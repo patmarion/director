@@ -100,7 +100,7 @@ class ImageView(object):
         camera = self.view.camera()
         camera.ParallelProjectionOn()
         camera.SetFocalPoint(0,0,0)
-        camera.SetPosition(0,0,1)
+        camera.SetPosition(0,0,-1)
         camera.SetViewUp(0,1,0)
 
         self.view.resetCamera()
