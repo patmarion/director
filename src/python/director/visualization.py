@@ -1001,6 +1001,8 @@ class GridItem(PolyDataItem):
         self.addProperty('Major Tick Rings', True)
         self.addProperty('Minor Tick Rings', False)
         self.addProperty('Show Text', True)
+        self.addProperty('Text Angle', 0,
+                         attributes=om.PropertyAttributes(minimum=-999, maximum=999, singleStep=5))
         self.addProperty('Text Size', 10, attributes=om.PropertyAttributes(minimum=4, maximum=100, singleStep=1))
         self.addProperty('Text Color', [1.0, 1.0, 1.0])
         self.addProperty('Text Alpha', 1.0,
@@ -1013,7 +1015,7 @@ class GridItem(PolyDataItem):
         if propertyName in ('Grid Half Width', 'Major Tick Resolution',
                             'Minor Tick Resolution', 'Major Tick Rings', 'Minor Tick Rings'):
             self._updateGrid()
-        if propertyName in ('Visible', 'Show Text', 'Text Color', 'Text Alpha', 'Text Size'):
+        if propertyName in ('Visible', 'Show Text', 'Text Color', 'Text Alpha', 'Text Size', 'Text Angle'):
             self._updateTextActorProperties()
 
     def _updateGrid(self):
@@ -1030,6 +1032,7 @@ class GridItem(PolyDataItem):
         self._buildTextActors()
 
     def _updateTextActorProperties(self):
+        self._repositionTextActors()
 
         visible = self.getProperty('Visible') and self.getProperty('Show Text')
         textAlpha = self.getProperty('Text Alpha')
@@ -1042,7 +1045,6 @@ class GridItem(PolyDataItem):
             prop.SetColor(color)
             prop.SetFontSize(textSize)
             prop.SetOpacity(textAlpha)
-
 
     def addToView(self, view):
         if view in self.views:
@@ -1063,22 +1065,38 @@ class GridItem(PolyDataItem):
           self._removeTextActorsFromView(view)
         self.textActors = []
 
+    def _repositionTextActors(self):
+        if not self.textActors:
+            return
+
+        angle = np.radians(self.getProperty('Text Angle'))
+        sinAngle = np.sin(angle)
+        cosAngle = np.cos(angle)
+
+        gridHalfWidth = self.getProperty('Grid Half Width')
+        majorTickSize = gridHalfWidth / self.getProperty('Major Tick Resolution')
+        transform = self.actor.GetUserTransform() or vtk.vtkTransform()
+        for i, actor in enumerate(self.textActors):
+            distance = (i+1) * majorTickSize
+            actor = self.textActors[i]
+            prop = actor.GetTextProperty()
+            coord = actor.GetPositionCoordinate()
+            coord.SetCoordinateSystemToWorld()
+            p = transform.TransformPoint((distance*cosAngle, distance*sinAngle, 0.0))
+            coord.SetValue(p)
+
     def _buildTextActors(self):
 
         self._clearTextActors()
         gridHalfWidth = self.getProperty('Grid Half Width')
         majorTickSize = gridHalfWidth / self.getProperty('Major Tick Resolution')
-
+        suffix = 'm'
         for i in range(int(gridHalfWidth / majorTickSize)):
             ringDistance = (i+1) * majorTickSize
-            edgeLength = np.sqrt(ringDistance**2 * 0.5)
             actor = vtk.vtkTextActor()
             prop = actor.GetTextProperty()
-            actor.SetInput('{}m'.format(int(ringDistance)))
+            actor.SetInput('{:.3f}'.format(ringDistance).rstrip('0').rstrip('.') + suffix)
             actor.SetPickable(False)
-            coord = actor.GetPositionCoordinate()
-            coord.SetCoordinateSystemToWorld()
-            coord.SetValue(edgeLength, edgeLength, 0.0)
             self.textActors.append(actor)
 
         self._updateTextActorProperties()
@@ -1100,11 +1118,11 @@ def showGrid(view, cellSize=0.5, numberOfCells=25, name='grid', parent='scene', 
     gridObj.setProperty('Minor Tick Rings', False)
     gridObj.setProperty('Alpha', alpha)
     gridObj.setProperty('Text Alpha', 0.5)
-
     gridObj.addToView(view)
     om.addToObjectModel(gridObj, getParentObj(parent))
-    addChildFrame(gridObj)
-
+    gridFrame = addChildFrame(gridObj)
+    gridFrame.connectFrameModified(lambda x: gridObj._repositionTextActors())
+    gridFrame.setProperty('Scale', 1.0)
     viewBoundsFunction = viewBoundsFunction or computeViewBoundsNoGrid
     def onViewBoundsRequest():
         if view not in gridObj.views or not gridObj.getProperty('Visible'):
