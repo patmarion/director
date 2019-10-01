@@ -199,6 +199,42 @@ void vtkInteractorStyleTerrain2::OnRightButtonUp ()
 }
 
 //----------------------------------------------------------------------------
+void vtkInteractorStyleTerrain2::OnMouseWheelForward()
+{
+  this->FindPokedRenderer(this->Interactor->GetEventPosition()[0],
+                          this->Interactor->GetEventPosition()[1]);
+  if (this->CurrentRenderer == nullptr)
+  {
+    return;
+  }
+
+  this->GrabFocus(this->EventCallbackCommand);
+  this->StartDolly();
+  double factor = this->MotionFactor * 0.2 * this->MouseWheelMotionFactor;
+  this->Dolly(pow(1.1, factor));
+  this->EndDolly();
+  this->ReleaseFocus();
+}
+
+//----------------------------------------------------------------------------
+void vtkInteractorStyleTerrain2::OnMouseWheelBackward()
+{
+  this->FindPokedRenderer(this->Interactor->GetEventPosition()[0],
+                          this->Interactor->GetEventPosition()[1]);
+  if (this->CurrentRenderer == nullptr)
+  {
+    return;
+  }
+
+  this->GrabFocus(this->EventCallbackCommand);
+  this->StartDolly();
+  double factor = this->MotionFactor * -0.2 * this->MouseWheelMotionFactor;
+  this->Dolly(pow(1.1, factor));
+  this->EndDolly();
+  this->ReleaseFocus();
+}
+
+//----------------------------------------------------------------------------
 void vtkInteractorStyleTerrain2::Rotate()
 {
   if (this->CurrentRenderer == NULL)
@@ -244,12 +280,12 @@ void vtkInteractorStyleTerrain2::Rotate()
   double angle = vtkMath::DegreesFromRadians( acos(vtkMath::Dot( dop, vup) ) );
   //printf("current angle: %.2f.  elvation delta: %.2f\n", angle, e);
 
-  if ( ( angle + e ) > 177.0 ||
-       ( angle + e ) < 3.0 )
-    {
-    //printf("  ...clamping elvation delta.\n");
-    e = 0.0;
-    }
+  if ( ( angle + e ) > 177.0) {
+    e = 177.0 - angle;
+  }
+  else if ( (angle + e < 3.0)) {
+    e = 3.0 - angle;
+  }
 
   camera->Elevation( e );
 
@@ -335,13 +371,23 @@ void vtkInteractorStyleTerrain2::Dolly()
     }
 
   vtkRenderWindowInteractor *rwi = this->Interactor;
-  vtkCamera *camera = this->CurrentRenderer->GetActiveCamera();
   double *center = this->CurrentRenderer->GetCenter();
 
   int dy = rwi->GetEventPosition()[1] - rwi->GetLastEventPosition()[1];
   double dyf = this->MotionFactor * dy / center[1];
-  double zoomFactor = pow(1.1, dyf);
-  
+  this->Dolly(pow(1.1, dyf));
+}
+
+//----------------------------------------------------------------------------
+void vtkInteractorStyleTerrain2::Dolly(double zoomFactor)
+{
+  if (this->CurrentRenderer == NULL)
+    {
+    return;
+    }
+  vtkCamera *camera = this->CurrentRenderer->GetActiveCamera();
+  vtkRenderWindowInteractor *rwi = this->Interactor;
+
   if (camera->GetParallelProjection())
     {
     camera->SetParallelScale(camera->GetParallelScale() / zoomFactor);

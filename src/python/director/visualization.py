@@ -413,6 +413,7 @@ class Image2DItem(om.ObjectModelItem):
 
     def _updatePositionCoordinates(self, view):
 
+        return
         width = self.getProperty('Width')
         height = self._getHeightForWidth(self.image, width)
 
@@ -695,6 +696,8 @@ class FrameItem(PolyDataItem):
         if propertyName == 'Scale':
             scale = self.getProperty(propertyName)
             self.rep.SetWorldSize(scale)
+            self._updateAxesGeometry()
+        elif propertyName == 'Tube Width':
             self._updateAxesGeometry()
         elif propertyName == 'Edit':
             view = app.getCurrentRenderView()
