@@ -398,6 +398,7 @@ else()
       -DVTK_PYTHON_VERSION:STRING=3
       -DModule_vtkGUISupportQt:BOOL=ON
       -DVTK_WRAP_PYTHON:BOOL=ON
+      -DCMAKE_INSTALL_RPATH:STRING=${install_prefix}/lib
     )
 
   set(vtk_args -DVTK_DIR:PATH=${install_prefix}/lib/cmake/vtk-8.2)
