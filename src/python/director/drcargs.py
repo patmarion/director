@@ -174,6 +174,12 @@ class DRCArgParser(object):
                             default=[], action='append', metavar='filename',
                             help='python scripts to run at startup')
 
+        parser.add_argument('--module', '-m', type=str, dest='module',
+                            default=[], action='append', metavar='module-name',
+                            help='run a python module as a script')
+
+
+
 
 _argParser = None
 def getGlobalArgParser():

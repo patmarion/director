@@ -346,9 +346,11 @@ class MainWindowAppFactory(object):
 
         return FieldContainer(runScript=runScript)
 
-
     def initScriptLoader(self, fields):
         def loadScripts():
+            import runpy
+            for moduleName in fields.commandLineArgs.module:
+                runpy.run_module(moduleName, run_name='__main__', init_globals=fields.globalsDict)
             for scriptArgs in fields.commandLineArgs.scripts:
                 fields.runScript(scriptArgs[0], scriptArgs[1:])
         fields.app.registerStartupCallback(loadScripts)
