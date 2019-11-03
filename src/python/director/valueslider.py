@@ -30,15 +30,15 @@ class ValueSlider(object):
         layout.addWidget(self.spinbox)
         layout.addWidget(self.slider)
 
+        self.shortcuts = []
+        self.mouseScrubber = None
+        self.callbacks = callbacks.CallbackRegistry(self.events._fields)
         self.animationPrevTime = 0.0
         self.animationRate = 1.0
         self.animationRateTarget = 1.0
         self.animationRateAlpha = 1.0
         self.animationTimer = TimerCallback(callback=self._tick, targetFps=60)
         self.useRealTime = True
-
-        self.callbacks = callbacks.CallbackRegistry(self.events._fields)
-
         self.eventFilter = PythonQt.dd.ddPythonEventFilter()
         self.eventFilter.connect('handleEvent(QObject*, QEvent*)', self._filterEvent)
         self.eventFilter.addFilteredEventType(QtCore.QEvent.MouseButtonPress)
@@ -76,6 +76,34 @@ class ValueSlider(object):
         self.playButton.setText('Play')
         self.animationTimer.stop()
 
+    def stepBackward(self):
+        self.slider.setValue(self.slider.value - self.slider.singleStep)
+
+    def stepForward(self):
+        self.slider.setValue(self.slider.value + self.slider.singleStep)
+
+    def jumpBackward(self):
+        self.slider.setValue(self.slider.value - self.slider.pageStep)
+
+    def jumpForward(self):
+        self.slider.setValue(self.slider.value + self.slider.pageStep)
+
+    def togglePlayForward(self):
+        isPlayingForward = self.animationTimer.isActive() and self.animationRateTarget > 0
+        self.setAnimationRate(np.abs(self.animationRateTarget))
+        if isPlayingForward:
+            self.pause()
+        else:
+            self.play()
+        
+    def togglePlayReverse(self):
+        isPlayingReverse = self.animationTimer.isActive() and self.animationRateTarget < 0
+        self.setAnimationRate(-1 * np.abs(self.animationRateTarget))
+        if isPlayingReverse:
+            self.pause()
+        else:
+            self.play()
+
     def _onPlayClicked(self):
         if self.animationTimer.isActive():
             self.pause()
@@ -97,8 +125,9 @@ class ValueSlider(object):
             self.slider.maximum = resolution
         self._syncSlider()
 
-    def setValueRange(self, minValue, maxValue):
-        newValue = np.clip(self._value, minValue, maxValue)
+    def setValueRange(self, minValue, maxValue, newValue=None, notifyChange=True):
+        newValue = self._value if newValue is None else newValue
+        newValue = np.clip(newValue, minValue, maxValue)
         changed = newValue != self._value
         self.minValue = minValue
         self.maxValue = maxValue
@@ -108,7 +137,7 @@ class ValueSlider(object):
             self.spinbox.maximum = maxValue
         self._syncSpinBox()
         self._syncSlider()
-        if changed:
+        if changed and notifyChange:
             self._notifyValueChanged()
 
     def getValue(self):
@@ -143,3 +172,56 @@ class ValueSlider(object):
         self._value = (self.minValue + (self.maxValue - self.minValue) * (sliderValue / float(self.slider.maximum)))
         self._syncSpinBox()
         self._notifyValueChanged()
+
+    def initMouseScrubber(self, widget):
+        self.mouseScrubber = MouseScrubber(widget, self)
+
+    def initKeyboardShortcuts(self, widget):
+        commands = {
+            '[': self.stepBackward,
+            ']': self.stepForward,
+            'shift+[': self.jumpBackward,
+            'shift+]': self.jumpForward,
+            ' ': self.togglePlayForward,
+            'shift+ ': self.togglePlayReverse
+        }
+        self.shortcuts = []
+        for keySequence, func in commands.items():
+            shortcut = QtGui.QShortcut(QtGui.QKeySequence(keySequence), widget)
+            shortcut.connect('activated()', func)
+            self.shortcuts.append(shortcut)
+
+
+class MouseScrubber:
+
+    def __init__(self, widget, slider):
+        self.slider = slider
+        self.keyState = {}
+        self.movePos = None
+        self.factor = 3.0
+        self.enabled = True
+        self.eventFilter = PythonQt.dd.ddPythonEventFilter()
+        self.eventFilter.connect('handleEvent(QObject*, QEvent*)', self.filterEvent)
+        self.eventFilter.addFilteredEventType(QtCore.QEvent.KeyPress)
+        self.eventFilter.addFilteredEventType(QtCore.QEvent.KeyRelease)
+        self.eventFilter.addFilteredEventType(QtCore.QEvent.HoverMove)
+        widget.installEventFilter(self.eventFilter)
+
+    def filterEvent(self, obj, event):
+        if not self.enabled:
+            return
+        if event.type() == QtCore.QEvent.HoverMove:
+            if self.movePos is None:
+                self.movePos = event.pos()
+            if self.keyState.get('.') or event.modifiers() == QtCore.Qt.AltModifier:
+                delta = event.pos() - self.movePos
+                delta = delta.x()
+                self.slider.setValue(self.slider.value + (delta * self.slider.singleStep * self.factor))
+            self.movePos = event.pos()
+            return
+        if event.isAutoRepeat():
+            return
+        if event.type() == QtCore.QEvent.KeyPress:
+            self.keyState[event.text()] = True
+        elif event.type() == QtCore.QEvent.KeyRelease:
+            self.keyState[event.text()] = False

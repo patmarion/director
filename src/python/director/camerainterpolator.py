@@ -4,7 +4,7 @@ import math
 import numpy as np
 from director import transformUtils
 from director.timercallback import TimerCallback
-
+from director import objectmodel as om
 from director import vieweventfilter
 from director import visualization as vis
 from director import vtkAll as vtk
@@ -164,7 +164,7 @@ class MyCameraInteractor(vieweventfilter.ViewEventFilter):
         d = DebugData()
         d.addCircle(intersectionPoint, planeNormal, radius=0.5)
         d.addLine(intersectionPoint, intersectionPoint + 10*np.array(planeNormal))
-        vis.updatePolyData(d.getPolyData(), 'hit point', color=[1.0, 0.0, 0.0], visible=False)
+        vis.updatePolyData(d.getPolyData(), 'hit point', color=[1.0, 0.0, 0.0], visible=False, parent=om.findObjectByName('grid'))
 
     def onLeftMousePress(self, event):
         if event.modifiers() != QtCore.Qt.ControlModifier:

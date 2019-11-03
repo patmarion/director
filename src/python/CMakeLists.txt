@@ -80,9 +80,11 @@ set(python_files
   director/maptileviewer.py
   director/matlab.py
   director/matlabik.py
+  director/matplotlib.py
   director/measurementpanel.py
   director/meshmanager.py
   director/midi.py
+  director/mouselook.py
   director/multisensepanel.py
   director/navigationpanel.py
   director/objectmodel.py
@@ -100,6 +102,7 @@ set(python_files
   director/pointpicker.py
   director/pointselector.py
   director/polarisplatformplanner.py
+  director/processcommand.py
   director/profiler.py
   director/propertyanimation.py
   director/propertyset.py
