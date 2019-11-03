@@ -11,12 +11,10 @@ class TaskRunner(object):
 
     def __init__(self):
         self.interval = 1/60.0
-        sys.setcheckinterval(1000)
         try:
             sys.setswitchinterval(self.interval)
         except AttributeError:
-            # sys.setswitchinterval is only python3
-            pass
+            sys.setcheckinterval(1000)
 
         self.taskQueue = asynctaskqueue.AsyncTaskQueue()
         self.pendingTasks = []
