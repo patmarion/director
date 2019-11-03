@@ -506,17 +506,18 @@ class ObjectModelTree(object):
         elif selectedAction:
             obj.onAction(selectedAction)
 
-
     def removeSelectedItems(self):
-        for ind in self.getTreeWidget().selectedIndexes():
-            item = self.itemModel.itemFromIndex(self.sortModel.mapToSource(ind))
-            if item is None:
-                print('none item for index', ind)
-                continue
-            obj = self._getObjectForItem(item)
-            if (not obj.hasProperty('Deletable')) or obj.getProperty('Deletable'):
-                self._removeItemFromObjectModel(item)
+        inds = [self.sortModel.mapToSource(ind) for ind in self.getTreeWidget().selectedIndexes()]
+        inds = [ind for ind in inds if ind.column() == 0]
 
+        # we don't currently have multi select, so only one should be selected
+        assert len(inds) == 1
+
+        item = self.itemModel.itemFromIndex(inds[0])
+        assert item
+        obj = self._getObjectForItem(item)
+        if (not obj.hasProperty('Deletable')) or obj.getProperty('Deletable'):
+            self._removeItemFromObjectModel(item)
 
     def _filterEvent(self, obj, event):
         if event.type() == QtCore.QEvent.KeyPress:
