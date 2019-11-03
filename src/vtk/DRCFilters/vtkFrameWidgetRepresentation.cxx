@@ -208,7 +208,7 @@ DataRep MakeDisk(double radius, double handleRadius, int axis)
   return DataRepFromPolyData(Transform(d->GetOutput(), t));
 }
 
-vtkDataSet* PickDataSet(vtkPicker* picker, int x, int y, vtkRenderer* renderer)
+vtkDataSet* PickDataSet(vtkPicker* picker, int x, int y, double tolerance, vtkRenderer* renderer)
 {
   picker->SetTolerance(0.0);
   picker->Pick(x, y, 0.0, renderer);
@@ -217,7 +217,7 @@ vtkDataSet* PickDataSet(vtkPicker* picker, int x, int y, vtkRenderer* renderer)
     return picker->GetDataSet();
     }
 
-  picker->SetTolerance(0.005);
+  picker->SetTolerance(tolerance);
   picker->Pick(x, y, 0.0, renderer);
   return picker->GetDataSet();
 }
@@ -341,6 +341,7 @@ vtkFrameWidgetRepresentation::vtkFrameWidgetRepresentation()
   this->InteractionState = vtkFrameWidgetRepresentation::Outside;
   this->WorldSize = 0.5;
   this->UseTubeFilter = false;
+  this->PickTolerance = 0.005;
   this->RotateAxis = -1;
   this->TranslateAxis = -1;
   this->InteractionStartWorldPoint[0] = 0.0;
@@ -772,7 +773,7 @@ void vtkFrameWidgetRepresentation::HighlightActor(vtkDataSet* dataset)
 //----------------------------------------------------------------------------
 void vtkFrameWidgetRepresentation::OnMouseHover(double e[2])
 {
-  vtkDataSet* dataset = PickDataSet(this->Internal->AxesPicker, e[0], e[1], this->Renderer);
+  vtkDataSet* dataset = PickDataSet(this->Internal->AxesPicker, e[0], e[1], this->PickTolerance, this->Renderer);
   this->HighlightActor(dataset);
 }
 
@@ -791,7 +792,7 @@ int vtkFrameWidgetRepresentation::ComputeInteractionState(int X, int Y, int vtkN
   this->Internal->Transform->GetPosition(this->InteractionStartWorldPoint);
 
   // Check if the axes actor was picked
-  vtkDataSet* dataset = PickDataSet(this->Internal->AxesPicker, X, Y, this->Renderer);
+  vtkDataSet* dataset = PickDataSet(this->Internal->AxesPicker, X, Y, this->PickTolerance, this->Renderer);
 
   if (dataset)
     {

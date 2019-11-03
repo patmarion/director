@@ -101,6 +101,10 @@ public:
   vtkSetMacro(WorldSize, double);
   vtkGetMacro(WorldSize, double);
 
+  // Description:
+  // Set the pick tolerance
+  vtkSetMacro(PickTolerance, double);
+  vtkGetMacro(PickTolerance, double);
 
   // Description:
   // Use a tube filter instead of only drawing lines.
@@ -117,6 +121,7 @@ protected:
   bool UseTubeFilter;
   int TranslateAxis;
   int RotateAxis;
+  double PickTolerance;
   double WorldSize;
   double LastEventPosition[2];
   double InteractionStartWorldPoint[3];
