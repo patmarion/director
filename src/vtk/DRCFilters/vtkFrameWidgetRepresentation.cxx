@@ -747,7 +747,7 @@ void vtkFrameWidgetRepresentation::HighlightActor(vtkDataSet* dataset)
     {
     if (this->Internal->Reps[i].PolyData.GetPointer() == dataset)
       {
-      this->Internal->Reps[i].Actor->GetProperty()->SetAmbient(0.7);
+      this->Internal->Reps[i].Actor->GetProperty()->SetAmbient(0.3);
       this->Internal->Reps[i].Actor->GetProperty()->SetAmbientColor(this->Internal->Reps[i].Actor->GetProperty()->GetColor());
       }
     else
@@ -760,7 +760,7 @@ void vtkFrameWidgetRepresentation::HighlightActor(vtkDataSet* dataset)
     {
     if (this->Internal->Axes[i].PolyData.GetPointer() == dataset)
       {
-      this->Internal->Axes[i].Actor->GetProperty()->SetAmbient(0.7);
+      this->Internal->Axes[i].Actor->GetProperty()->SetAmbient(0.3);
       this->Internal->Axes[i].Actor->GetProperty()->SetAmbientColor(this->Internal->Axes[i].Actor->GetProperty()->GetColor());
       }
     else
