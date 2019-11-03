@@ -16,7 +16,8 @@ class ProcessCommand:
         self.proc = subprocess.Popen(self.command_arg_list,
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
-            stderr=subprocess.STDOUT)
+            stderr=subprocess.STDOUT,
+            bufsize=0)
         return self.proc
 
     def poll(self):
@@ -52,14 +53,20 @@ class ProcessCommand:
     def run_process_async(self, output_console=None):
         if output_console:
             output_console.appendHtml('<b>Command:</b><br/>' + self.get_command_line() + '<br/><br/><b>Output:</b><br/><br/>')
+        else:
+            print('Command:\n{}\n\nOutput:\n'.format(self.get_command_line()), flush=True)
         self.start()
         while True:
             ret, output = self.poll()
             if output:
                 if output_console:
                     output_console.appendPlainText(output.decode())
+                else:
+                    print(output.decode(), end='', flush=True)
             if ret is not None:
                 break
             yield
         if output_console:
             output_console.appendHtml('<br/><b>Return Code:</b> {}'.format(ret) + '<br/><br/><br/>')
+        else:
+            print('\nReturn Code: {}\n'.format(ret), flush=True)
