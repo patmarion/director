@@ -441,13 +441,15 @@ class ObjectModelTree(object):
         return obj
 
 
-    def getOrCreateContainer(self, name, parentObj=None):
+    def getOrCreateContainer(self, name, parentObj=None, collapsed=False):
         if parentObj:
             containerObj = parentObj.findChild(name)
         else:
             containerObj = self.findObjectByName(name)
         if not containerObj:
             containerObj = self.addContainer(name, parentObj)
+            if collapsed:
+                self.collapse(containerObj)
         return containerObj
 
 
@@ -635,8 +637,8 @@ def expand(obj):
 def addContainer(name, parentObj=None):
     return _t.addContainer(name, parentObj)
 
-def getOrCreateContainer(name, parentObj=None):
-    return _t.getOrCreateContainer(name, parentObj)
+def getOrCreateContainer(name, parentObj=None, collapsed=False):
+    return _t.getOrCreateContainer(name, parentObj, collapsed)
 
 def init(treeView=None, propertiesPanel=None):
 
