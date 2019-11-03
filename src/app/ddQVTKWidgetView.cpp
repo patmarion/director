@@ -137,10 +137,7 @@ ddQVTKWidgetView::ddQVTKWidgetView(QWidget* parent) : ddViewBase(parent)
   //this->Internal->Renderer->SetLayer(1);
   this->Internal->RenderWindow->AddRenderer(this->Internal->Renderer);
 
-
-
-
-  vtkMapper::SetResolveCoincidentTopologyToPolygonOffset();
+  //vtkMapper::SetResolveCoincidentTopologyToPolygonOffset();
 
   this->Internal->Renderer->GradientBackgroundOn();
   this->Internal->Renderer->SetBackground(0.0, 0.0, 0.0);
