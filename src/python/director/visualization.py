@@ -722,6 +722,8 @@ class FrameItem(PolyDataItem):
             scale = self.getProperty(propertyName)
             self.rep.SetWorldSize(scale)
             self._updateAxesGeometry()
+        elif propertyName == 'Tube Width':
+            self._updateAxesGeometry()
         elif propertyName == 'Edit':
             view = app.getCurrentRenderView()
             if view not in self.views:

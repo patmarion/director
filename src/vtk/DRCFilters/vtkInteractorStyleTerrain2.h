@@ -74,6 +74,9 @@ public:
   virtual void OnMiddleButtonUp() VTKDRCFILTERS_OVERRIDE;
   virtual void OnRightButtonDown() VTKDRCFILTERS_OVERRIDE;
   virtual void OnRightButtonUp() VTKDRCFILTERS_OVERRIDE;
+  virtual void OnMouseWheelForward() VTKDRCFILTERS_OVERRIDE;
+  virtual void OnMouseWheelBackward() VTKDRCFILTERS_OVERRIDE;
+
 
   // Description:
   // Override the "fly-to" (f keypress) for images.
@@ -85,11 +88,16 @@ public:
   virtual void Pan() VTKDRCFILTERS_OVERRIDE;
   virtual void Dolly() VTKDRCFILTERS_OVERRIDE;
 
+  virtual void Dolly(double zoomFactor);
+
   // Description:
   // Turn on/off the latitude/longitude lines.
   vtkSetMacro(LatLongLines,int);
   vtkGetMacro(LatLongLines,int);
   vtkBooleanMacro(LatLongLines,int);
+
+  vtkSetMacro(MotionFactor,double);
+  vtkGetMacro(MotionFactor,double);
 
 protected:
   vtkInteractorStyleTerrain2();
