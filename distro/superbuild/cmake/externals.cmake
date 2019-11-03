@@ -503,6 +503,7 @@ ExternalProject_Add(PointCloudLibraryPlugin
     ${python_args}
     ${vtk_args}
     -DPCL_REQUIRED_VERSION:STRING=1.8.0
+    -DCMAKE_INSTALL_RPATH:STRING=${install_prefix}/lib
   DEPENDS
     ${pcl_depends}
     ${vtk_depends}
@@ -621,6 +622,7 @@ ExternalProject_Add(director
     -DUSE_DRAKE:BOOL=${USE_DRAKE}
     -DDD_QT_VERSION:STRING=${DD_QT_VERSION}
     -DUSE_PERCEPTION:BOOL=${USE_PERCEPTION}
+    -DUSE_PCL:BOOL=${USE_PCL}
     ${default_cmake_args}
     ${eigen_args}
     ${boost_args}
