@@ -502,10 +502,21 @@ class TextItem(om.ObjectModelItem):
         self.addProperty('Font Size', 18, attributes=om.PropertyAttributes(minimum=6, maximum=128, singleStep=1))
         self.addProperty('Bold', False)
         self.addProperty('Italic', False)
+        self.addProperty('Color', [1.0, 1.0, 1.0], attributes=om.PropertyAttributes(minimum=0.0, maximum=1.0, decimals=2, singleStep=0.1))
+        self.addProperty('Alpha', 1.0, attributes=om.PropertyAttributes(minimum=0.0, maximum=1.0, decimals=2, singleStep=0.1))
+        self.addProperty('Background Color', [0.0, 0.0, 0.0], attributes=om.PropertyAttributes(minimum=0.0, decimals=2, singleStep=0.1))
+        self.addProperty('Background Alpha', 0.0, attributes=om.PropertyAttributes(minimum=0.0, maximum=1.0, decimals=2, singleStep=0.1))
 
         if view:
             self.addToView(view)
 
+    def hasActor(self, actor):
+        return actor == self.actor
+
+    def setPosition3D(self, pos):
+        coord = self.actor.GetPositionCoordinate()
+        coord.SetCoordinateSystemToWorld()
+        coord.SetValue(pos)
 
     def addToView(self, view):
         if view in self.views:
@@ -545,14 +556,23 @@ class TextItem(om.ObjectModelItem):
             self.actor.SetInput(self.getProperty(propertyName))
         elif propertyName == 'Position':
             pos = self.getProperty(propertyName)
-            self.actor.SetPosition(pos[0], pos[1])
+            coord = self.actor.GetPositionCoordinate()
+            coord.SetCoordinateSystemToDisplay()
+            coord.SetValue(pos[0], pos[1])
         elif propertyName == 'Font Size':
             self.actor.GetTextProperty().SetFontSize(self.getProperty(propertyName))
         elif propertyName == 'Bold Size':
             self.actor.GetTextProperty().SetBold(self.getProperty(propertyName))
         elif propertyName == 'Italic':
             self.actor.GetTextProperty().SetItalic(self.getProperty(propertyName))
-
+        elif propertyName == 'Color':
+            self.actor.GetTextProperty().SetColor(self.getProperty(propertyName))
+        elif propertyName == 'Alpha':
+            self.actor.GetTextProperty().SetOpacity(self.getProperty(propertyName))
+        elif propertyName == 'Background Color':
+            self.actor.GetTextProperty().SetBackgroundColor(self.getProperty(propertyName))
+        elif propertyName == 'Background Alpha':
+            self.actor.GetTextProperty().SetBackgroundOpacity(self.getProperty(propertyName))
 
         if self.getProperty('Visible'):
             self._renderAllViews()
@@ -1286,6 +1306,25 @@ def addChildFrame(obj, initialTransform=None):
     obj.actor.SetUserTransform(t)
 
     return frame
+
+
+def addObjectLabel(obj):
+    if isinstance(obj, FrameItem):
+        frame = obj
+    else:
+        frame = obj.getChildFrame()
+        if not frame:
+            frame = addChildFrame(obj)
+    def update(frame):
+        obj.textLabel.setPosition3D(frame.transform.GetPosition())
+    obj.textLabel = TextItem('label', obj.getProperty('Name'))
+    obj.textLabel.setProperty('Background Alpha', 0.3)
+    obj.textLabel.actor.SetPickable(False)
+    om.addToObjectModel(obj.textLabel, obj)
+    for view in obj.views:
+        obj.textLabel.addToView(view)
+    frame.connectFrameModified(update)
+    update(frame)
 
 
 def getRandomColor():
