@@ -1,10 +1,6 @@
 import matplotlib
 matplotlib.use('Qt5Agg')
 
-
-import time
-import numpy as np
-
 import matplotlib.pyplot as plt
 from matplotlib.backends.qt_compat import QtCore, QtWidgets
 from matplotlib.backends.backend_qt5agg import (
@@ -27,15 +23,9 @@ class PlotWidget(QtWidgets.QWidget):
         self.clear = self.axes.clear
         self.plot = self.axes.plot
         self.layout = QtWidgets.QVBoxLayout(self)
+        self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.addWidget(self.canvas)
         self.layout.addWidget(self.toolbar)
-        #self.plot_demo()
-
-    def plot_demo(self):
-        self.axes.clear()
-        t = np.linspace(0, 10, 101)
-        self.axes.plot(t, np.sin(t + time.time()))
-        self.canvas.draw()
 
     def redraw(self):
         self.canvas.draw()
@@ -43,30 +33,20 @@ class PlotWidget(QtWidgets.QWidget):
 
 def plot(*args, **kwargs):
     plot = PlotWidget()
-    tab = get_tab_widget()
-    tab.addTab(plot, 'Figure')
-    tab.setCurrentIndex(tab.count()-1)
     plot.plot(*args, **kwargs)
+    plot.show()
     return plot
 
 
-def plot_widget_demo():
-    plot = PlotWidget()
-    tab = get_tab_widget()
-    tab.addTab(plot, 'Figure')
-    tab.setCurrentIndex(tab.count()-1)
-    return plot
+def addToTabWidget(widget, title='Figure'):
+    tabWidget = getMainWindow().findChild(QtWidgets.QTabWidget)
+    tabWidget.addTab(widget, title)
+    tabWidget.setCurrentIndex(tabWidget.count() - 1)
 
 
-def get_tab_widget():
+def getMainWindow():
     widgets = QtCore.QCoreApplication.instance().topLevelWidgets()
-    for mainWindow in widgets:
-        try:
-            return mainWindow.centralWidget()
-        except AttributeError:
-            pass
-    raise Exception('Tab widget not found')
-
-
-if __name__ == "__main__":
-    plot_widget_demo()
+    for widget in widgets:
+        if isinstance(widget, QtWidgets.QMainWindow):
+            return widget
+    return None
