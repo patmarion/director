@@ -60,11 +60,13 @@ class DepthScanner(object):
 
         self.initDepthImageView()
         self.initPointCloudView()
+        self.initRenderObserver()
 
         self._block = False
         self.singleShotTimer = TimerCallback()
         self.singleShotTimer.callback = self.update
-        self.forceRender = True
+        self.reRender = False
+        self.updateOnRender = True
         self._updateFunc = None
 
     def getDepthBufferImage(self):
@@ -104,29 +106,31 @@ class DepthScanner(object):
         self.imageView = imageview.ImageView()
         self.imageView.view.setWindowTitle('Depth image')
         self.imageView.setImage(self.imageMapToColors.GetOutput())
+        self.docks = []
 
     def initPointCloudView(self):
         self.pointCloudView = PythonQt.dd.ddQVTKWidgetView()
         self.pointCloudView.setWindowTitle('Pointcloud')
         self.pointCloudViewBehaviors = viewbehaviors.ViewBehaviors(self.pointCloudView)
 
+    def initRenderObserver(self):
+        if self.renderObserver:
+            return
+        def onEndRender(obj, event):
+            if self._block or not self.updateOnRender:
+                return
+            if not self.singleShotTimer.singleShotTimer.isActive():
+                self.singleShotTimer.singleShot(0)
+        self.renderObserver = self.view.renderWindow().AddObserver('EndEvent', onEndRender)
+
     def update(self):
-
-        if not self.renderObserver:
-            def onEndRender(obj, event):
-                if self._block:
-                    return
-                if not self.singleShotTimer.singleShotTimer.isActive():
-                    self.singleShotTimer.singleShot(0)
-            self.renderObserver = self.view.renderWindow().AddObserver('EndEvent', onEndRender)
-
         if not self.pointCloudView.visible and not self.imageView.view.visible:
             return
 
         self._block = True
-        if self.forceRender:
+        if self.reRender:
             self.view.forceRender()
-            self.updateBufferImages()
+        self.updateBufferImages()
         self._block = False
 
         depthImage, polyData = computeDepthImageAndPointCloud(self.getDepthBufferImage(), self.getColorBufferImage(), self.view.camera())
@@ -152,6 +156,15 @@ class DepthScanner(object):
             dock = app.addWidgetToDock(view, QtCore.Qt.RightDockWidgetArea)
             dock.setMinimumWidth(300)
             dock.setMinimumHeight(300)
+            self.docks.append(dock)
+
+    def showDocks(self):
+        for dock in self.docks:
+            dock.visible = True
+
+    def hideDocks(self):
+        for dock in self.docks:
+            dock.visible = False
 
 
 def getCameraFrustumMesh(view, rayLength=1.0):
