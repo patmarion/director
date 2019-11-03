@@ -258,10 +258,11 @@ if(DD_QT_VERSION EQUAL 4)
   set(PythonQt_TAG patched-6)
 else()
   set(PythonQt_TAG patched-8)
+  set(PythonQt_TAG support-python-gil)
 endif()
 
 ExternalProject_Add(PythonQt
-  GIT_REPOSITORY https://github.com/commontk/PythonQt.git
+  GIT_REPOSITORY https://github.com/patmarion/PythonQt.git
   GIT_TAG ${PythonQt_TAG}
   CMAKE_CACHE_ARGS
     ${default_cmake_args}
