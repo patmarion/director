@@ -64,6 +64,7 @@ class DepthScanner(object):
         self._block = False
         self.singleShotTimer = TimerCallback()
         self.singleShotTimer.callback = self.update
+        self.forceRender = True
         self._updateFunc = None
 
     def getDepthBufferImage(self):
@@ -123,8 +124,9 @@ class DepthScanner(object):
             return
 
         self._block = True
-        self.view.forceRender()
-        self.updateBufferImages()
+        if self.forceRender:
+            self.view.forceRender()
+            self.updateBufferImages()
         self._block = False
 
         depthImage, polyData = computeDepthImageAndPointCloud(self.getDepthBufferImage(), self.getColorBufferImage(), self.view.camera())
@@ -191,11 +193,11 @@ def getCameraTransform(camera):
               camera.GetViewUp())
 
 
-def initCameraFrustumVisualizer(depthScanner):
+def initCameraFrustumVisualizer(depthScanner, defaultScale=50):
 
     cameraObj = vis.showPolyData(vtk.vtkPolyData(), 'camera', parent=depthScanner.parentFolder, view=depthScanner.pointCloudView)
     cameraFrame = vis.addChildFrame(cameraObj)
-    cameraFrame.setProperty('Scale', 50)
+    cameraFrame.setProperty('Scale', defaultScale)
     cameraObj.setProperty('Visible', False)
     pointCloudToCamera = transformUtils.frameFromPositionAndRPY((0,0,0,), (-90, 90, 0)).GetLinearInverse()
 
@@ -203,8 +205,12 @@ def initCameraFrustumVisualizer(depthScanner):
         scale = cameraObj.getChildFrame().getProperty('Scale') * 10.0
         rayLength = scale
         d = DebugData()
-        d.addCube(dimensions=[0.04, 0.08, 0.06], center=[-0.02, 0.0, 0.0], color=[1,0.5,0])
-        d.addLine([0.0, 0.0, 0.0], [0.01, 0.0, 0.0], radius=0.023, color=[1,0.5,0])
+        #d.addCube(dimensions=[0.04, 0.08, 0.06], center=[-0.02, 0.0, 0.0], color=[1,0.5,0])
+        #d.addLine([0.0, 0.0, 0.0], [0.01, 0.0, 0.0], radius=0.023, color=[1,0.5,0])
+        t = vtk.vtkTransform()
+        t.RotateY(90)
+        t.RotateZ(-90)
+        d.addFrame(t, scale=0.1, tubeRadius=0.008)
         cameraModelMesh = d.getPolyData()
 
         t = vtk.vtkTransform()
@@ -215,11 +221,14 @@ def initCameraFrustumVisualizer(depthScanner):
         cameraMesh = filterUtils.transformPolyData(cameraMesh, getCameraTransform(depthScanner.view.camera()).GetLinearInverse())
         cameraMesh = filterUtils.appendPolyData([cameraMesh, cameraModelMesh])
         cameraObj.setPolyData(cameraMesh)
+        cameraObj._updateColorByProperty()
+        cameraObj.setProperty('Color By', 'RGB255')
 
     def onCameraModified():
         cameraToWorld = getCameraTransform(depthScanner.view.camera())
-        depthScanner.pointCloudObj.actor.SetUserTransform(transformUtils.concatenateTransforms([pointCloudToCamera, cameraToWorld]))
         cameraFrame.copyFrame(cameraToWorld)
+        if depthScanner.pointCloudObj:
+            depthScanner.pointCloudObj.actor.SetUserTransform(transformUtils.concatenateTransforms([pointCloudToCamera, cameraToWorld]))
 
     def enableFrustum():
         updateCameraMesh()
@@ -242,7 +251,8 @@ def initCameraFrustumVisualizer(depthScanner):
         updateCameraMesh=updateCameraMesh,
         onCameraModified=onCameraModified,
         enableFrustum=enableFrustum,
-        disableFrustum=disableFrustum
+        disableFrustum=disableFrustum,
+        cameraObj=cameraObj
         )
 
 
