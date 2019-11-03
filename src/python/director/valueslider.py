@@ -174,7 +174,7 @@ class ValueSlider(object):
         self._notifyValueChanged()
 
     def initMouseScrubber(self, widget):
-        self.mouseScrubber = MouseScrubber(widget, self)
+        self.mouseScrubber = MouseScrubber(widget, self.slider)
 
     def initKeyboardShortcuts(self, widget):
         commands = {
