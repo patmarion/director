@@ -348,9 +348,16 @@ class MainWindowAppFactory(object):
 
     def initScriptLoader(self, fields):
         def loadScripts():
-            import runpy
+            #import runpy
+            import importlib
             for moduleName in fields.commandLineArgs.module:
-                runpy.run_module(moduleName, run_name='__main__', init_globals=fields.globalsDict)
+                #result = runpy.run_module(moduleName, run_name='__main__', init_globals=fields.globalsDict)
+                #fields.globalsDict.update(**result)
+                spec = importlib.util.find_spec(moduleName)
+                if spec is None:
+                    raise ModuleNotFoundError(moduleName)
+                filename = spec.origin
+                fields.runScript(filename)
             for scriptArgs in fields.commandLineArgs.scripts:
                 fields.runScript(scriptArgs[0], scriptArgs[1:])
         fields.app.registerStartupCallback(loadScripts)
