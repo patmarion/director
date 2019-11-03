@@ -26,6 +26,9 @@
 #include <vtkSmartPointer.h>
 #include <vtkTextProperty.h>
 
+#include <QSurfaceFormat>
+#include <QVTKOpenGLWidget.h>
+
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -258,6 +261,12 @@ double ddQVTKWidgetView::getAverageFramesPerSecond()
 void ddQVTKWidgetView::setAntiAliasing(bool enabled)
 {
   antiAliasingEnabled = enabled;
+  if (!enabled)
+  {
+    auto format = QVTKOpenGLWidget::defaultFormat();
+    format.setSamples(0);
+    QSurfaceFormat::setDefaultFormat(format);
+  }
 }
 
 //-----------------------------------------------------------------------------

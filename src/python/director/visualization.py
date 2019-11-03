@@ -1603,6 +1603,10 @@ def setAntiAliasing(enabled):
     PythonQt.dd.ddQVTKWidgetView.setAntiAliasing(enabled)
 
 
+if 'DIRECTOR_NO_ANTIALIASING' in os.environ:
+    setAntiAliasing(False)
+
+
 def enableEyeDomeLighting(view):
     standardPass = vtk.vtkRenderStepsPass()
     edlPass = vtk.vtkEDLShading()
