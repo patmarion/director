@@ -75,6 +75,7 @@ set(python_files
   director/lcmUtils.py
   director/mainwindowapp.py
   director/mapsregistrar.py
+  director/maptileviewer.py
   director/matlab.py
   director/matlabik.py
   director/measurementpanel.py
@@ -175,6 +176,7 @@ set(python_files
   director/thirdparty/conversions.py
   director/thirdparty/geometry_msgs_mock.py
   director/thirdparty/naming.py
+  director/thirdparty/osm_utils.py
   director/thirdparty/pysdf.py
   director/thirdparty/toposort.py
 
