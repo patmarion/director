@@ -77,8 +77,8 @@ class DebugData(object):
             polyData = applyTubeFilter(polyData, tubeRadius)
         self.addPolyData(polyData, color=None)
 
-    def addCircle(self, origin, normal, radius, color=[1,1,1]):
-        self.addCone(origin, normal, radius, height=0, color=color, fill=False)
+    def addCircle(self, origin, normal, radius, color=[1,1,1], fill=False):
+        self.addCone(origin, normal, radius, height=0, color=color, fill=fill)
 
     def addCone(self, origin, normal, radius, height, color=[1,1,1], fill=True):
         normal = np.array(normal) / np.linalg.norm(normal)
