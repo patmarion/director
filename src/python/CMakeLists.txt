@@ -22,6 +22,7 @@ set(python_files
   director/cameracontrol.py
   director/cameracontrolpanel.py
   director/camerainteractor.py
+  director/camerainterpolator.py
   director/cameraview.py
   director/colorize.py
   director/componentgraph.py
@@ -49,6 +50,7 @@ set(python_files
   director/framevisualization.py
   director/gamepad.py
   director/geometryencoder.py
+  director/gradientbackground.py
   director/handcontrolpanel.py
   director/handdriver.py
   director/takktilevis.py
