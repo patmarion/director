@@ -192,7 +192,9 @@ if 'enableComponents' in drcargs.getDirectorConfig():
 
 
 if useSpreadsheet:
-    spreadsheet.init(poseCollection, costCollection)
+    robotStateJointController.poseCollection = poseCollection
+    teleopJointController.poseCollection = poseCollection
+    spreadsheet.init(robotstate.getDrakePoseJointNames(), poseCollection, costCollection)
 
 
 if useIk:
