@@ -663,7 +663,7 @@ def addParentPropertySync(obj):
         parent._syncedProperties = set()
         parent.properties.connectPropertyChanged(onPropertyChanged)
     for propertyName in obj.properties.propertyNames():
-        if propertyName in parent._syncedProperties:
+        if propertyName == 'Name' or propertyName in parent._syncedProperties:
             continue
         parent._syncedProperties.add(propertyName)
         parent.properties.addProperty(propertyName, obj.properties.getProperty(propertyName), attributes=obj.properties._attributes[propertyName])
