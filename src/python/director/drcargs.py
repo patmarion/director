@@ -141,7 +141,7 @@ class DRCArgParser(object):
                             const=self.getDefaultDualArmHuskyConfigFile(),
                             help='Use Dual Arm Husky')
 
-    def addDefaultArgs(self, parser):
+    def addDRCArgs():
 
         parser.add_argument('-c', '--bot-config', '--config_file', dest='config_file',
                             metavar='filename', type=str, help='Robot cfg file')
@@ -161,6 +161,10 @@ class DRCArgParser(object):
 
         if self._isPyDrakeAvailable():
             self.addDrakeConfigShortcuts(directorConfig)
+
+
+    def addDefaultArgs(self, parser):
+
 
         parser.add_argument('--data', type=str, nargs='+', dest='data_files',
                             default=[], action='append', metavar='filename',

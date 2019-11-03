@@ -162,7 +162,7 @@ class MainWindowAppFactory(object):
             'RunScriptFunction' : ['Globals'],
             'ScriptLoader' : ['MainWindow', 'RunScriptFunction']}
 
-        disabledComponents = []
+        disabledComponents = ['AdjustedClippingRange']
 
         return components, disabledComponents
 
@@ -284,6 +284,7 @@ class MainWindowAppFactory(object):
 
         viewBackgroundLightHandler = viewcolors.ViewBackgroundLightHandler(fields.viewOptions, fields.gridObj,
                                 lightAction)
+        viewBackgroundLightHandler.toggle()
 
         return FieldContainer(viewBackgroundLightHandler=viewBackgroundLightHandler, terrainToggle=terrainToggle)
 

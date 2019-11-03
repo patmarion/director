@@ -1,5 +1,4 @@
 import director.applogic as app
-from director import lcmUtils
 from director import transformUtils
 from director import visualization as vis
 from director import filterUtils
@@ -17,6 +16,11 @@ import numpy as np
 from director.simpletimer import SimpleTimer
 from director import ioUtils
 import sys
+
+try:
+    from director import lcmUtils
+except ImportError:
+    pass
 
 
 def clipRange(dataObj, arrayName, thresholdRange):

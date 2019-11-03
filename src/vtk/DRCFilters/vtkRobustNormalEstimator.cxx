@@ -26,7 +26,7 @@ vtkRobustNormalEstimator::vtkRobustNormalEstimator()
   this->MaxCenterError = 0.02;
   this->MaxEstimationError = 0.01;
   this->MaxIterations = 100;
-  this->ComputeCurvature = false;
+  this->ComputeCurvature = true;
 
   this->SetNumberOfInputPorts(1);
   this->SetNumberOfOutputPorts(1);

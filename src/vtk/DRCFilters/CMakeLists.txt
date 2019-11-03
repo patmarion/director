@@ -137,14 +137,25 @@ if (USE_DRC_MAPS)
   list(APPEND deps ${MAPS_LIBRARIES} ${PCL_LIBRARIES})
 endif()
 
-if (USE_DRC_PLANE_SEG)
-  find_package(PlaneSeg REQUIRED)
+if (USE_PCL)
+  #find_package(PlaneSeg REQUIRED)
+  set(vtk_libraries_prev  ${VTK_LIBRARIES})
   find_package(PCL REQUIRED)
+  set(VTK_LIBRARIES ${vtk_libraries_prev})
 
   list(APPEND sources
     vtkPlaneSegmentation.cxx
     vtkRobustNormalEstimator.cxx
     vtkSurfaceFitter.cxx
+  )
+
+  list(APPEND EXTRA_SRCS
+    plane-seg/PlaneFitter.cpp
+    plane-seg/RobustNormalEstimator.cpp
+    plane-seg/IncrementalPlaneEstimator.cpp
+    plane-seg/PlaneSegmenter.cpp
+    plane-seg/RectangleFitter.cpp
+    plane-seg/BlockFitter.cpp
   )
 
   list(APPEND headers
@@ -153,9 +164,10 @@ if (USE_DRC_PLANE_SEG)
     vtkSurfaceFitter.h
   )
 
-  include_directories(${PLANE_SEG_INCLUDE_DIRS})
+  #include_directories(${PLANE_SEG_INCLUDE_DIRS})
   include_directories(${PCL_INCLUDE_DIRS})
   list(APPEND deps ${PLANE_SEG_LIBRARIES} ${PCL_LIBRARIES})
+
 endif()
 
 if(USE_LCMGL)

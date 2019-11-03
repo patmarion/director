@@ -26,7 +26,7 @@ vtkStandardNewMacro(vtkSurfaceFitter);
 //----------------------------------------------------------------------------
 vtkSurfaceFitter::vtkSurfaceFitter()
 {
-
+  this->ComputeNormals = true;
   this->MaxError = 0.05;
   this->MaxAngle = 5.0*M_PI/180;
   this->SearchRadius = 0.03;
@@ -190,25 +190,39 @@ int vtkSurfaceFitter::RequestData(
   // get input and output data objects
   vtkInformation *inInfo = inputVector[0]->GetInformationObject(0);
   vtkPolyData *input = vtkPolyData::SafeDownCast(inInfo->Get(vtkDataObject::DATA_OBJECT()));
-
-  vtkInformation *outInfo = outputVector->GetInformationObject(0);
-  vtkPolyData *output = vtkPolyData::SafeDownCast(outInfo->Get(vtkDataObject::DATA_OBJECT()));
-
-
-  // create new normals array
-  vtkSmartPointer<vtkFloatArray> normals = vtkSmartPointer<vtkFloatArray>::New();
-  normals->SetNumberOfComponents(3);
-  normals->SetNumberOfTuples(input->GetNumberOfPoints());
-  normals->SetName("normals");
-
-  // pass input thru to output and add new array
-  output->ShallowCopy(input);
-  output->GetPointData()->AddArray(normals);
-
   // early exit if input data has no points
   if (!input->GetNumberOfPoints())
     {
     return 1;
+    }
+
+
+  vtkInformation *outInfo = outputVector->GetInformationObject(0);
+  vtkPolyData *output = vtkPolyData::SafeDownCast(outInfo->Get(vtkDataObject::DATA_OBJECT()));
+  output->ShallowCopy(input);
+
+  vtkSmartPointer<vtkFloatArray> normals;
+  if (this->ComputeNormals)
+    {
+    // create new normals array
+    normals = vtkSmartPointer<vtkFloatArray>::New();
+    normals->SetNumberOfComponents(3);
+    normals->SetNumberOfTuples(input->GetNumberOfPoints());
+    normals->SetName("normals");
+    output->GetPointData()->AddArray(normals);
+    }
+  else
+    {
+    normals = vtkFloatArray::SafeDownCast(input->GetPointData()->GetNormals());
+    if (!normals)
+      {
+      normals = vtkFloatArray::SafeDownCast(input->GetPointData()->GetArray("normals"));
+      }
+    if (!normals)
+      {
+      vtkErrorMacro("Input data does not have a normals float array, but ComputeNormals is off.");
+      return 0;
+      }
     }
 
   // convert point cloud
@@ -218,25 +232,48 @@ int vtkSurfaceFitter::RequestData(
 
   pcl::copyPointCloud<pcl::PointXYZ, planeseg::Point>(*cloud, *lcloud);
 
-  planeseg::RobustNormalEstimator normalEstimator;
-  normalEstimator.setRadius(this->RobustNormalEstimator->GetRadius());
-  normalEstimator.setMaxCenterError(this->RobustNormalEstimator->GetMaxCenterError());
-  normalEstimator.setMaxEstimationError(this->RobustNormalEstimator->GetMaxEstimationError());
-  normalEstimator.setMaxIterations(this->RobustNormalEstimator->GetMaxIterations());
-
   planeseg::NormalCloud::Ptr cloudNormals(new planeseg::NormalCloud);
 
-  //printf("computing normals...\n");
-  normalEstimator.go(lcloud, *cloudNormals);
-  //printf("done.\n");
-
-  assert(cloudNormals->size() == normals->GetNumberOfTuples());
-
-  for (size_t i = 0; i < cloudNormals->size(); ++i)
+  if (this->ComputeNormals)
     {
-    normals->SetTuple(i, cloudNormals->points[i].normal);
-    }
+    planeseg::RobustNormalEstimator normalEstimator;
+    normalEstimator.setRadius(this->RobustNormalEstimator->GetRadius());
+    normalEstimator.setMaxCenterError(this->RobustNormalEstimator->GetMaxCenterError());
+    normalEstimator.setMaxEstimationError(this->RobustNormalEstimator->GetMaxEstimationError());
+    normalEstimator.setMaxIterations(this->RobustNormalEstimator->GetMaxIterations());
+    normalEstimator.go(lcloud, *cloudNormals);
 
+    assert(cloudNormals->size() == normals->GetNumberOfTuples());
+
+    for (size_t i = 0; i < cloudNormals->size(); ++i)
+      {
+      normals->SetTuple(i, cloudNormals->points[i].normal);
+      }
+    }
+  else
+    {
+    vtkDoubleArray* curvature = vtkDoubleArray::SafeDownCast(input->GetPointData()->GetArray("curvature"));
+    if (!curvature)
+      {
+      vtkErrorMacro("Input data does not have a curvature double array, but ComputeNormals is off.");
+      return 0;
+      }
+
+    cloudNormals->width = normals->GetNumberOfTuples();
+    cloudNormals->height = 0;
+    cloudNormals->is_dense = false;
+    cloudNormals->resize(cloudNormals->width);
+
+    for (size_t i = 0; i < cloudNormals->size(); ++i)
+      {
+      auto normal = normals->GetTuple(i);
+      auto &ptNormal = cloudNormals->points[i];
+      ptNormal.normal_x = normal[0];
+      ptNormal.normal_y = normal[1];
+      ptNormal.normal_z = normal[2];
+      ptNormal.curvature = curvature->GetValue(i);
+      }
+    }
 
   //printf("segmenting planes...\n");
 

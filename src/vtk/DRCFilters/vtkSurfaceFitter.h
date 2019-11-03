@@ -16,6 +16,12 @@ public:
 
   static vtkSurfaceFitter *New();
 
+  // Sets whether or not this filter should compute normals for the input
+  // data.  When disabled the input data must have normals defined. 
+  vtkSetMacro(ComputeNormals, bool);
+  vtkGetMacro(ComputeNormals, bool);
+  vtkBooleanMacro(ComputeNormals, bool);
+
   // Max average distance error from points to the plane estimate.
   // Region growing will not add a point that increases the average
   // error beyond this threshold.
@@ -51,6 +57,7 @@ public:
 
 protected:
 
+  bool ComputeNormals;
   double MaxError;
   double MaxAngle;
   double SearchRadius;
