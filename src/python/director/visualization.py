@@ -14,6 +14,7 @@ import os
 import colorsys
 import weakref
 import itertools
+import functools
 
 
 class PolyDataItem(om.ObjectModelItem):
@@ -107,6 +108,11 @@ class PolyDataItem(om.ObjectModelItem):
         if not arrayName:
             self.mapper.ScalarVisibilityOff()
             self.polyData.GetPointData().SetActiveScalars(None)
+            return
+
+        if arrayName == 'Solid Color' and self.actor.GetTexture():
+            tex = self.actor.GetTexture()
+            tex.SetLookupTable(lut)
             return
 
         array = self.polyData.GetPointData().GetArray(arrayName)
@@ -1581,4 +1587,94 @@ def showQLabelImage(filename):
     imageLabel.setWindowTitle(os.path.basename(filename))
     imageLabel.show()
     return imageLabel
+
+
+def getMatplotLibColorMapNames():
+    from matplotlib import cm
+    names = [name for name in cm.cmap_d.keys() if not name.endswith('_r')]
+    return sorted(names, key=lambda x: x.lower())
+
+
+# TODO
+# add alpha mapping too
+@functools.lru_cache()
+def getColorMap(name, scalarRange, reverse=False, discretize=0):
+    from matplotlib import cm
+    colorMap = cm.cmap_d[name]
+    if discretize:
+        f = vtk.vtkDiscretizableColorTransferFunction()
+        f.DiscretizeOn()
+        f.SetNumberOfValues(discretize)
+    else:
+        f = vtk.vtkColorTransferFunction()
+    valueRange = scalarRange[1] - scalarRange[0]
+
+    # TODO
+    # for color lists
+    numberOfColors = 255
+    for i in range(numberOfColors+1):
+        pvalue = i/(numberOfColors)
+        scalarValue = scalarRange[0] + pvalue * valueRange
+        if reverse:
+            color = colorMap(1.0 - pvalue)
+        else:
+            color = colorMap(pvalue)
+        f.AddRGBPoint(scalarValue,  color[0], color[1], color[2])
+    f.Build()
+    return f
+
+
+def onColorMapPropertyChanged(propertySet, propertyName, obj):
+
+    def _setPropertiesHidden(propertyNames, hidden):
+        for propertyName in propertyNames:
+            propertySet.setPropertyAttribute(propertyName, 'hidden', hidden)
+
+
+    colorMapProperties = ('Color Map', 'Scalar Range', 'Color Map Reverse', 'Color Map Repeat', 'Discrete Colors')
+
+    if propertyName == 'Color By':
+        colorByName = propertySet.getPropertyEnumValue('Color By')
+        if colorByName in ('rgb', 'RGB', 'RGB255') or colorByName == 'Solid Color' and not obj.actor.GetTexture():
+            _setPropertiesHidden(colorMapProperties, True)
+            _setPropertiesHidden(['Color'], False)
+            return
+        else:
+            _setPropertiesHidden(colorMapProperties, False)
+            _setPropertiesHidden(['Color'], True)
+
+            if colorByName != 'Solid Color':
+                if colorByName not in obj.rangeMap:
+                    scalarRange = obj.polyData.GetPointData().GetArray(colorByName).GetRange()
+                    obj.rangeMap[colorByName] = scalarRange
+                obj.setProperty('Scalar Range', obj.rangeMap[colorByName])
+
+    if propertyName == 'Color By' or propertyName in colorMapProperties:
+        arrayName = propertySet.getPropertyEnumValue('Color By')
+        if arrayName == 'Solid Color' and not obj.actor.GetTexture():
+            return
+        colorMapName = propertySet.getPropertyEnumValue('Color Map')
+        scalarRange = propertySet.getProperty('Scalar Range')
+        reverse = propertySet.getProperty('Color Map Reverse')
+        repeat = propertySet.getProperty('Color Map Repeat')
+        discretize = propertySet.getProperty('Discrete Colors')
+        colorMap = getColorMap(colorMapName, tuple(scalarRange), reverse, discretize)
+        obj.colorBy(arrayName, scalarRange, lut=colorMap)
+        if obj.scalarBarWidget:
+            obj.scalarBarWidget.GetScalarBarActor().SetLookupTable(colorMap)
+
+
+def addColorMapProperties(obj):
+    if obj.properties.hasProperty('Color Map'):
+        return
+    def _onPropertyChanged(propertySet, propertyName):
+        onColorMapPropertyChanged(propertySet, propertyName, obj)
+    obj.addProperty('Color Map', 0, attributes=om.PropertyAttributes(enumNames=getMatplotLibColorMapNames()))
+    obj.addProperty('Scalar Range', [0.0, 1.0])
+    obj.addProperty('Discrete Colors', 0, attributes=om.PropertyAttributes(minimum=0, maximum=999))
+    obj.addProperty('Color Map Reverse', False)
+    obj.addProperty('Color Map Repeat', 1, attributes=om.PropertyAttributes(minimum=1, maximum=999))
+    obj.setProperty('Color Map', 'jet')
+    obj.properties.connectPropertyChanged(_onPropertyChanged)
+    _onPropertyChanged(obj.properties, 'Color By')
 
