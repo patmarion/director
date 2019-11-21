@@ -109,7 +109,10 @@ class ObjectModelItem(object):
         return False
 
     def getActionNames(self):
-        actions = ['Rename']
+        actions = []
+        if not self.getPropertyAttribute('Name', 'readOnly'):
+            actions.append('Rename')
+
         for delegate in self.actionDelegates:
             delegateActions = delegate.getActionNames()
             if delegateActions:

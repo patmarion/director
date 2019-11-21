@@ -930,8 +930,8 @@ class ViewOptionsItem(om.ObjectModelItem):
 
     def __init__(self, view):
         om.ObjectModelItem.__init__(self, 'view options')
-
         self.view = view
+        self.setPropertyAttribute('Name', 'readOnly', True)
         self.addProperty('Camera projection', 0, attributes=om.PropertyAttributes(enumNames=['Perspective', 'Parallel']))
         self.addProperty('View angle', view.camera().GetViewAngle(), attributes=om.PropertyAttributes(minimum=2, maximum=180))
         self.addProperty('Key light intensity', view.lightKit().GetKeyLightIntensity(), attributes=om.PropertyAttributes(minimum=0, maximum=5, singleStep=0.1, decimals=2))
