@@ -60,6 +60,11 @@ ddViewBase* ddViewManager::currentView() const;
 void ddViewManager::popOut(ddViewBase*);
 
 
+ddSortFilterProxyModel::ddSortFilterProxyModel();
+ddSortFilterProxyModel::ddSortFilterProxyModel(QObject*);
+ddSortFilterProxyModel::~ddSortFilterProxyModel();
+
+
 ddSpreadsheetView::ddSpreadsheetView();
 ddSpreadsheetView::~ddSpreadsheetView();
 QAbstractItemModel* ddSpreadsheetView::model();

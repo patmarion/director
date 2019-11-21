@@ -555,7 +555,7 @@ class ObjectModelTree(object):
         itemModel.setHeaderData(0, QtCore.Qt.Horizontal, 'Name')
         itemModel.setHeaderData(1, QtCore.Qt.Horizontal, Icons.getIcon(Icons.Eye), 1)
 
-        sortModel = QtGui.QSortFilterProxyModel()
+        sortModel = PythonQt.dd.ddSortFilterProxyModel()
         sortModel.setSourceModel(itemModel)
 
         treeView.setModel(sortModel)

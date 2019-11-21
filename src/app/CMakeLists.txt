@@ -73,6 +73,7 @@ qt_wrap_cpp(moc_srcs
   ddPythonUndoCommand.h
   ddQVTKWidgetView.h
   ddSignalMap.h
+  ddSortFilterProxyModel.h
   ddSpreadsheetView.h
   ddTaskSelection.h
   ddViewBase.h
@@ -138,6 +139,7 @@ list(APPEND hdrs
   ddPythonUndoCommand.h
   ddQVTKWidgetView.h
   ddSignalMap.h
+  ddSortFilterProxyModel.h
   ddSpreadsheetView.h
   ddTaskSelection.h
   ddViewBase.h
