@@ -92,6 +92,12 @@ class ObjectModelItem(object):
     def setPropertyAttribute(self, propertyName, propertyAttribute, value):
         self.properties.setPropertyAttribute(propertyName, propertyAttribute, value)
 
+    def connectPropertyChanged(self, func):
+        return self.properties.connectPropertyChanged(func)
+
+    def connectPropertyValueChanged(self, propertyName, func):
+        return self.properties.connectPropertyValueChanged(propertyName, func)
+
     def _onPropertyChanged(self, propertySet, propertyName):
         if self._tree is not None:
             self._tree._onPropertyValueChanged(self, propertyName)
