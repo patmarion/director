@@ -12,6 +12,7 @@ int main(int argc, char **argv)
   QApplication app(argc, argv);
   ddPythonManager* pythonManager = new ddPythonManager;
   pythonManager->setSysArgv(QApplication::instance()->arguments());
+  pythonManager->setPythonPath();
   PythonQt::self()->addVariable(PythonQt::self()->importModule("sys"), "executable", QCoreApplication::applicationFilePath());
 
   PythonQt::self()->importModule("director");

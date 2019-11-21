@@ -23,6 +23,7 @@ public:
   static QString appSitePackagesDir();
 
   void setSysArgv(const QStringList& args);
+  void setPythonPath();
 
 public slots:
 

@@ -253,6 +253,7 @@ void ddMainWindow::setPythonManager(ddPythonManager* pythonManager)
 //-----------------------------------------------------------------------------
 void ddMainWindow::setupPython()
 {
+  this->Internal->PythonManager->setPythonPath();
   this->Internal->PythonManager->setSysArgv(QApplication::instance()->arguments());
   this->Internal->PythonManager->addObjectToPythonMain("_mainWindow", this);
   this->Internal->PythonManager->setupConsole(this);

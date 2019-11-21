@@ -59,9 +59,12 @@ void ddPythonManager::preInitialization()
 {
   this->addWrapperFactory(new ddPythonQtWrapperFactory);
   this->registerPythonQtDecorator(new ddPythonQtDecorators);
-
   PythonQt::self()->importModule("PythonQt.dd").addObject("_pythonManager", this);
+}
 
+//-----------------------------------------------------------------------------
+void ddPythonManager::setPythonPath()
+{
   QString libDir = QFileInfo(QCoreApplication::applicationDirPath() + "/../lib").canonicalFilePath();
   PythonQtObjectPtr mod = PythonQt::self()->importModule("sys");
   QVariantList version = mod.getVariable("version_info").value<QVariantList>();
