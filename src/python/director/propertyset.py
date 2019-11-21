@@ -166,6 +166,20 @@ class PropertySet(object):
             else:
                 raise exc
 
+    def __setattr__(self, name, value):
+        try:
+            object.__getattribute__(self, name)
+        except AttributeError as exc:
+            try:
+                alternateNames = object.__getattribute__(self, '_alternateNames')
+            except AttributeError:
+                pass
+            else:
+                if name in alternateNames:
+                    return self.setProperty(alternateNames[name], value)
+        object.__setattr__(self, name, value)
+
+
 
 class PropertyPanelHelper(object):
 
