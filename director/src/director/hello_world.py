@@ -2,25 +2,40 @@
 
 import sys
 import vtk
-from qtpy.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout
+from qtpy.QtWidgets import QApplication, QMainWindow, QDockWidget, QTreeWidget
 from qtpy.QtCore import Qt
 
-from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+from director.vtk_widget import VTKWidget
+from director.objectmodel import ObjectModelTree, ObjectModelItem
 
 
-class VTKWidget(QWidget):
-    """A Qt widget that contains a VTK render window."""
+class DummyPropertiesPanel:
+    """Dummy properties panel for hello world example."""
     
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        
-        # Create VTK renderer, render window, and interactor
-        self.renderer = vtk.vtkRenderer()
-        self.vtk_widget = QVTKRenderWindowInteractor(self)         
-        self.render_window = self.vtk_widget.GetRenderWindow()
-        self.render_window.AddRenderer(self.renderer)
+    def clear(self):
+        """Clear the panel."""
+        pass
+    
+    def setBrowserModeToWidget(self):
+        """Set browser mode to widget."""
+        pass
 
-        self.interactor = self.render_window.GetInteractor()
+
+
+class MainWindow(QMainWindow):
+    """Main application window."""
+    
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Director 2.0 - Hello World")
+        self.setGeometry(100, 100, 800, 600)
+        
+        # Create central widget with VTK
+        self.vtk_widget = VTKWidget(self)
+        self.setCentralWidget(self.vtk_widget)
+        
+        # Create object model dock widget
+        self._setup_object_model()
         
         # Create a simple VTK scene - a sphere
         sphere_source = vtk.vtkSphereSource()
@@ -35,31 +50,35 @@ class VTKWidget(QWidget):
         actor.SetMapper(mapper)
         actor.GetProperty().SetColor(0.7, 0.3, 0.3)  # Reddish color
         
-        self.renderer.AddActor(actor)
-        self.renderer.SetBackground(0.2, 0.2, 0.3)  # Dark blue background
-        self.renderer.ResetCamera()
-
-        self.interactor.Initialize()
+        # Add actor to the renderer using the VTKWidget API
+        self.vtk_widget.renderer().AddActor(actor)
         
-        # Set up the layout
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        self.setLayout(layout)
-        layout.addWidget(self.vtk_widget)
+        # Reset camera to fit the scene
+        self.vtk_widget.resetCamera()
     
-
-
-class MainWindow(QMainWindow):
-    """Main application window."""
-    
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Director 2.0 - Hello World")
-        self.setGeometry(100, 100, 800, 600)
+    def _setup_object_model(self):
+        """Setup the object model as a dock widget."""
+        # Create dock widget for object model
+        dock = QDockWidget("Object Model", self)
+        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         
-        # Create central widget with VTK
-        self.vtk_widget = VTKWidget(self)
-        self.setCentralWidget(self.vtk_widget)
+        # Create tree widget
+        tree_widget = QTreeWidget()
+        
+        # Create object model tree and initialize it
+        self.object_model = ObjectModelTree()
+        properties_panel = DummyPropertiesPanel()
+        self.object_model.init(tree_widget, properties_panel)
+        
+        # Add test object to the object model
+        test_obj = ObjectModelItem("test obj")
+        self.object_model.addToObjectModel(test_obj)
+        
+        # Set tree widget as the dock widget's widget
+        dock.setWidget(tree_widget)
+        
+        # Add dock widget to the left side
+        self.addDockWidget(Qt.LeftDockWidgetArea, dock)
 
 
 def main():

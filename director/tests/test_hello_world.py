@@ -21,9 +21,9 @@ def test_vtk_widget_construction(qapp):
     """Test that VTKWidget can be constructed."""
     widget = VTKWidget()
     assert widget is not None
-    assert widget.renderer is not None
-    assert widget.render_window is not None
-    assert widget.vtk_widget is not None
+    assert widget.renderer() is not None
+    assert widget.renderWindow() is not None
+    assert widget.vtkWidget() is not None
 
 
 def test_vtk_widget_show(qapp):
