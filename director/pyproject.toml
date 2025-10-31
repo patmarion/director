@@ -12,6 +12,9 @@ dependencies = [
     "vtk>=9.0",
     "qtpy>=2.0.0",
     "PySide6>=6.0.0",
+    "qtconsole>=5.4.0",
+    "ipykernel>=6.0.0",
+    "jupyter-client>=7.0.0",
 ]
 
 [project.optional-dependencies]

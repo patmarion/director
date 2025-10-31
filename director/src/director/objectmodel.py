@@ -500,7 +500,7 @@ class ObjectModelTree(QObject):
 
     def eventFilter(self, obj, event):
         """Event filter for handling delete key."""
-        if obj == self._treeWidget and event.type() == QtCore.QEvent.KeyPress:
+        if hasattr(self, '_treeWidget') and obj == self._treeWidget and event.type() == QtCore.QEvent.KeyPress:
             if event.key() == QtCore.Qt.Key_Delete:
                 self.removeSelectedItems()
                 return True

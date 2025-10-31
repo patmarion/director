@@ -178,6 +178,38 @@ class PropertySet(object):
                 return object.__getattribute__(self, 'getProperty')(alternateNames[name])
             else:
                 raise exc
+    
+    def __setattr__(self, name, value):
+        """Allow setting properties via alternate names."""
+        # First, check if this is a real attribute (one that exists or is being initialized)
+        # We need to check this carefully to avoid infinite recursion
+        
+        # Check if this is a protected/private attribute or an internal attribute
+        if name.startswith('_') or name in ['callbacks', '_properties', '_attributes', '_alternateNames']:
+            object.__setattr__(self, name, value)
+            return
+        
+        # Try to get the attribute - if it exists, set it normally
+        try:
+            # If we can get it, it's a real attribute
+            object.__getattribute__(self, name)
+            object.__setattr__(self, name, value)
+            return
+        except AttributeError:
+            # Attribute doesn't exist, check if it's an alternate property name
+            try:
+                alternateNames = object.__getattribute__(self, '_alternateNames')
+                if name in alternateNames:
+                    # Found as alternate name, set the property
+                    propertyName = alternateNames[name]
+                    object.__getattribute__(self, 'setProperty')(propertyName, value)
+                    return
+                else:
+                    # Not found, raise AttributeError
+                    raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+            except AttributeError:
+                # _alternateNames doesn't exist yet (during __init__), just set normally
+                object.__setattr__(self, name, value)
 
 
 class PropertyPanelHelper(object):

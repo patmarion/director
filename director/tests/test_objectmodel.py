@@ -105,3 +105,46 @@ def test_object_model_add_and_show(qapp):
     widget.close()
     qapp.processEvents()
 
+
+def test_object_model_property_change_updates_tree_item(qapp):
+    """Test that changing a property on an object updates the QTreeWidgetItem."""
+    tree = ObjectModelTree()
+    tree_widget = QTreeWidget()
+    properties_panel = DummyPropertiesPanel()
+    
+    tree.init(tree_widget, properties_panel)
+    
+    # Create and add an item
+    obj = ObjectModelItem("original name")
+    tree.addToObjectModel(obj)
+    
+    # Process events to ensure tree widget is updated
+    qapp.processEvents()
+    
+    # Verify initial name is set correctly
+    tree_item = tree_widget.topLevelItem(0)
+    assert tree_item is not None
+    assert tree_item.text(0) == "original name"
+    
+    # Change the name property using setProperty
+    obj.setProperty('Name', 'new name')
+    
+    # Process events to allow signal/slot connections to propagate
+    qapp.processEvents()
+    
+    # Verify the tree widget item text has been updated
+    assert tree_item.text(0) == "new name"
+    
+    # Also verify the property was actually changed
+    assert obj.getProperty('Name') == "new name"
+    
+    # Test direct property access via properties attribute (using alternate name)
+    obj.properties.name = "another name"
+    
+    # Process events again
+    qapp.processEvents()
+    
+    # Verify the tree widget item text has been updated again
+    assert tree_item.text(0) == "another name"
+    assert obj.getProperty('Name') == "another name"
+
