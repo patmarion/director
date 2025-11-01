@@ -3,7 +3,8 @@
 import sys
 import pytest
 from qtpy.QtWidgets import QApplication
-from director.hello_world import VTKWidget, MainWindow
+from director.vtk_widget import VTKWidget
+from director.mainwindow import MainWindow
 
 
 @pytest.fixture(scope="session")

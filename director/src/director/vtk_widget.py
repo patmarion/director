@@ -90,6 +90,9 @@ class VTKWidget(QWidget):
         # FPS counter
         self._fps_counter = FPSCounter()
         
+        # Custom bounds for camera reset
+        self._custom_bounds = []
+        
         # Render pending flag
         self._render_pending = False
         
@@ -109,8 +112,37 @@ class VTKWidget(QWidget):
         self._vtk_widget.Initialize()
         self._vtk_widget.Start()
         
+        # Set terrain interactor style by default (natural view up, azimuth/elevation camera control)
+        interactor = self._render_window.GetInteractor()
+        if interactor:
+            terrain_style = vtk.vtkInteractorStyleTerrain()
+            interactor.SetInteractorStyle(terrain_style)
+            # Set view up to Z-axis for terrain mode
+            camera = self._renderer.GetActiveCamera()
+            if camera:
+                camera.SetViewUp(0.0, 0.0, 1.0)
+        
+        # Install default view behaviors (context menus, key bindings, etc.)
+        from director.viewbehaviors import ViewBehaviors
+        self._view_behaviors = ViewBehaviors(self)
+        
+        # Grid will be added later when object model is initialized
+        self._grid_obj = None
+        
         # Reset camera
         self._renderer.ResetCamera()
+    
+    def initializeGrid(self):
+        """Initialize the default grid (called after object model is set up)."""
+        if self._grid_obj is None:
+            from director import visualization as vis
+            try:
+                self._grid_obj = vis.showGrid(self, name='grid', parent='scene', 
+                                            cellSize=0.5, numberOfCells=25,
+                                            alpha=0.3, color=[0.5, 0.5, 0.5])
+            except:
+                # Object model might not be ready yet, ignore
+                pass
     
     def renderWindow(self):
         """Return the VTK render window."""
@@ -150,9 +182,48 @@ class VTKWidget(QWidget):
         self._renderer.ResetCameraClippingRange()
         self._render_window.Render()
     
+    def addCustomBounds(self, bounds):
+        """Add custom bounds for camera reset calculation."""
+        # bounds should be a list/tuple of 6 values [xmin, xmax, ymin, ymax, zmin, zmax]
+        if len(bounds) == 6:
+            self._custom_bounds.append(list(bounds))
+    
     def resetCamera(self):
-        """Reset the camera to fit all actors."""
-        self._renderer.ResetCamera()
+        """Reset the camera to fit all actors, excluding the grid if present."""
+        # Try to compute bounds excluding grid
+        bounds = None
+        if hasattr(self, '_grid_obj') and self._grid_obj:
+            try:
+                from director.viewbounds import computeViewBoundsNoGrid
+                bounds = computeViewBoundsNoGrid(self, self._grid_obj)
+                # Check if bounds are valid
+                if bounds is not None and len(bounds) == 6:
+                    # Check if bounds are initialized (not all zeros)
+                    if not all(abs(b) < 1e-9 for b in bounds):
+                        bounds_array = [float(b) for b in bounds]
+                        self._renderer.ResetCamera(bounds_array)
+                        self._renderer.ResetCameraClippingRange()
+                        return
+            except:
+                pass
+        
+        # Fall back to custom bounds if available
+        if self._custom_bounds:
+            # Use vtkBoundingBox to combine all custom bounds
+            bbox = vtk.vtkBoundingBox()
+            for bounds in self._custom_bounds:
+                bounds_array = [float(b) for b in bounds]
+                bbox.AddBounds(bounds_array)
+            
+            if bbox.IsValid():
+                result_bounds = [0.0] * 6
+                bbox.GetBounds(result_bounds)
+                self._renderer.ResetCamera(result_bounds)
+            else:
+                self._renderer.ResetCamera()
+        else:
+            self._renderer.ResetCamera()
+        
         self._renderer.ResetCameraClippingRange()
     
     def getAverageFramesPerSecond(self):
