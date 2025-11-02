@@ -132,3 +132,65 @@ def toggleCameraTerrainMode(view=None):
         return
     setCameraTerrainModeEnabled(view, not getCameraTerrainModeEnabled(view))
 
+
+def addShortcut(widget, keySequence, func):
+    """Add a keyboard shortcut to a widget."""
+    from qtpy.QtWidgets import QShortcut
+    from qtpy.QtGui import QKeySequence
+    
+    shortcut = QShortcut(QKeySequence(keySequence), widget)
+    shortcut.activated.connect(func)
+    return shortcut
+
+
+def showPythonConsole():
+    """Show the Python console (stub - should be implemented by MainWindow)."""
+    # This should be implemented by MainWindow to show the Python console dock
+    # For now, just raise an error to indicate it needs to be implemented
+    raise NotImplementedError("showPythonConsole should be implemented by MainWindow")
+
+
+class ActionToggleHelper:
+    """Helper class for managing toggle actions with getter/setter functions."""
+    
+    def __init__(self, action, getValue, setValue):
+        """
+        Initialize toggle helper.
+        
+        Args:
+            action: QAction to toggle
+            getValue: Function that returns current state (bool)
+            setValue: Function that sets state (takes bool)
+        """
+        self.action = action
+        self.getValue = getValue
+        self.setValue = setValue
+        
+        action.setCheckable(True)
+        action.setChecked(self.getValue())
+        action.triggered.connect(self._onTriggered)
+    
+    def _onTriggered(self):
+        """Handle action trigger - toggle the state."""
+        newState = not self.getValue()
+        self.setValue(newState)
+        self.action.setChecked(newState)
+
+
+def MenuActionToggleHelper(menuName, actionName, getValue, setValue):
+    """
+    Add a toggle action to a menu.
+    
+    Args:
+        menuName: Name of the menu (e.g., 'Tools')
+        actionName: Name of the action
+        getValue: Function that returns current state (bool)
+        setValue: Function that sets state (takes bool)
+    
+    Note: This is a simplified version. The menu must be accessible via getMainWindow().
+    """
+    # This requires access to the main window's menu
+    # For now, this is a stub that would need the main window instance
+    # In practice, this should be called from MainWindowApp context
+    pass  # TODO: Implement if needed
+

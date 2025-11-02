@@ -13,12 +13,7 @@ from director.propertiespanel import PropertiesPanel
 import director.objectmodel as om
 import director.applogic as applogic
 
-try:
-    from qtconsole.rich_jupyter_widget import RichJupyterWidget
-    from qtconsole.inprocess import QtInProcessKernelManager
-    QTCONSOLE_AVAILABLE = True
-except ImportError:
-    QTCONSOLE_AVAILABLE = False
+from director.python_console import PythonConsoleWidget, QTCONSOLE_AVAILABLE
 
 
 class MainWindow(QMainWindow):
@@ -48,7 +43,7 @@ class MainWindow(QMainWindow):
         # Create Python console dock widget (initially hidden unless requested)
         # Defer console setup until needed to avoid blocking during construction
         self._python_console_dock = None
-        self._python_console_available = QTCONSOLE_AVAILABLE
+        self._python_console_widget_manager = None
         if show_python_console and QTCONSOLE_AVAILABLE:
             self._setup_python_console()
             self._toggle_python_console()
@@ -140,38 +135,23 @@ class MainWindow(QMainWindow):
         dock = QDockWidget("Python Console", self)
         dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
         
-        # Create the console widget
-        console_widget = RichJupyterWidget()
-        
-        # Initialize the in-process kernel
-        kernel_manager = QtInProcessKernelManager()
-        kernel_manager.start_kernel()
-        kernel = kernel_manager.kernel
-        kernel.gui = 'qt'
-        
-        # Start kernel client
-        kernel_client = kernel_manager.client()
-        kernel_client.start_channels()
-        
-        # Connect console to kernel
-        console_widget.kernel_manager = kernel_manager
-        console_widget.kernel_client = kernel_client
-        console_widget.set_default_style()
-        
-        # Set up namespace with access to application objects
-        kernel.shell.push({
+        # Create the console widget with namespace
+        namespace = {
             'app': self,
             'vtk_widget': self.vtk_widget,
             'object_model': self.object_model,
             'vtk': vtk,
             'sys': sys,
-        })
+        }
+        
+        console_widget_manager = PythonConsoleWidget(namespace=namespace)
         
         # Set console widget as dock widget's widget
-        dock.setWidget(console_widget)
+        dock.setWidget(console_widget_manager.get_widget())
         
-        # Store reference to dock
+        # Store references
         self._python_console_dock = dock
+        self._python_console_widget_manager = console_widget_manager
         
         # Initially hide the console
         dock.hide()
@@ -179,7 +159,7 @@ class MainWindow(QMainWindow):
     def _toggle_python_console(self):
         """Toggle the Python console dock widget visibility."""
         if self._python_console_dock is None:
-            if self._python_console_available:
+            if QTCONSOLE_AVAILABLE:
                 self._setup_python_console()
             else:
                 print("Python console not available. Please install qtconsole.")
@@ -194,15 +174,9 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """Handle window close event with proper cleanup."""
         # Clean up Python console kernel if it was created
-        if self._python_console_dock is not None:
+        if hasattr(self, '_python_console_widget_manager') and self._python_console_widget_manager is not None:
             try:
-                console_widget = self._python_console_dock.widget()
-                if hasattr(console_widget, 'kernel_manager') and console_widget.kernel_manager:
-                    # Stop kernel channels
-                    if hasattr(console_widget, 'kernel_client') and console_widget.kernel_client:
-                        console_widget.kernel_client.stop_channels()
-                    # Shutdown kernel
-                    console_widget.kernel_manager.shutdown_kernel()
+                self._python_console_widget_manager.shutdown()
             except:
                 pass  # Ignore errors during cleanup
         

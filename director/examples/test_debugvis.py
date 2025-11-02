@@ -5,9 +5,9 @@ them as PolyDataItem objects in the object model."""
 
 import sys
 from qtpy.QtWidgets import QApplication
-from qtpy.QtCore import QTimer
 
-from director.mainwindow import MainWindow, _setup_signal_handlers
+from director import mainwindowapp
+from director.mainwindow import _setup_signal_handlers
 from director.debugVis import DebugData
 from director import objectmodel as om
 from director import visualization as vis
@@ -113,6 +113,7 @@ def getHelixPoints(numberOfPoints=1000):
 
 def main():
     """Main entry point for the debug visualization test."""
+    # Construct QApplication first
     app = QApplication(sys.argv)
     
     # Set application properties
@@ -122,11 +123,11 @@ def main():
     # Setup signal handlers for Ctrl+C
     _setup_signal_handlers(app)
     
-    # Create and show main window
-    window = MainWindow(window_title="Director 2.0 - Debug Visualization Test")
+    # Construct the main window using component factory
+    fields = mainwindowapp.construct(windowTitle="Director 2.0 - Debug Visualization Test")
     
-    # Get the view (VTKWidget) for showing objects
-    view = window.vtk_widget
+    # Get the view from fields
+    view = fields.view
     applogic.setCurrentRenderView(view)
     
     # Install object picking and hover highlighting event filter
@@ -206,10 +207,8 @@ def main():
     # Reset camera
     applogic.resetCamera(viewDirection=[0, 0.1, -1], view=view)
     
-    window.show()
-    
-    # Start the event loop
-    sys.exit(app.exec_())
+    # Start the application (shows main window and enters event loop)
+    fields.app.start()
 
 
 if __name__ == "__main__":
