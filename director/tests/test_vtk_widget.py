@@ -86,8 +86,8 @@ def test_vtk_widget_light_kit(qapp):
 def test_vtk_widget_vtk_widget(qapp):
     """Test vtkWidget() method."""
     widget = VTKWidget()
-    vtk_widget = widget.vtkWidget()
-    assert vtk_widget is not None
+    vtk_w = widget.vtkWidget()
+    assert vtk_w is not None
 
 
 def test_vtk_widget_orientation_marker(qapp):
@@ -121,7 +121,6 @@ def test_vtk_widget_force_render(qapp):
 def test_vtk_widget_reset_camera(qapp):
     """Test resetCamera() method."""
     widget = VTKWidget()
-    
     # Add a simple actor to test camera reset
     sphere_source = vtk.vtkSphereSource()
     sphere_source.SetRadius(1.0)
@@ -141,7 +140,6 @@ def test_vtk_widget_reset_camera(qapp):
 def test_vtk_widget_get_average_fps(qapp):
     """Test getAverageFramesPerSecond() method."""
     widget = VTKWidget()
-    
     # Initially might be 0 or have some value
     fps = widget.getAverageFramesPerSecond()
     assert fps >= 0.0
@@ -165,8 +163,4 @@ def test_vtk_widget_show_and_close(qapp):
     
     # Verify widget is visible
     assert widget.isVisible()
-    
-    # Close the widget
-    widget.close()
-    qapp.processEvents()
 

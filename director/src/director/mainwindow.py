@@ -9,6 +9,7 @@ from qtpy.QtGui import QKeySequence
 
 from director.vtk_widget import VTKWidget
 from director.objectmodel import ObjectModelTree
+from director.propertiespanel import PropertiesPanel
 import director.objectmodel as om
 import director.applogic as applogic
 
@@ -18,18 +19,6 @@ try:
     QTCONSOLE_AVAILABLE = True
 except ImportError:
     QTCONSOLE_AVAILABLE = False
-
-
-class DummyPropertiesPanel:
-    """Dummy properties panel for examples."""
-    
-    def clear(self):
-        """Clear the panel."""
-        pass
-    
-    def setBrowserModeToWidget(self):
-        """Set browser mode to widget."""
-        pass
 
 
 class MainWindow(QMainWindow):
@@ -53,12 +42,16 @@ class MainWindow(QMainWindow):
         # Create object model dock widget (must be before console setup)
         self._setup_object_model()
         
+        # Create properties panel dock widget
+        self._setup_properties_panel()
+        
         # Create Python console dock widget (initially hidden unless requested)
+        # Defer console setup until needed to avoid blocking during construction
         self._python_console_dock = None
-        if QTCONSOLE_AVAILABLE:
+        self._python_console_available = QTCONSOLE_AVAILABLE
+        if show_python_console and QTCONSOLE_AVAILABLE:
             self._setup_python_console()
-            if show_python_console:
-                self._toggle_python_console()
+            self._toggle_python_console()
     
     def _setup_menu_bar(self):
         """Setup the menu bar."""
@@ -93,9 +86,9 @@ class MainWindow(QMainWindow):
         # Create tree widget
         tree_widget = QTreeWidget()
         
-        # Initialize the global object model (required for om.addToObjectModel to work)
-        properties_panel = DummyPropertiesPanel()
-        om.init(tree_widget, properties_panel)
+        # Get the properties panel (will be created in _setup_properties_panel)
+        # For now, pass None - we'll set it after creating the panel
+        om.init(tree_widget, None)
         
         # Get the global object model instance
         self.object_model = om.getDefaultObjectModel()
@@ -103,12 +96,43 @@ class MainWindow(QMainWindow):
         # Set tree widget as the dock widget's widget
         dock.setWidget(tree_widget)
         
+        # Store dock reference for tabbing
+        self._object_model_dock = dock
+        
         # Add dock widget to the left side
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
         
         # Initialize grid now that object model is ready
         if hasattr(self, 'vtk_widget') and self.vtk_widget:
             self.vtk_widget.initializeGrid()
+    
+    def _setup_properties_panel(self):
+        """Setup the properties panel as a dock widget below the object model."""
+        # Create dock widget for properties panel
+        dock = QDockWidget("Properties", self)
+        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        
+        # Create properties panel
+        properties_panel = PropertiesPanel()
+        
+        # Set the properties panel in the object model
+        object_model = om.getDefaultObjectModel()
+        if object_model:
+            object_model._propertiesPanel = properties_panel
+        
+        # Set properties panel as the dock widget's widget
+        dock.setWidget(properties_panel)
+        
+        # Store reference
+        self.properties_panel = properties_panel
+        
+        # Add dock widget to the left side, below the object model
+        self.addDockWidget(Qt.LeftDockWidgetArea, dock)
+        
+        # Tab the properties panel below the object model
+        # if hasattr(self, '_object_model_dock'):
+        #     self.tabifyDockWidget(self._object_model_dock, dock)
+        #     self._object_model_dock.raise_()
     
     def _setup_python_console(self):
         """Setup the Python console as a dock widget."""
@@ -155,7 +179,7 @@ class MainWindow(QMainWindow):
     def _toggle_python_console(self):
         """Toggle the Python console dock widget visibility."""
         if self._python_console_dock is None:
-            if QTCONSOLE_AVAILABLE:
+            if self._python_console_available:
                 self._setup_python_console()
             else:
                 print("Python console not available. Please install qtconsole.")
@@ -166,6 +190,24 @@ class MainWindow(QMainWindow):
         else:
             self._python_console_dock.show()
             self.addDockWidget(Qt.BottomDockWidgetArea, self._python_console_dock)
+    
+    def closeEvent(self, event):
+        """Handle window close event with proper cleanup."""
+        # Clean up Python console kernel if it was created
+        if self._python_console_dock is not None:
+            try:
+                console_widget = self._python_console_dock.widget()
+                if hasattr(console_widget, 'kernel_manager') and console_widget.kernel_manager:
+                    # Stop kernel channels
+                    if hasattr(console_widget, 'kernel_client') and console_widget.kernel_client:
+                        console_widget.kernel_client.stop_channels()
+                    # Shutdown kernel
+                    console_widget.kernel_manager.shutdown_kernel()
+            except:
+                pass  # Ignore errors during cleanup
+        
+        # Call parent closeEvent
+        super().closeEvent(event)
 
 
 def _setup_signal_handlers(app):

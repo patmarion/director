@@ -121,6 +121,11 @@ class VTKWidget(QWidget):
             camera = self._renderer.GetActiveCamera()
             if camera:
                 camera.SetViewUp(0.0, 0.0, 1.0)
+                # Set initial camera position for terrain mode to avoid view-up parallel warnings
+                # Position camera at a reasonable angle looking at origin
+                camera.SetPosition(10.0, 10.0, 10.0)
+                camera.SetFocalPoint(0.0, 0.0, 0.0)
+                camera.SetViewUp(0.0, 0.0, 1.0)
         
         # Install default view behaviors (context menus, key bindings, etc.)
         from director.viewbehaviors import ViewBehaviors
@@ -129,7 +134,7 @@ class VTKWidget(QWidget):
         # Grid will be added later when object model is initialized
         self._grid_obj = None
         
-        # Reset camera
+        # Reset camera (will adjust to scene bounds if actors exist)
         self._renderer.ResetCamera()
     
     def initializeGrid(self):
@@ -276,6 +281,26 @@ class VTKWidget(QWidget):
     def _on_end_render(self, obj, event):
         """Handle end render event to update FPS counter."""
         self._fps_counter.update()
+    
+    def closeEvent(self, event):
+        """Handle widget close event with proper cleanup."""
+        # Stop render timer first
+        if hasattr(self, '_render_timer'):
+            self._render_timer.stop()
+            try:
+                self._render_timer.timeout.disconnect(self._on_render_timer)
+            except (TypeError, RuntimeError):
+                pass
+        
+        # Remove observer for render events
+        if hasattr(self, '_render_window') and self._render_window:
+            try:
+                self._render_window.RemoveObserver(self._on_end_render)
+            except:
+                pass
+        
+        # Call parent closeEvent (VTK widget will clean itself up now that it's patched)
+        super().closeEvent(event)
     
     # def resizeEvent(self, event):
     #     """Handle widget resize events."""

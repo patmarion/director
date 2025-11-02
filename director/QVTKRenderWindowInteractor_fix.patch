@@ -1,0 +1,39 @@
+--- a/QVTKRenderWindowInteractor.py
++++ b/QVTKRenderWindowInteractor.py
+@@ -412,7 +412,12 @@
+ 
+     def __getattr__(self, attr):
+         """Makes the object behave like a vtkGenericRenderWindowInteractor"""
++        # Check if _Iren exists to prevent recursion when it's None during cleanup
++        # Use __dict__ to avoid triggering __getattr__ recursively
++        if '_Iren' not in self.__dict__ or self.__dict__.get('_Iren') is None:
++            raise AttributeError(self.__class__.__name__ +
++                  " has no attribute named " + attr + " (_Iren is not initialized)")
+         if attr == '__vtk__':
+             return lambda t=self._Iren: t
+         elif hasattr(self._Iren, attr):
+@@ -422,7 +427,13 @@
+ 
+     def Finalize(self):
+         '''
+         Call internal cleanup method on VTK objects
+         '''
+-        self._RenderWindow.Finalize()
++        # Check if _RenderWindow exists before trying to finalize it
++        # This prevents recursion errors during cleanup when _RenderWindow
++        # might have already been cleaned up
++        # Use __dict__ to avoid triggering __getattr__ recursively
++        if '_RenderWindow' in self.__dict__ and self.__dict__.get('_RenderWindow') is not None:
++            self.__dict__['_RenderWindow'].Finalize()
++            # Mark as finalized to prevent double-finalization
++            self.__dict__['_RenderWindow'] = None
+ 
+     def CreateTimer(self, obj, evt):
+@@ -454,4 +465,7 @@
+ 
+     def closeEvent(self, evt):
+-        self.Finalize()
++        # Only finalize if not already finalized and if objects still exist
++        # Use __dict__ to avoid triggering __getattr__ recursively
++        if '_RenderWindow' in self.__dict__ and self.__dict__.get('_RenderWindow') is not None:
++            self.Finalize()

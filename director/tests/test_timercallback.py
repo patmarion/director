@@ -90,11 +90,15 @@ def test_timer_callback_tick_returns_false(qapp):
     timer = TimerCallback(targetFps=60, callback=callback_func)
     timer.start()
     
-    # Process events
-    time.sleep(0.2)
-    qapp.processEvents()
+    # Process events multiple times to ensure timer events are processed
+    # With scheduled timer mode, we need to give it time to execute
+    for _ in range(10):
+        time.sleep(0.05)
+        qapp.processEvents()
+        if not timer.isActive():
+            break
     
-    # Should have stopped automatically
-    assert not timer.isActive()
-    assert call_count[0] >= 1
+    # Should have stopped automatically after returning False
+    assert not timer.isActive(), "Timer should have stopped when callback returned False"
+    assert call_count[0] >= 2, "Callback should have been called at least twice"
 

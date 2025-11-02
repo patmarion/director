@@ -6,6 +6,7 @@ import director.visualization as vis
 from director import cameracontrol
 from director import propertyset
 from director import frameupdater
+from director.propertiespanel import PropertiesPanel
 from director.vieweventfilter import ViewEventFilter
 
 
@@ -89,18 +90,23 @@ def showRightClickMenu(displayPoint, view):
     menu.addAction(widgetAction)
     menu.addSeparator()
     
-    # Properties panel integration (commented out until PropertiesPanel is ported)
-    # propertiesPanel = PythonQt.dd.ddPropertiesPanel()
-    # propertiesPanel.setBrowserModeToWidget()
-    # panelConnector = propertyset.PropertyPanelConnector(pickedObj.properties, propertiesPanel)
-    # def onMenuHidden():
-    #     panelConnector.cleanup()
-    # menu.aboutToHide.connect(onMenuHidden)
-    # 
-    # propertiesMenu = menu.addMenu('Properties')
-    # propertiesWidgetAction = QtWidgets.QWidgetAction(propertiesMenu)
-    # propertiesWidgetAction.setDefaultWidget(propertiesPanel)
-    # propertiesMenu.addAction(propertiesWidgetAction)
+    # Properties panel integration
+    propertiesPanel = PropertiesPanel()
+    propertiesPanel.connectProperties(pickedObj.properties)
+    
+    # Clean up when menu is hidden
+    def onMenuHidden():
+        propertiesPanel.clear()
+    menu.aboutToHide.connect(onMenuHidden)
+    
+    # Create Properties submenu with the panel widget
+    propertiesMenu = menu.addMenu('Properties')
+    propertiesWidgetAction = QtWidgets.QWidgetAction(propertiesMenu)
+    # Set a reasonable size for the panel in the menu
+    propertiesPanel.setMinimumWidth(300)
+    propertiesPanel.setMinimumHeight(200)
+    propertiesWidgetAction.setDefaultWidget(propertiesPanel)
+    propertiesMenu.addAction(propertiesWidgetAction)
     
     actions = getContextMenuActions(view, pickedObj, pickedPoint)
     

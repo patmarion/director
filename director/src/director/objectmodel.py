@@ -3,7 +3,7 @@ import re
 from collections import defaultdict
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QObject
-from director.propertyset import PropertySet, PropertyAttributes, PropertyPanelHelper, PropertyPanelConnector
+from director.propertyset import PropertySet, PropertyAttributes
 from director import callbacks
 import functools
 
@@ -283,7 +283,6 @@ class ObjectModelTree(QObject):
         self._itemToName = {}
         self._nameToItems = defaultdict(set)
         self._blockSignals = False
-        self._propertyConnector = None
         self.actions = []
         self.callbacks = callbacks.CallbackRegistry([
                             self.ACTION_SELECTED,
@@ -387,16 +386,13 @@ class ObjectModelTree(QObject):
 
     def _onTreeSelectionChanged(self):
 
-        if self._propertyConnector:
-          self._propertyConnector.cleanup()
-          self._propertyConnector = None
-
         panel = self.getPropertiesPanel()
-        panel.clear()
+        if panel:
+            panel.clear()
 
-        obj = self.getActiveObject()
-        if obj:
-            self._propertyConnector = PropertyPanelConnector(obj.properties, panel)
+            obj = self.getActiveObject()
+            if obj:
+                panel.connectProperties(obj.properties)
 
         self.callbacks.process(self.SELECTION_CHANGED, self)
 
@@ -610,8 +606,9 @@ class ObjectModelTree(QObject):
 
         self._treeWidget = treeWidget
         self._propertiesPanel = propertiesPanel
-        propertiesPanel.clear()
-        propertiesPanel.setBrowserModeToWidget()
+        # Note: propertiesPanel may be None initially and set later
+        if propertiesPanel:
+            propertiesPanel.clear()
 
         treeWidget.setColumnCount(2)
         treeWidget.setHeaderLabels(['Name', ''])
@@ -690,6 +687,11 @@ def addContainer(name, parentObj=None):
 
 def getOrCreateContainer(name, parentObj=None):
     return _t.getOrCreateContainer(name, parentObj)
+
+def isInitialized():
+    """Check if the object model is initialized."""
+    return _t._treeWidget is not None
+
 
 def init(objectTree=None, propertiesPanel=None):
 

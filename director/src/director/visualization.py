@@ -299,28 +299,34 @@ def createAxesPolyData(scale, useTube, tubeWidth=0.002):
 
 
 class FrameItem(PolyDataItem):
-    """Simplified FrameItem without vtkFrameWidget - just displays axes."""
+    """FrameItem with interactive frame widget support."""
 
     def __init__(self, name, transform, view):
         PolyDataItem.__init__(self, name, vtk.vtkPolyData(), view)
 
         self.transform = transform
         self._blockSignals = False
+        self.frameWidget = None
 
         self.actor.SetUserTransform(transform)
 
         self.addProperty('Scale', 1.0, attributes=om.PropertyAttributes(decimals=2, minimum=0.01, maximum=100, singleStep=0.1, hidden=False))
+        self.addProperty('Edit', False)
         self.addProperty('Tube', False)
         self.addProperty('Tube Width', 0.002, attributes=om.PropertyAttributes(decimals=3, minimum=0.001, maximum=10, singleStep=0.01, hidden=True))
+        
+        # Set Edit as the first property
+        self.properties.setPropertyIndex('Edit', 0)
 
         # Initialize callbacks with FrameModified signal
         self.callbacks = callbacks.CallbackRegistry(['FrameModified'])
         self.onTransformModifiedCallback = None
         self.observerTag = self.transform.AddObserver('ModifiedEvent', self.onTransformModified)
-
         self._updateAxesGeometry()
+
         self.setProperty('Color By', 'Axes')
         self.setProperty('Icon', om.Icons.Axes)
+        self._updateFrameWidget()
 
     def connectFrameModified(self, func):
         return self.callbacks.connect('FrameModified', func)
@@ -346,15 +352,67 @@ class FrameItem(PolyDataItem):
     def _updateAxesGeometry(self):
         scale = self.getProperty('Scale')
         self.setPolyData(createAxesPolyData(scale, self.getProperty('Tube'), self.getProperty('Tube Width')))
-
+        # Update frame widget scale if it exists
+        if self.frameWidget:
+            self.frameWidget.setScale(scale)
+    
     def _onPropertyChanged(self, propertySet, propertyName):
+        """Handle property changes."""
         PolyDataItem._onPropertyChanged(self, propertySet, propertyName)
+        
+        if propertyName == 'Edit':
+            print("Edit changed:", self.properties.edit)
+            self._updateFrameWidget()
 
-        if propertyName == 'Scale':
+        elif propertyName == 'Visible':
+            pass
+        elif propertyName == 'Scale':
             self._updateAxesGeometry()
         elif propertyName == 'Tube':
             self.properties.setPropertyAttribute('Tube Width', 'hidden', not self.getProperty(propertyName))
             self._updateAxesGeometry()
+    
+    def _updateFrameWidget(self):
+        """Create or destroy frame widget based on Edit property."""
+        if not self.hasProperty('Edit'):
+            return
+        edit = self.getProperty('Edit')
+        
+        # Get the view (prefer current view, otherwise first view)
+        try:
+            view = self.views[0]
+        except IndexError:
+            return
+        
+        if edit:
+            if self.frameWidget is None:
+                # Create frame widget
+                from director.framewidget import FrameWidget
+                scale = self.getProperty('Scale')
+                # Set callback to trigger FrameModified signal when transform changes
+                self.frameWidget = FrameWidget(view, self.transform, scale=scale, 
+                                               onTransformModified=self.onTransformModified)
+            # Ensure widget is enabled and visible (regardless of whether it was just created)
+            self.frameWidget.setEnabled(True)
+            self.frameWidget.view.render()
+        else:
+            if self.frameWidget:
+                # Disable widget but don't destroy it (keep it for toggling)
+                self.frameWidget.setEnabled(False)
+                self.frameWidget.view.render()
+    
+    def addToView(self, view):
+        """Add frame item to a view."""
+        PolyDataItem.addToView(self, view)
+        self._updateFrameWidget()
+    
+    def removeFromView(self, view):
+        """Remove frame item from a view."""
+        # Clean up frame widget if it exists
+        if self.frameWidget:
+            self.frameWidget.cleanup()
+            self.frameWidget = None
+        PolyDataItem.removeFromView(self, view)
 
     def onRemoveFromObjectModel(self):
         PolyDataItem.onRemoveFromObjectModel(self)
@@ -371,7 +429,7 @@ def getParentObj(parent):
 
 
 def showPolyData(polyData, name, color=None, colorByName=None, colorByRange=None, alpha=1.0, visible=True, view=None, parent='data', cls=None):
-    """Show polyData in the view and add it to the object model."""
+    """Show polyData in the view and optionally add it to the object model if initialized."""
     if view is None:
         # Try to get current view from applogic
         try:
@@ -384,7 +442,10 @@ def showPolyData(polyData, name, color=None, colorByName=None, colorByRange=None
     cls = cls or PolyDataItem
     item = cls(name, polyData, view)
 
-    om.addToObjectModel(item, getParentObj(parent))
+    # Only add to object model if it's initialized
+    if om.isInitialized():
+        om.addToObjectModel(item, getParentObj(parent))
+    
     item.setProperty('Visible', visible)
     item.setProperty('Alpha', alpha)
 

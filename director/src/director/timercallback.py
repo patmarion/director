@@ -42,13 +42,18 @@ class TimerCallback(object):
         self.timer.stop()
         try:
             self.timer.timeout.disconnect(self._timerEvent)
-        except TypeError:
-            pass  # Already disconnected
-        self.singleShotTimer.stop()
-        try:
-            self.singleShotTimer.timeout.disconnect(self._singleShotTimerEvent)
-        except TypeError:
-            pass  # Already disconnected
+        except (TypeError, RuntimeError):
+            pass  # Already disconnected or signal not connected
+        
+        # Only try to disconnect singleShotTimer if it's active
+        if self.singleShotTimer.isActive():
+            self.singleShotTimer.stop()
+            try:
+                self.singleShotTimer.timeout.disconnect(self._singleShotTimerEvent)
+            except (TypeError, RuntimeError):
+                pass  # Already disconnected or signal not connected
+        else:
+            self.singleShotTimer.stop()
 
     def tick(self):
         '''
@@ -84,8 +89,8 @@ class TimerCallback(object):
         self.tick()
         try:
             self.singleShotTimer.timeout.disconnect(self._singleShotTimerEvent)
-        except TypeError:
-            pass  # Already disconnected
+        except (TypeError, RuntimeError):
+            pass  # Already disconnected or signal not connected
 
     def _schedule(self, elapsedTimeInSeconds):
         '''

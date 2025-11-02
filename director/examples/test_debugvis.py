@@ -200,8 +200,8 @@ def main():
     polyData = vnp.numpyToPolyData(np.random.random((1000, 3)))
     vnp.addNumpyToVtk(polyData, np.arange(polyData.GetNumberOfPoints()), 'point_ids')
     d.addPolyData(polyData)
-    obj = show(d, (2.5, 5, 0), view=view)
-    obj.setProperty('Color By', 'point_ids')
+    cloud_obj = show(d, (2.5, 5, 0), view=view)
+    cloud_obj.setProperty('Color By', 'point_ids')
     
     # Reset camera
     applogic.resetCamera(viewDirection=[0, 0.1, -1], view=view)

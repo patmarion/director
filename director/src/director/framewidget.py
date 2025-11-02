@@ -198,7 +198,7 @@ class FrameWidget(ViewEventFilter):
     TRANSLATING_IN_PLANE = 2
     ROTATING = 3
     
-    def __init__(self, view, transform, scale=0.5, useTubeFilter=True, useDiskRings=False):
+    def __init__(self, view, transform, scale=0.5, useTubeFilter=True, useDiskRings=False, onTransformModified=None):
         """
         Initialize the frame widget.
         
@@ -214,12 +214,15 @@ class FrameWidget(ViewEventFilter):
             Whether to use tube filter for smooth appearance
         useDiskRings : bool
             Whether to draw rings as flat disks (True) or tubes (False)
+        onTransformModified : callable, optional
+            Callback function called when transform is modified
         """
         super().__init__(view)
         self.transform = transform
         self.scale = scale
         self.useTubeFilter = useTubeFilter
         self.useDiskRings = useDiskRings
+        self.onTransformModified = onTransformModified
         
         # Interaction state
         self.interactionState = self.OUTSIDE
@@ -244,13 +247,19 @@ class FrameWidget(ViewEventFilter):
         
         # Add actors to renderer (axes first so they render behind rings if needed)
         renderer = view.renderer()
+        # Initially hide actors - they will be shown when setEnabled(True) is called
+        # This ensures proper visibility control
+        initial_visibility = 0  # Hidden by default, will be shown when Edit=True
         for actor in self.axisActors:
             renderer.AddActor(actor)
+            actor.SetVisibility(initial_visibility)
         for actor in self.ringActors:
             renderer.AddActor(actor)
+            actor.SetVisibility(initial_visibility)
         
         # Highlight state
         self.highlightedActor = None
+        self._enabled = False  # Track enabled state
         
     def _buildActors(self):
         """Build the actors for axes and rings."""
@@ -417,6 +426,9 @@ class FrameWidget(ViewEventFilter):
         # Translate the transform
         self.transform.Translate(worldDelta[0], worldDelta[1], worldDelta[2])
         self.transform.Modified()
+        # Call callback if provided
+        if self.onTransformModified:
+            self.onTransformModified(self.transform, None)
     
     def _rotateAboutAxis(self, axisId, deltaX, deltaY):
         """Rotate the frame about an axis (matching C++ implementation)."""
@@ -486,6 +498,9 @@ class FrameWidget(ViewEventFilter):
         self.transform.Translate(centerOfRotation[0], centerOfRotation[1], centerOfRotation[2])
         self.transform.PreMultiply()
         self.transform.Modified()
+        # Call callback if provided
+        if self.onTransformModified:
+            self.onTransformModified(self.transform, None)
     
     def _translateInPlane(self, ringId, deltaX, deltaY):
         """Translate the frame in a plane using proper 3D ray-plane intersection."""
@@ -535,6 +550,9 @@ class FrameWidget(ViewEventFilter):
         # Translate the transform
         self.transform.Translate(worldDelta[0], worldDelta[1], worldDelta[2])
         self.transform.Modified()
+        # Call callback if provided
+        if self.onTransformModified:
+            self.onTransformModified(self.transform, None)
     
     def _rotateAboutPlaneNormal(self, ringId, deltaX, deltaY):
         """Rotate the frame about a plane normal."""
@@ -559,6 +577,10 @@ class FrameWidget(ViewEventFilter):
         self.transform.PostMultiply()
         self.transform.Concatenate(rotation)
         self.transform.PreMultiply()
+        self.transform.Modified()
+        # Call callback if provided
+        if self.onTransformModified:
+            self.onTransformModified(self.transform, None)
     
     def onMouseMove(self, event):
         """Handle mouse move for hover highlighting and interaction."""
@@ -674,9 +696,77 @@ class FrameWidget(ViewEventFilter):
     def setEnabled(self, enabled):
         """Enable or disable the widget."""
         visibility = 1 if enabled else 0
+        renderer = self.view.renderer()
+        
+        # Ensure all actors are in the renderer
         for actor in self.axisActors + self.ringActors:
+            # Check if actor is already in renderer by getting all actors
+            actors = renderer.GetActors()
+            actors.InitTraversal()
+            found = False
+            while True:
+                a = actors.GetNextItem()
+                if a is None:
+                    break
+                if a == actor:
+                    found = True
+                    break
+            
+            if not found:
+                renderer.AddActor(actor)
+            
+            # Set visibility
             actor.SetVisibility(visibility)
-        self.view.render()
+        
+        # Force immediate render to ensure visibility changes are shown
+        if hasattr(self.view, 'forceRender'):
+            self.view.forceRender()
+        else:
+            self.view.render()
+    
+    def setScale(self, scale):
+        """Update the scale and rebuild actors."""
+        if self.scale == scale:
+            return
+        
+        self.scale = scale
+        
+        # Get current visibility state before rebuilding
+        was_enabled = self._enabled
+        
+        # Remove old actors from renderer
+        renderer = self.view.renderer()
+        for actor in self.axisActors + self.ringActors:
+            renderer.RemoveActor(actor)
+        
+        # Rebuild actors with new scale
+        self.axisActors = []
+        self.ringActors = []
+        self.axisPolys = []
+        self.ringPolys = []
+        self._buildActors()
+        
+        # Re-add actors to renderer
+        initial_visibility = 1 if was_enabled else 0
+        for actor in self.axisActors:
+            renderer.AddActor(actor)
+            actor.SetVisibility(initial_visibility)
+        for actor in self.ringActors:
+            renderer.AddActor(actor)
+            actor.SetVisibility(initial_visibility)
+        
+        # Update picker
+        self.picker = vtk.vtkCellPicker()
+        self.picker.SetTolerance(0.005)
+        self.picker.PickFromListOn()
+        for actor in self.axisActors + self.ringActors:
+            self.picker.AddPickList(actor)
+        
+        # Render
+        if hasattr(self.view, 'forceRender'):
+            self.view.forceRender()
+        else:
+            self.view.render()
     
     def cleanup(self):
         """Clean up and remove actors."""

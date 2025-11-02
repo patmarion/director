@@ -55,19 +55,12 @@ def fromQColor(propertyName, propertyValue):
     else:
         return propertyValue
 
-def toQProperty(propertyName, propertyValue):
-    """Convert property value to Qt-compatible format."""
-    from qtpy import QtGui
-    if 'color' in propertyName.lower() and isinstance(propertyValue, (list, tuple)) and len(propertyValue) == 3:
-        return QtGui.QColor(int(propertyValue[0]*255.0), int(propertyValue[1]*255.0), int(propertyValue[2]*255.0))
-    else:
-        return propertyValue
-
 
 class PropertySet(object):
 
     PROPERTY_CHANGED_SIGNAL = 'PROPERTY_CHANGED_SIGNAL'
     PROPERTY_ADDED_SIGNAL = 'PROPERTY_ADDED_SIGNAL'
+    PROPERTY_REMOVED_SIGNAL = 'PROPERTY_REMOVED_SIGNAL'
     PROPERTY_ATTRIBUTE_CHANGED_SIGNAL = 'PROPERTY_ATTRIBUTE_CHANGED_SIGNAL'
 
     def __getstate__(self):
@@ -83,6 +76,7 @@ class PropertySet(object):
     def __init__(self):
         self.callbacks = callbacks.CallbackRegistry([self.PROPERTY_CHANGED_SIGNAL,
                                                      self.PROPERTY_ADDED_SIGNAL,
+                                                     self.PROPERTY_REMOVED_SIGNAL,
                                                      self.PROPERTY_ATTRIBUTE_CHANGED_SIGNAL])
 
         self._properties = OrderedDict()
@@ -107,6 +101,12 @@ class PropertySet(object):
     def disconnectPropertyAdded(self, callbackId):
         self.callbacks.disconnect(callbackId)
 
+    def connectPropertyRemoved(self, func):
+        return self.callbacks.connect(self.PROPERTY_REMOVED_SIGNAL, func)
+
+    def disconnectPropertyRemoved(self, callbackId):
+        self.callbacks.disconnect(callbackId)
+
     def connectPropertyAttributeChanged(self, func):
         return self.callbacks.connect(self.PROPERTY_ATTRIBUTE_CHANGED_SIGNAL, func)
 
@@ -121,9 +121,12 @@ class PropertySet(object):
         return attributes.enumNames[self._properties[propertyName]]
 
     def removeProperty(self, propertyName):
+        if propertyName not in self._properties:
+            return
         del self._properties[propertyName]
         del self._attributes[propertyName]
         del self._alternateNames[cleanPropertyName(propertyName)]
+        self.callbacks.process(self.PROPERTY_REMOVED_SIGNAL, self, propertyName)
 
     def addProperty(self, propertyName, propertyValue, attributes=None, index=None):
         alternateName = cleanPropertyName(propertyName)
@@ -210,34 +213,3 @@ class PropertySet(object):
             except AttributeError:
                 # _alternateNames doesn't exist yet (during __init__), just set normally
                 object.__setattr__(self, name, value)
-
-
-class PropertyPanelHelper(object):
-    """Helper class for adding properties to a panel (stub for now)."""
-    
-    @staticmethod
-    def addPropertiesToPanel(properties, panel, propertyNamesToAdd=None):
-        """Add properties to the panel (stub implementation)."""
-        # For now, just a stub - will be implemented when PropertiesPanel is ready
-        pass
-
-
-class PropertyPanelConnector(object):
-    """Connector between PropertySet and PropertiesPanel (stub for now)."""
-    
-    def __init__(self, propertySet, propertiesPanel, propertyNamesToAdd=None):
-        self.propertySet = propertySet
-        self.propertyNamesToAdd = propertyNamesToAdd
-        self.propertiesPanel = propertiesPanel
-        self.connections = []
-        # For now, don't connect anything since PropertiesPanel is a dummy
-        # self.connections.append(self.propertySet.connectPropertyAdded(self._onPropertyAdded))
-        # self.connections.append(self.propertySet.connectPropertyChanged(self._onPropertyChanged))
-        # self.connections.append(self.propertySet.connectPropertyAttributeChanged(self._onPropertyAttributeChanged))
-    
-    def cleanup(self):
-        """Clean up connections."""
-        for connection in self.connections:
-            self.propertySet.callbacks.disconnect(connection)
-        self.connections = []
-
