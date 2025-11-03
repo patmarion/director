@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco model="test_model">
+  <option timestep="0.01"/>
+  
+  <asset>
+    <!-- Simple assets for testing -->
+  </asset>
+  
+  <worldbody>
+    <!-- Ground plane -->
+    <geom name="ground" type="plane" size="5 5 0.1" rgba="0.8 0.8 0.8 1"/>
+    
+    <!-- Base body with a box -->
+    <body name="base" pos="0 0 0.5">
+      <geom name="base_geom" type="box" size="0.3 0.3 0.1" rgba="1 0 0 1"/>
+      
+      <!-- Link 1 with a sphere -->
+      <body name="link1" pos="0.5 0 0">
+        <joint name="joint1" type="hinge" axis="0 0 1" range="-180 180"/>
+        <geom name="link1_geom" type="sphere" size="0.15" rgba="0 1 0 1"/>
+        
+        <!-- Link 2 with a cylinder -->
+        <body name="link2" pos="0.4 0 0">
+          <joint name="joint2" type="hinge" axis="0 0 1" range="-180 180"/>
+          <geom name="link2_geom" type="cylinder" size="0.1 0.2" rgba="0 0 1 1"/>
+          
+          <!-- Link 3 with a capsule -->
+          <body name="link3" pos="0.3 0 0">
+            <joint name="joint3" type="hinge" axis="0 0 1" range="-180 180"/>
+            <geom name="link3_geom" type="capsule" size="0.08 0.15" rgba="1 1 0 1"/>
+            
+            <!-- Link 4 with an ellipsoid -->
+            <body name="link4" pos="0.2 0 0">
+              <joint name="joint4" type="hinge" axis="0 0 1" range="-180 180"/>
+              <geom name="link4_geom" type="ellipsoid" size="0.1 0.08 0.12" rgba="1 0 1 1"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>
+

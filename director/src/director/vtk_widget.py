@@ -113,23 +113,21 @@ class VTKWidget(QWidget):
         self._vtk_widget.Start()
         
         # Set terrain interactor style by default (natural view up, azimuth/elevation camera control)
+        # Use our Python terrain interactor for better control
         interactor = self._render_window.GetInteractor()
         if interactor:
-            terrain_style = vtk.vtkInteractorStyleTerrain()
-            interactor.SetInteractorStyle(terrain_style)
-            # Set view up to Z-axis for terrain mode
+            from director.terrain_interactor import setTerrainInteractor
+            setTerrainInteractor(self)
+            # Set initial camera position for terrain mode
             camera = self._renderer.GetActiveCamera()
             if camera:
-                camera.SetViewUp(0.0, 0.0, 1.0)
-                # Set initial camera position for terrain mode to avoid view-up parallel warnings
-                # Position camera at a reasonable angle looking at origin
                 camera.SetPosition(10.0, 10.0, 10.0)
                 camera.SetFocalPoint(0.0, 0.0, 0.0)
                 camera.SetViewUp(0.0, 0.0, 1.0)
         
         # Install default view behaviors (context menus, key bindings, etc.)
-        from director.viewbehaviors import ViewBehaviors
-        self._view_behaviors = ViewBehaviors(self)
+        #from director.viewbehaviors import ViewBehaviors
+        #self._view_behaviors = ViewBehaviors(self)
         
         # Grid will be added later when object model is initialized
         self._grid_obj = None
@@ -186,6 +184,23 @@ class VTKWidget(QWidget):
         """Force an immediate render."""
         self._renderer.ResetCameraClippingRange()
         self._render_window.Render()
+    
+    def addQuitShortcut(self, key_sequence='Ctrl+Q'):
+        """Add a keyboard shortcut to quit the application.
+        
+        Args:
+            key_sequence: Key sequence string (default: 'Ctrl+Q')
+            
+        Returns:
+            QShortcut: The created shortcut object
+        """
+        from qtpy.QtWidgets import QShortcut
+        from qtpy.QtGui import QKeySequence
+        from qtpy.QtWidgets import QApplication
+        
+        shortcut = QShortcut(QKeySequence(key_sequence), self)
+        shortcut.activated.connect(QApplication.instance().quit)
+        return shortcut
     
     def addCustomBounds(self, bounds):
         """Add custom bounds for camera reset calculation."""

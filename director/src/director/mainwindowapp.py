@@ -218,7 +218,7 @@ class MainWindowAppFactory(object):
         from director.vtk_widget import VTKWidget
         view = VTKWidget()
         applogic.setCurrentRenderView(view)
-        applogic.setCameraTerrainModeEnabled(view, True)
+        #applogic.setCameraTerrainModeEnabled(view, True)
         applogic.resetCamera(viewDirection=[-1, -1, -0.3], view=view)
         return FieldContainer(view=view)
 

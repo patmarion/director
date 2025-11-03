@@ -594,6 +594,43 @@ class FrameWidget(ViewEventFilter):
         deltaX = pos[0] - self.lastEventPosition[0]
         deltaY = pos[1] - self.lastEventPosition[1]
         
+        # If frame widget is actively interacting, handle it (take priority over camera)
+        if self.interactionState != self.OUTSIDE:
+            # Frame widget is being manipulated - continue handling
+            pass
+        else:
+            # Frame widget is not interacting - check if camera is, and if so, don't consume
+            camera_interacting = False
+            
+            # Check Qt event buttons directly
+            from qtpy.QtCore import Qt
+            # buttons_pressed = event.buttons()
+            # if buttons_pressed & (Qt.LeftButton | Qt.RightButton | Qt.MiddleButton):
+            #     # Check if it's our terrain interactor style
+            #     interactor = self.view.renderWindow().GetInteractor()
+            #     if interactor:
+            #         style = interactor.GetInteractorStyle()
+            #         from director.terrain_interactor import TerrainInteractorStyle
+            #         if isinstance(style, TerrainInteractorStyle):
+            #             # Verify buttons match terrain interactor's internal state
+            #             if (buttons_pressed & Qt.LeftButton and 
+            #                 hasattr(style, '_left_button_pressed') and 
+            #                 style._left_button_pressed):
+            #                 camera_interacting = True
+            #             elif (buttons_pressed & Qt.RightButton and 
+            #                   hasattr(style, '_right_button_pressed') and 
+            #                   style._right_button_pressed):
+            #                 camera_interacting = True
+            #             else:
+            #                 # Buttons are pressed but not in terrain interactor state
+            #                 # Assume camera might be interacting anyway
+            #                 camera_interacting = True
+            
+            # # If camera is actively interacting and frame widget is not, don't consume events
+            # if camera_interacting:
+            #     self.lastEventPosition = [pos[0], pos[1]]
+            #     return False  # Don't consume - let camera interactor handle it
+        
         consumed = False
         
         if self.interactionState == self.OUTSIDE:
@@ -602,7 +639,7 @@ class FrameWidget(ViewEventFilter):
             if pickedType is not None:
                 self._updateHighlight(pickedType, pickedId)
                 self.view.render()
-                consumed = True  # Consume if hovering over widget
+                consumed = False #True  # Consume if hovering over widget
         elif self.interactionState == self.TRANSLATING:
             # Translating along axis
             if 0 <= self.interactingAxis < 3:

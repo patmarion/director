@@ -16,6 +16,8 @@ dependencies = [
     "ipykernel>=6.0.0",
     "jupyter-client>=7.0.0",
     "numpy>=1.20.0",
+    "mujoco>=3.0.0",
+    "scipy>=1.7.0",
 ]
 
 [project.optional-dependencies]

@@ -1,6 +1,7 @@
 import director.vtkAll as vtk
 from director import vtkNumpy as vnp
 from director.shallowCopy import shallowCopy
+from director import transformUtils
 import numpy as np
 
 
@@ -168,12 +169,28 @@ class DebugData(object):
         center = np.array(center)
         self.addLine(center - 0.5*length*axis, center + 0.5*length*axis, radius=radius, color=color)
 
-    def addCapsule(self, center, axis, length, radius, color=[1,1,1]):
+    def addCapsule(self, center, axis, length, radius, resolution=24, color=[1,1,1]):
         axis = np.asarray(axis) / np.linalg.norm(axis)
         center = np.array(center)
-        self.addCylinder(center=center, axis=axis, radius=radius, length=length, color=color)
-        self.addSphere(center=center-0.5*length*axis, radius=radius, color=color)
-        self.addSphere(center=center+0.5*length*axis, radius=radius, color=color)
+        cylinder = vtk.vtkCylinderSource()
+        cylinder.SetCapping(True)
+        cylinder.SetCapsuleCap(True)
+        cylinder.SetResolution(resolution)
+        cylinder.SetRadius(radius)
+        cylinder.SetHeight(length)
+
+        yaxis = axis
+        zaxis = [0,0,0]
+        xaxis = [0,0,0]
+        vtk.vtkMath.Perpendiculars(yaxis, zaxis, xaxis, 0)
+        t = transformUtils.getTransformFromAxesAndOrigin(xaxis, yaxis, zaxis, center)
+        transformFilter = vtk.vtkTransformPolyDataFilter()
+        transformFilter.SetTransform(t)
+        transformFilter.SetInputConnection(cylinder.GetOutputPort())
+        transformFilter.Update()
+        self.addPolyData(transformFilter.GetOutput(), color)
+
+
 
     def addTorus(self, radius, thickness, resolution=30):
         q = vtk.vtkSuperquadricSource()
