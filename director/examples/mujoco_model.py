@@ -10,7 +10,6 @@ import argparse
 from qtpy.QtWidgets import QApplication
 
 from director import mainwindowapp
-from director.mainwindow import _setup_signal_handlers
 from director import mujoco_model
 from director import applogic
 from director import argutils
@@ -40,16 +39,6 @@ Examples:
     
     # Parse arguments (using parse_known_args to handle any remaining args)
     args = parser.parse_known_args()[0]
-    
-    # Construct QApplication first
-    app = QApplication(sys.argv)
-    
-    # Set application properties
-    app.setApplicationName("Director 2.0 - MuJoCo Model Visualization")
-    app.setApplicationVersion("2.0.0")
-    
-    # Setup signal handlers for Ctrl+C
-    _setup_signal_handlers(app)
     
     # Check if MuJoCo is available
     if not mujoco_model.MUJOCO_AVAILABLE:

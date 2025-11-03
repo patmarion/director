@@ -8,17 +8,6 @@ import vtk
 from director.vtk_widget import VTKWidget, FPSCounter
 
 
-@pytest.fixture(scope="session")
-def qapp():
-    """Create QApplication instance for tests."""
-    if not QApplication.instance():
-        app = QApplication(sys.argv)
-        yield app
-        app.quit()
-    else:
-        yield QApplication.instance()
-
-
 def test_fps_counter():
     """Test FPS counter functionality."""
     counter = FPSCounter(alpha=0.9, time_window=0.1)

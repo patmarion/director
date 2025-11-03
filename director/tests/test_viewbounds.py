@@ -9,17 +9,6 @@ from director.viewbounds import getVisibleActors, computeViewBoundsNoGrid, compu
 from director.vtk_widget import VTKWidget
 
 
-@pytest.fixture(scope="session")
-def qapp():
-    """Create QApplication instance for tests."""
-    if not QApplication.instance():
-        app = QApplication(sys.argv)
-        yield app
-        app.quit()
-    else:
-        yield QApplication.instance()
-
-
 def test_get_visible_actors(qapp):
     """Test getting visible actors from view."""
     widget = VTKWidget()

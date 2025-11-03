@@ -711,3 +711,105 @@ def showGrid(view, cellSize=0.5, numberOfCells=25, name='grid', parent='scene',
     
     return gridObj
 
+
+def setCameraToParallelProjection(camera):
+    """Switch camera to parallel (orthographic) projection mode."""
+    viewAngle = np.radians(camera.GetViewAngle())
+    viewDistance = np.linalg.norm(np.array(camera.GetFocalPoint()) - np.array(camera.GetPosition()))
+    desiredParallelScale = np.tan(viewAngle * 0.5) * viewDistance
+    camera.SetParallelScale(desiredParallelScale)
+    camera.ParallelProjectionOn()
+
+
+def setCameraToPerspectiveProjection(camera):
+    """Switch camera to perspective projection mode."""
+    parallelScale = camera.GetParallelScale()
+    viewAngle = np.radians(camera.GetViewAngle())
+    desiredViewDistance = parallelScale / np.tan(viewAngle * 0.5)
+    focalPoint = np.array(camera.GetFocalPoint())
+    viewPlaneNormal = np.array(camera.GetViewPlaneNormal())
+    desiredCameraPosition = focalPoint + desiredViewDistance * viewPlaneNormal
+    camera.SetPosition(desiredCameraPosition)
+    camera.ParallelProjectionOff()
+
+
+def enableEyeDomeLighting(view):
+    """Enable eye dome lighting (EDL) shading for the view."""
+    standardPass = vtk.vtkRenderStepsPass()
+    edlPass = vtk.vtkEDLShading()
+    edlPass.SetDelegatePass(standardPass)
+    view.renderer().SetPass(edlPass)
+
+
+def disableEyeDomeLighting(view):
+    """Disable eye dome lighting (EDL) shading for the view."""
+    view.renderer().SetPass(None)
+
+
+class ViewOptionsItem(om.ObjectModelItem):
+    """Object model item for controlling view options like camera projection, lighting, background, etc."""
+
+    def __init__(self, view):
+        om.ObjectModelItem.__init__(self, 'view options')
+
+        self.view = view
+        self.addProperty('Camera projection', 0, attributes=om.PropertyAttributes(enumNames=['Perspective', 'Parallel']))
+        self.addProperty('View angle', view.camera().GetViewAngle(), attributes=om.PropertyAttributes(minimum=2, maximum=180))
+        self.addProperty('Key light intensity', view.lightKit().GetKeyLightIntensity(), attributes=om.PropertyAttributes(minimum=0, maximum=5, singleStep=0.1, decimals=2))
+        self.addProperty('Light kit', True)
+        self.addProperty('Eye dome lighting', False)
+        self.addProperty('Orientation widget', True)
+        self.addProperty('Interactive render', True)
+        self.addProperty('Gradient background', True)
+        self.addProperty('Background color', view.backgroundRenderer().GetBackground())
+        self.addProperty('Background color 2', view.backgroundRenderer().GetBackground2())
+
+    def _onPropertyChanged(self, propertySet, propertyName):
+        om.ObjectModelItem._onPropertyChanged(self, propertySet, propertyName)
+
+        if propertyName in ('Gradient background', 'Background color', 'Background color 2'):
+            colors = [self.getProperty('Background color'), self.getProperty('Background color 2')]
+
+            if not self.getProperty('Gradient background'):
+                colors[1] = colors[0]
+
+            self.view.renderer().SetBackground(colors[0])
+            self.view.renderer().SetBackground2(colors[1])
+
+        elif propertyName == 'Camera projection':
+            if self.getPropertyEnumValue(propertyName) == 'Perspective':
+                setCameraToPerspectiveProjection(self.view.camera())
+            else:
+                setCameraToParallelProjection(self.view.camera())
+
+        elif propertyName == 'Orientation widget':
+            if self.getProperty(propertyName):
+                self.view.orientationMarkerWidget().SetEnabled(1)
+            else:
+                self.view.orientationMarkerWidget().SetEnabled(0)
+
+        elif propertyName == 'View angle':
+            angle = self.getProperty(propertyName)
+            self.view.camera().SetViewAngle(angle)
+
+        elif propertyName == 'Key light intensity':
+            intensity = self.getProperty(propertyName)
+            self.view.lightKit().SetKeyLightIntensity(intensity)
+
+        elif propertyName == 'Light kit':
+            self.view.setLightKitEnabled(self.getProperty(propertyName))
+
+        elif propertyName == 'Eye dome lighting':
+            if self.getProperty(propertyName):
+                enableEyeDomeLighting(self.view)
+            else:
+                disableEyeDomeLighting(self.view)
+
+        elif propertyName == 'Interactive render':
+            if self.getProperty(propertyName):
+                self.view.renderWindow().GetInteractor().EnableRenderOn()
+            else:
+                self.view.renderWindow().GetInteractor().EnableRenderOff()
+
+        self.view.render()
+

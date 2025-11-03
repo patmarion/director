@@ -18,17 +18,6 @@ class DummyPropertiesPanel:
         pass
 
 
-@pytest.fixture(scope="session")
-def qapp():
-    """Create QApplication instance for tests."""
-    if not QApplication.instance():
-        app = QApplication(sys.argv)
-        yield app
-        app.quit()
-    else:
-        yield QApplication.instance()
-
-
 def test_object_model_tree_construction(qapp):
     """Test that ObjectModelTree can be constructed."""
     tree = ObjectModelTree()

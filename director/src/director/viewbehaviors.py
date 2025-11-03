@@ -127,7 +127,7 @@ def zoomToPick(displayPoint, view):
         return
     flyer = cameracontrol.Flyer(view)
     flyer.zoomTo(pickedPoint)
-
+    view.flyer = flyer  # store the flyer so it doesn't get garbage collected
 
 def getChildFrame(obj):
     """Get the child frame of an object if it exists."""

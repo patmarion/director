@@ -145,15 +145,13 @@ class ConsoleApp(object):
         applogic.setCurrentRenderView(view)
         view.resize(600, 400)
 
-        applogic.setCameraTerrainModeEnabled(view, True)
         if useGrid:
             view.initializeGrid()
             self.gridObj = om.findObjectByName('grid')
 
         # ViewOptionsItem is not yet implemented - skip for now
-        # self.viewOptions = vis.ViewOptionsItem(view)
-        # om.addToObjectModel(self.viewOptions, parentObj=om.findObjectByName('scene'))
-        self.viewOptions = None
+        self.viewOptions = vis.ViewOptionsItem(view)
+        om.addToObjectModel(self.viewOptions, parentObj=om.findObjectByName('scene'))
 
         applogic.resetCamera(viewDirection=[-1,-1,-0.3], view=view)
         self.viewBehaviors = viewbehaviors.ViewBehaviors(view)

@@ -200,12 +200,13 @@ class MainWindowAppFactory(object):
             'Globals' : [],
             'GlobalModules' : ['Globals'],
             'ObjectModel' : [],
-            # 'ViewOptions' : ['View', 'ObjectModel'],  # ViewOptionsItem not yet implemented
-            'MainToolBar' : ['View', 'Grid', 'MainWindow'],  # Removed ViewOptions dependency
+            'ViewOptions' : ['View', 'ObjectModel'],
+            'MainToolBar' : ['View', 'Grid', 'MainWindow'],
             'ViewBehaviors' : ['View'],
             'Grid': ['View', 'ObjectModel'],
-            'PythonConsole' : [],  # Create console widget
-            'MainWindow' : ['View', 'ObjectModel', 'PythonConsole'],  # Needs PythonConsole to create dock
+            'PythonConsole' : [],
+            'MainWindow' : ['View', 'ObjectModel', 'PythonConsole'],
+            'SignalHandlers' : ['MainWindow'],  # Setup after MainWindow is created
             'AdjustedClippingRange' : ['View'],
             'RunScriptFunction' : ['Globals'],
             'ScriptLoader' : ['MainWindow', 'RunScriptFunction']}
@@ -218,7 +219,6 @@ class MainWindowAppFactory(object):
         from director.vtk_widget import VTKWidget
         view = VTKWidget()
         applogic.setCurrentRenderView(view)
-        #applogic.setCameraTerrainModeEnabled(view, True)
         applogic.resetCamera(viewDirection=[-1, -1, -0.3], view=view)
         return FieldContainer(view=view)
 
@@ -252,23 +252,49 @@ class MainWindowAppFactory(object):
         return FieldContainer(viewBehaviors=viewBehaviors)
 
     def initViewOptions(self, fields):
-        # ViewOptionsItem is not yet implemented in Director 2.0
-        # TODO: Implement ViewOptionsItem when needed
-        # viewOptions = vis.ViewOptionsItem(fields.view)
-        # fields.objectModel.addToObjectModel(viewOptions, parentObj=fields.objectModel.findObjectByName('scene'))
-        # viewOptions.setProperty('Background color', [0.3, 0.3, 0.35])
-        # viewOptions.setProperty('Background color 2', [0.95,0.95,1])
-        # return FieldContainer(viewOptions=viewOptions)
-        return FieldContainer(viewOptions=None)
+        viewOptions = vis.ViewOptionsItem(fields.view)
+        fields.objectModel.addToObjectModel(viewOptions, parentObj=fields.objectModel.findObjectByName('scene'))
+        return FieldContainer(viewOptions=viewOptions)
 
+    def initSignalHandlers(self, fields):
+        """Setup signal handlers for graceful shutdown on Ctrl+C."""
+        import sys
+        import signal
+        from qtpy.QtCore import QTimer
+        
+        app = fields.app
+        
+        def signal_handler(signum, frame):
+            """Handle SIGINT (Ctrl+C) by quitting the Qt application."""
+            # Use QTimer.singleShot to ensure quit() is called from the Qt event loop
+            print("Caught interrupt signal, quitting application...")
+            QTimer.singleShot(0, app.quit)
+        
+        # Register signal handler for SIGINT (Ctrl+C)
+        signal.signal(signal.SIGINT, signal_handler)
+        
+        # Install custom exception hook to catch KeyboardInterrupt
+        original_excepthook = sys.excepthook
+        
+        def exception_hook(exc_type, exc_value, exc_traceback):
+            """Handle KeyboardInterrupt exceptions by quitting the application."""
+            if exc_type is KeyboardInterrupt:
+                # KeyboardInterrupt should quit the application gracefully
+                QTimer.singleShot(0, app.quit)
+            else:
+                # For other exceptions, use the original exception handler
+                original_excepthook(exc_type, exc_value, exc_traceback)
+        
+        sys.excepthook = exception_hook
+        
+        return FieldContainer()
+    
     def initAdjustedClippingRange(self, fields):
         '''This setting improves the near plane clipping resolution.
         Drake often draws a very large ground plane which is detrimental to
         the near clipping for up close objects.  The trade-off is Z buffer
         resolution but in practice things look good with this setting.'''
-        renderer = fields.view.renderer()
-        if renderer:
-            renderer.SetNearClippingPlaneTolerance(0.0005)
+        fields.view.renderer().SetNearClippingPlaneTolerance(0.0005)
         return FieldContainer()
 
     def initMainWindow(self, fields):
@@ -381,10 +407,14 @@ class MainWindowAppFactory(object):
                            callback=lambda: applogic.resetCamera(view=fields.view))
 
         def getFreeCameraMode():
-            return not applogic.getCameraTerrainModeEnabled(fields.view)
+            # Free camera mode is when terrain interactor is NOT active
+            return not fields.view.isTerrainInteractor()
 
         def setFreeCameraMode(enabled):
-            applogic.setCameraTerrainModeEnabled(fields.view, not enabled)
+            if enabled:
+                fields.view.setTrackballInteractor()
+            else:
+                fields.view.setTerrainInteractor()
 
         terrainToggle = applogic.ActionToggleHelper(terrainModeAction, getFreeCameraMode, setFreeCameraMode)
 
@@ -501,11 +531,20 @@ def construct(command_line_args=None, **kwargs):
     if command_line_args is not None:
         kwargs['command_line_args'] = command_line_args
     
+    # Ensure QApplication exists
+    MainWindowApp.applicationInstance()
+
     fields = fact.construct(**kwargs)
 
     # Push variables to Python console if it exists
     if hasattr(fields, 'pythonConsoleWidget') and fields.pythonConsoleWidget is not None:
-        fields.pythonConsoleWidget.push_variables({'fields': fields})
+        variables = dict()
+        variables.update(fields.globalsDict)
+        variables['fields'] = fields
+        variables['view'] = fields.view
+        variables['quit'] = fields.app.quit
+        variables['exit'] = fields.app.exit
+        fields.pythonConsoleWidget.push_variables(variables)
     
     return fields
 

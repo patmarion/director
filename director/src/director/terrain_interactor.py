@@ -444,17 +444,41 @@ class TerrainInteractorStyle(vtk.vtkInteractorStyle):
         zoom_delta = -dy * self._zoom_factor * distance
         
         # Apply zoom (move camera along view vector)
-        if distance > 1e-6:
+        # Allow zooming to arbitrarily close (remove the 0.1 minimum limit)
+        min_distance = 1e-6  # Very small minimum to avoid numerical issues
+        if distance > min_distance:
             view_vector_normalized = [v / distance for v in view_vector]
-            new_distance = max(0.1, distance + zoom_delta)  # Prevent zooming through focal point
+            new_distance = max(min_distance, distance + zoom_delta)
             new_position = [
                 focal_point[i] + view_vector_normalized[i] * new_distance 
                 for i in range(3)
             ]
             camera.SetPosition(new_position)
-            # Reset camera clipping range after zoom
-            if renderer:
-                renderer.ResetCameraClippingRange()
+        else:
+            # Already very close, use normalized direction from current position
+            if distance > 1e-9:
+                view_vector_normalized = [v / distance for v in view_vector]
+            else:
+                # Distance is essentially zero, use camera's view direction
+                view_dir = camera.GetDirectionOfProjection()
+                mag = math.sqrt(sum(v * v for v in view_dir))
+                if mag > 1e-6:
+                    view_vector_normalized = [-v / mag for v in view_dir]
+                else:
+                    # Fallback: use a default direction
+                    view_vector_normalized = [0.0, 0.0, -1.0]
+            
+            # Apply zoom by moving camera closer
+            new_distance = max(min_distance, distance + zoom_delta)
+            new_position = [
+                focal_point[i] + view_vector_normalized[i] * new_distance 
+                for i in range(3)
+            ]
+            camera.SetPosition(new_position)
+        
+        # Reset camera clipping range after zoom (this adjusts near/far planes for visibility)
+        if renderer:
+            renderer.ResetCameraClippingRange()
     
     def _zoom_camera_wheel(self, camera, direction, renderer=None):
         """Zoom camera using mouse wheel.
@@ -475,15 +499,39 @@ class TerrainInteractorStyle(vtk.vtkInteractorStyle):
         zoom_factor = 0.1
         zoom_delta = direction * zoom_factor * distance
         
-        # Apply zoom
-        if distance > 1e-6:
+        # Apply zoom - allow zooming to arbitrarily close
+        min_distance = 1e-6  # Very small minimum to avoid numerical issues
+        if distance > min_distance:
             view_vector_normalized = [v / distance for v in view_vector]
-            new_distance = max(0.1, distance + zoom_delta)
+            new_distance = max(min_distance, distance + zoom_delta)
             new_position = [
                 focal_point[i] + view_vector_normalized[i] * new_distance 
                 for i in range(3)
             ]
             camera.SetPosition(new_position)
+        else:
+            # Already very close, use normalized direction
+            if distance > 1e-9:
+                view_vector_normalized = [v / distance for v in view_vector]
+            else:
+                # Use camera's view direction
+                view_dir = camera.GetDirectionOfProjection()
+                mag = math.sqrt(sum(v * v for v in view_dir))
+                if mag > 1e-6:
+                    view_vector_normalized = [-v / mag for v in view_dir]
+                else:
+                    view_vector_normalized = [0.0, 0.0, -1.0]
+            
+            new_distance = max(min_distance, distance + zoom_delta)
+            new_position = [
+                focal_point[i] + view_vector_normalized[i] * new_distance 
+                for i in range(3)
+            ]
+            camera.SetPosition(new_position)
+        
+        # Reset camera clipping range after zoom
+        if renderer:
+            renderer.ResetCameraClippingRange()
     
     def _pan_camera(self, camera, dx, dy, renderer=None):
         """Pan camera - exact replica of vtkInteractorStyleTerrain2::Pan().

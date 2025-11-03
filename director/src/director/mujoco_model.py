@@ -433,7 +433,7 @@ def load_geom_mesh(model, geom_id, model_dir=None):
 
 def visualize_mujoco_model(model, body_poses, body_to_geom, view, model_dir=None, parent_obj=None):
     """
-    Visualize MuJoCo model geoms using PolyDataItem objects.
+    Visualize MuJoCo model geoms using PolyDataItem objects, organized by group in folders.
     
     Args:
         model: MuJoCo model object
@@ -450,6 +450,8 @@ def visualize_mujoco_model(model, body_poses, body_to_geom, view, model_dir=None
         parent_obj = om.getOrCreateContainer('mujoco_model')
     
     geom_items = {}
+    # Dictionary to cache group folders
+    group_folders = {}
     
     for body_id in range(model.nbody):
         body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
@@ -468,6 +470,19 @@ def visualize_mujoco_model(model, body_poses, body_to_geom, view, model_dir=None
                 geom_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
                 if not geom_name:
                     geom_name = f"geom_{geom_id}"
+                
+                # Get geom group (MuJoCo geom groups are integers, typically 0-5)
+                geom_group = int(model.geom_group[geom_id])
+                
+                # Get or create folder for this group
+                group_key = f"group_{geom_group}"
+                if group_key not in group_folders:
+                    group_folders[group_key] = om.getOrCreateContainer(
+                        f"Group {geom_group}", 
+                        parentObj=parent_obj
+                    )
+                
+                group_folder = group_folders[group_key]
                 
                 # Get geom pose relative to body
                 geom_pose_in_body = get_geom_pose_in_body(model, geom_id)
@@ -488,12 +503,12 @@ def visualize_mujoco_model(model, body_poses, body_to_geom, view, model_dir=None
                 geom_color = [float(geom_rgba[i]) for i in range(3)]  # RGB components [0-1]
                 geom_alpha = float(geom_rgba[3])   # Alpha component [0-1]
                 
-                # Create PolyDataItem for the geometry
+                # Create PolyDataItem for the geometry, adding it to the group folder
                 obj = vis.showPolyData(
                     geom_polydata, 
                     geom_name, 
                     view=view, 
-                    parent=parent_obj,
+                    parent=group_folder,
                     color=geom_color,
                     alpha=geom_alpha
                 )

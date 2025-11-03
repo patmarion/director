@@ -8,17 +8,6 @@ from qtpy.QtCore import QTimer
 from director.timercallback import TimerCallback
 
 
-@pytest.fixture(scope="session")
-def qapp():
-    """Create QApplication instance for tests."""
-    if not QApplication.instance():
-        app = QApplication(sys.argv)
-        yield app
-        app.quit()
-    else:
-        yield QApplication.instance()
-
-
 def test_timer_callback_construction(qapp):
     """Test that TimerCallback can be constructed."""
     callback = TimerCallback(targetFps=30)

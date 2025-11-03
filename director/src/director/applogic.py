@@ -90,47 +90,6 @@ def boolPrompt(title, message, parent=None):
     return result == QMessageBox.Yes
 
 
-def getCameraTerrainModeEnabled(view):
-    """Check if camera terrain mode is enabled."""
-    if view is None:
-        return False
-    interactor = view.renderWindow().GetInteractor()
-    if interactor is None:
-        return False
-    style = interactor.GetInteractorStyle()
-    # Check for both vtkInteractorStyleTerrain (standard) and vtkInteractorStyleTerrain2 (custom)
-    return isinstance(style, (vtk.vtkInteractorStyleTerrain, 
-                             getattr(vtk, 'vtkInteractorStyleTerrain2', type(None))))
-
-
-def setCameraTerrainModeEnabled(view, enabled):
-    """Enable or disable camera terrain mode."""
-    if view is None:
-        return
-    
-    if getCameraTerrainModeEnabled(view) == enabled:
-        return
-    
-    renderWindow = view.renderWindow()
-    interactor = renderWindow.GetInteractor()
-    
-    if enabled:
-        # Use standard VTK terrain interactor (vtkInteractorStyleTerrain2 is a custom C++ class)
-        interactor.SetInteractorStyle(vtk.vtkInteractorStyleTerrain())
-        camera = view.camera()
-        if camera:
-            camera.SetViewUp(0, 0, 1)
-    else:
-        interactor.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
-    
-    view.render()
-
-
-def toggleCameraTerrainMode(view=None):
-    """Toggle camera terrain mode."""
-    if view is None:
-        return
-    setCameraTerrainModeEnabled(view, not getCameraTerrainModeEnabled(view))
 
 
 def addShortcut(widget, keySequence, func):
@@ -142,12 +101,6 @@ def addShortcut(widget, keySequence, func):
     shortcut.activated.connect(func)
     return shortcut
 
-
-def showPythonConsole():
-    """Show the Python console (stub - should be implemented by MainWindow)."""
-    # This should be implemented by MainWindow to show the Python console dock
-    # For now, just raise an error to indicate it needs to be implemented
-    raise NotImplementedError("showPythonConsole should be implemented by MainWindow")
 
 
 class ActionToggleHelper:

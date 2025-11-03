@@ -4,11 +4,10 @@ import sys
 from qtpy.QtWidgets import QApplication, QPushButton, QVBoxLayout, QWidget
 from qtpy.QtCore import Qt
 
-from director.mainwindow import MainWindow, _setup_signal_handlers
+from director import mainwindowapp
 from director.debugVis import DebugData
 from director import visualization as vis
 from director import objectmodel as om
-from director import applogic
 from director import vtkAll as vtk
 
 
@@ -42,21 +41,11 @@ class FrameItemTestWindow(QWidget):
 
 def main():
     """Main entry point for the frame item test."""
-    app = QApplication(sys.argv)
+    # Construct the application using MainWindowApp
+    fields = mainwindowapp.construct()
     
-    # Set application properties
-    app.setApplicationName("Director 2.0 - Frame Item Test")
-    app.setApplicationVersion("2.0.0")
-    
-    # Setup signal handlers for Ctrl+C
-    _setup_signal_handlers(app)
-    
-    # Create and show main window
-    window = MainWindow(window_title="Director 2.0 - Frame Item Test")
-    
-    # Get the view (VTKWidget) for showing objects
-    view = window.vtk_widget
-    applogic.setCurrentRenderView(view)
+    # Get the view for showing objects
+    view = fields.view
     
     # Create a sphere using DebugData
     d = DebugData()
@@ -152,10 +141,6 @@ def main():
     child_frame.copyFrame(test_transform)
     print("Frame moved to (2, 1, 0.5) with 45 degree Z rotation")
     
-    # Create a control window with reset button
-    control_window = FrameItemTestWindow(window, sphere_obj)
-    control_window.show()
-    
     # Connect to frame modified signal to verify it's working
     def onFrameModified(frame_item):
         print(f"FrameModified signal received from {frame_item.getProperty('Name')}")
@@ -168,7 +153,12 @@ def main():
     view.resetCamera()
     view.render()
     
-    window.show()
+    # Create a control window with reset button
+    main_window = fields.mainWindow
+    control_window = FrameItemTestWindow(main_window, sphere_obj)
+    control_window.show()
+    
+    main_window.show()
     
     print("\nFrame Item Test Instructions:")
     print("  - The frame widget should be visible (axes and rings)")
@@ -181,7 +171,7 @@ def main():
     print("  - FrameModified signals should be printed when dragging")
     
     # Run the application
-    return app.exec_()
+    return fields.app.start()
 
 
 if __name__ == "__main__":

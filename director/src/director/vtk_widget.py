@@ -74,8 +74,8 @@ class VTKWidget(QWidget):
         # Create renderer
         self._renderer = vtk.vtkRenderer()
         self._renderer.GradientBackgroundOn()
-        self._renderer.SetBackground(0.0, 0.0, 0.0)
-        self._renderer.SetBackground2(0.3, 0.3, 0.3)
+        self._renderer.SetBackground(25/255, 25/255, 30/255)
+        self._renderer.SetBackground2(45/255, 45/255, 55/255)
         self._render_window.AddRenderer(self._renderer)
         
         # Create light kit
@@ -98,9 +98,9 @@ class VTKWidget(QWidget):
         
         # Setup render timer (60 FPS)
         self._render_timer = QTimer(self)
-        self._render_timer.setSingleShot(False)
+        self._render_timer.setSingleShot(True)
         self._render_timer.timeout.connect(self._on_render_timer)
-        self._render_timer.start(int(1000 / 60))
+        #self._render_timer.start(int(1000 / 60))
         
         # Connect render events to update FPS counter
         self._render_window.AddObserver(
@@ -109,25 +109,20 @@ class VTKWidget(QWidget):
         )
         
         # Initialize VTK interactor
-        self._vtk_widget.Initialize()
-        self._vtk_widget.Start()
+        #self._vtk_widget.Initialize()
+        #self._vtk_widget.Start()
         
         # Set terrain interactor style by default (natural view up, azimuth/elevation camera control)
-        # Use our Python terrain interactor for better control
-        interactor = self._render_window.GetInteractor()
-        if interactor:
-            from director.terrain_interactor import setTerrainInteractor
-            setTerrainInteractor(self)
-            # Set initial camera position for terrain mode
-            camera = self._renderer.GetActiveCamera()
-            if camera:
-                camera.SetPosition(10.0, 10.0, 10.0)
-                camera.SetFocalPoint(0.0, 0.0, 0.0)
-                camera.SetViewUp(0.0, 0.0, 1.0)
+        self.setTerrainInteractor()
         
-        # Install default view behaviors (context menus, key bindings, etc.)
-        #from director.viewbehaviors import ViewBehaviors
-        #self._view_behaviors = ViewBehaviors(self)
+        # Set initial camera position for terrain mode
+        camera = self._renderer.GetActiveCamera()
+        if camera:
+            camera.SetPosition(10.0, 10.0, 10.0)
+            camera.SetFocalPoint(0.0, 0.0, 0.0)
+            camera.SetViewUp(0.0, 0.0, 1.0)
+        
+
         
         # Grid will be added later when object model is initialized
         self._grid_obj = None
@@ -179,6 +174,7 @@ class VTKWidget(QWidget):
         """Request a render (queued, will render on next timer tick)."""
         if not self._render_pending:
             self._render_pending = True
+            self._render_timer.start()
     
     def forceRender(self):
         """Force an immediate render."""
@@ -201,6 +197,43 @@ class VTKWidget(QWidget):
         shortcut = QShortcut(QKeySequence(key_sequence), self)
         shortcut.activated.connect(QApplication.instance().quit)
         return shortcut
+    
+    def setTerrainInteractor(self, allow_inversion=False):
+        """Set the terrain interactor style (azimuth/elevation rotation, Z-up).
+        
+        Args:
+            allow_inversion: If True, allows elevation to go past ±90 degrees to enable
+                            inverted views. If False (default), clamps elevation.
+        """
+        interactor = self._render_window.GetInteractor()
+        if interactor:
+            from director.terrain_interactor import setTerrainInteractor
+            setTerrainInteractor(self, allow_inversion=allow_inversion)
+            # Ensure view up is Z-axis for terrain mode
+            camera = self._renderer.GetActiveCamera()
+            if camera:
+                camera.SetViewUp(0.0, 0.0, 1.0)
+            self.render()
+    
+    def setTrackballInteractor(self):
+        """Set the trackball interactor style (standard VTK trackball camera)."""
+        interactor = self._render_window.GetInteractor()
+        if interactor:
+            interactor.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+            self.render()
+    
+    def isTerrainInteractor(self):
+        """Check if terrain interactor is currently active.
+        
+        Returns:
+            bool: True if terrain interactor is active, False if trackball is active.
+        """
+        interactor = self._render_window.GetInteractor()
+        if not interactor:
+            return False
+        style = interactor.GetInteractorStyle()
+        from director.terrain_interactor import TerrainInteractorStyle
+        return isinstance(style, TerrainInteractorStyle)
     
     def addCustomBounds(self, bounds):
         """Add custom bounds for camera reset calculation."""

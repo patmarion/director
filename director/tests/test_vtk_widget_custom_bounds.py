@@ -6,17 +6,6 @@ from qtpy.QtWidgets import QApplication
 from director.vtk_widget import VTKWidget
 
 
-@pytest.fixture(scope="session")
-def qapp():
-    """Create QApplication instance for tests."""
-    if not QApplication.instance():
-        app = QApplication(sys.argv)
-        yield app
-        app.quit()
-    else:
-        yield QApplication.instance()
-
-
 def test_add_custom_bounds(qapp):
     """Test adding custom bounds to VTKWidget."""
     widget = VTKWidget()

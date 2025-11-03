@@ -7,7 +7,6 @@ import sys
 from qtpy.QtWidgets import QApplication
 
 from director import mainwindowapp
-from director.mainwindow import _setup_signal_handlers
 from director.debugVis import DebugData
 from director import objectmodel as om
 from director import visualization as vis
@@ -120,8 +119,6 @@ def main():
     app.setApplicationName("Director 2.0 - Debug Visualization Test")
     app.setApplicationVersion("2.0.0")
     
-    # Setup signal handlers for Ctrl+C
-    _setup_signal_handlers(app)
     
     # Construct the main window using component factory
     fields = mainwindowapp.construct(windowTitle="Director 2.0 - Debug Visualization Test")

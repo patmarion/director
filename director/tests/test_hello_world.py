@@ -4,18 +4,7 @@ import sys
 import pytest
 from qtpy.QtWidgets import QApplication
 from director.vtk_widget import VTKWidget
-from director.mainwindow import MainWindow
-
-
-@pytest.fixture(scope="session")
-def qapp():
-    """Create QApplication instance for tests."""
-    if not QApplication.instance():
-        app = QApplication(sys.argv)
-        yield app
-        app.quit()
-    else:
-        yield QApplication.instance()
+from director import mainwindowapp
 
 
 def test_vtk_widget_construction(qapp):
@@ -42,27 +31,28 @@ def test_vtk_widget_show(qapp):
     widget.close()
 
 
-def test_main_window_construction(qapp):
-    """Test that MainWindow can be constructed with VTKWidget."""
-    window = MainWindow()
-    assert window is not None
-    assert window.vtk_widget is not None
-    assert isinstance(window.vtk_widget, VTKWidget)
+def test_mainwindowapp_construction(qapp):
+    """Test that MainWindowApp can be constructed."""
+    fields = mainwindowapp.construct()
+    assert fields is not None
+    assert fields.view is not None
+    assert fields.mainWindow is not None
+    assert isinstance(fields.view, VTKWidget)
 
 
-def test_main_window_show_and_exit(qapp):
-    """Test that MainWindow can be shown and then closed."""
-    window = MainWindow()
-    window.show()
+def test_mainwindowapp_show_and_exit(qapp):
+    """Test that MainWindowApp can be shown and then closed."""
+    fields = mainwindowapp.construct()
+    fields.mainWindow.show()
     
     # Process events to allow the window to render
     qapp.processEvents()
     
     # Verify window is visible
-    assert window.isVisible()
+    assert fields.mainWindow.isVisible()
     
     # Close the window
-    window.close()
+    fields.mainWindow.close()
     
     # Process events to complete the close
     qapp.processEvents()

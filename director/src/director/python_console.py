@@ -13,6 +13,13 @@ except ImportError:
     RichJupyterWidget = None
     QtInProcessKernelManager = None
 
+try:
+    from qtpy.QtWidgets import QApplication
+    QT_AVAILABLE = True
+except ImportError:
+    QT_AVAILABLE = False
+    QApplication = None
+
 
 class PythonConsoleWidget:
     """Manages a Python console widget with Jupyter kernel."""
@@ -61,6 +68,7 @@ class PythonConsoleWidget:
         
         kernel.shell.push(default_namespace)
         self._kernel = kernel  # Store kernel reference for later namespace updates
+        self.connect_quit_handler()
     
     def push_variables(self, variables):
         """
@@ -85,4 +93,13 @@ class PythonConsoleWidget:
                 self.kernel_manager.shutdown_kernel()
         except:
             pass  # Ignore errors during cleanup
+    
+    def connect_quit_handler(self):
+        """Connect to QApplication's aboutToQuit signal to automatically shutdown on quit."""
+        if not QT_AVAILABLE:
+            return
+        
+        app = QApplication.instance()
+        if app:
+            app.aboutToQuit.connect(self.shutdown)
 
