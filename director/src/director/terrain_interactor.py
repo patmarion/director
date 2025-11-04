@@ -433,48 +433,66 @@ class TerrainInteractorStyle(vtk.vtkInteractorStyle):
             dy: Vertical mouse delta (positive = zoom in, negative = zoom out)
             renderer: vtkRenderer instance (optional, for clipping range)
         """
-        focal_point = camera.GetFocalPoint()
-        position = camera.GetPosition()
-        
-        # Calculate vector from focal point to camera position
-        view_vector = [position[i] - focal_point[i] for i in range(3)]
-        distance = math.sqrt(sum(v * v for v in view_vector))
-        
-        # Zoom factor based on distance (proportional zoom)
-        zoom_delta = -dy * self._zoom_factor * distance
-        
-        # Apply zoom (move camera along view vector)
-        # Allow zooming to arbitrarily close (remove the 0.1 minimum limit)
-        min_distance = 1e-6  # Very small minimum to avoid numerical issues
-        if distance > min_distance:
-            view_vector_normalized = [v / distance for v in view_vector]
-            new_distance = max(min_distance, distance + zoom_delta)
-            new_position = [
-                focal_point[i] + view_vector_normalized[i] * new_distance 
-                for i in range(3)
-            ]
-            camera.SetPosition(new_position)
-        else:
-            # Already very close, use normalized direction from current position
-            if distance > 1e-9:
-                view_vector_normalized = [v / distance for v in view_vector]
+        # Check if camera is in parallel projection mode
+        if camera.GetParallelProjection():
+            # In parallel projection mode, zoom by adjusting parallel scale
+            # Decreasing parallel scale = zoom in (more detail visible)
+            # Increasing parallel scale = zoom out (less detail visible)
+            current_scale = camera.GetParallelScale()
+            if current_scale > 1e-6:
+                # Zoom factor based on current scale (proportional zoom)
+                zoom_delta = -dy * self._zoom_factor * current_scale
+                new_scale = max(1e-6, current_scale + zoom_delta)
+                camera.SetParallelScale(new_scale)
             else:
-                # Distance is essentially zero, use camera's view direction
-                view_dir = camera.GetDirectionOfProjection()
-                mag = math.sqrt(sum(v * v for v in view_dir))
-                if mag > 1e-6:
-                    view_vector_normalized = [-v / mag for v in view_dir]
-                else:
-                    # Fallback: use a default direction
-                    view_vector_normalized = [0.0, 0.0, -1.0]
+                # Very small scale, use absolute zoom
+                zoom_delta = -dy * self._zoom_factor * 1.0
+                new_scale = max(1e-6, current_scale + zoom_delta)
+                camera.SetParallelScale(new_scale)
+        else:
+            # Perspective projection mode: move camera along view vector
+            focal_point = camera.GetFocalPoint()
+            position = camera.GetPosition()
             
-            # Apply zoom by moving camera closer
-            new_distance = max(min_distance, distance + zoom_delta)
-            new_position = [
-                focal_point[i] + view_vector_normalized[i] * new_distance 
-                for i in range(3)
-            ]
-            camera.SetPosition(new_position)
+            # Calculate vector from focal point to camera position
+            view_vector = [position[i] - focal_point[i] for i in range(3)]
+            distance = math.sqrt(sum(v * v for v in view_vector))
+            
+            # Zoom factor based on distance (proportional zoom)
+            zoom_delta = -dy * self._zoom_factor * distance
+            
+            # Apply zoom (move camera along view vector)
+            # Allow zooming to arbitrarily close (remove the 0.1 minimum limit)
+            min_distance = 1e-6  # Very small minimum to avoid numerical issues
+            if distance > min_distance:
+                view_vector_normalized = [v / distance for v in view_vector]
+                new_distance = max(min_distance, distance + zoom_delta)
+                new_position = [
+                    focal_point[i] + view_vector_normalized[i] * new_distance 
+                    for i in range(3)
+                ]
+                camera.SetPosition(new_position)
+            else:
+                # Already very close, use normalized direction from current position
+                if distance > 1e-9:
+                    view_vector_normalized = [v / distance for v in view_vector]
+                else:
+                    # Distance is essentially zero, use camera's view direction
+                    view_dir = camera.GetDirectionOfProjection()
+                    mag = math.sqrt(sum(v * v for v in view_dir))
+                    if mag > 1e-6:
+                        view_vector_normalized = [-v / mag for v in view_dir]
+                    else:
+                        # Fallback: use a default direction
+                        view_vector_normalized = [0.0, 0.0, -1.0]
+                
+                # Apply zoom by moving camera closer
+                new_distance = max(min_distance, distance + zoom_delta)
+                new_position = [
+                    focal_point[i] + view_vector_normalized[i] * new_distance 
+                    for i in range(3)
+                ]
+                camera.SetPosition(new_position)
         
         # Reset camera clipping range after zoom (this adjusts near/far planes for visibility)
         if renderer:
@@ -488,46 +506,66 @@ class TerrainInteractorStyle(vtk.vtkInteractorStyle):
             direction: -1 for zoom in, 1 for zoom out
             renderer: vtkRenderer instance (optional, for clipping range)
         """
-        focal_point = camera.GetFocalPoint()
-        position = camera.GetPosition()
-        
-        # Calculate vector from focal point to camera position
-        view_vector = [position[i] - focal_point[i] for i in range(3)]
-        distance = math.sqrt(sum(v * v for v in view_vector))
-        
-        # Zoom factor (10% per wheel step)
-        zoom_factor = 0.1
-        zoom_delta = direction * zoom_factor * distance
-        
-        # Apply zoom - allow zooming to arbitrarily close
-        min_distance = 1e-6  # Very small minimum to avoid numerical issues
-        if distance > min_distance:
-            view_vector_normalized = [v / distance for v in view_vector]
-            new_distance = max(min_distance, distance + zoom_delta)
-            new_position = [
-                focal_point[i] + view_vector_normalized[i] * new_distance 
-                for i in range(3)
-            ]
-            camera.SetPosition(new_position)
-        else:
-            # Already very close, use normalized direction
-            if distance > 1e-9:
-                view_vector_normalized = [v / distance for v in view_vector]
+        # Check if camera is in parallel projection mode
+        if camera.GetParallelProjection():
+            # In parallel projection mode, zoom by adjusting parallel scale
+            # Decreasing parallel scale = zoom in (more detail visible)
+            # Increasing parallel scale = zoom out (less detail visible)
+            current_scale = camera.GetParallelScale()
+            if current_scale > 1e-6:
+                # Zoom factor (10% per wheel step)
+                zoom_factor = 0.1
+                zoom_delta = direction * zoom_factor * current_scale
+                new_scale = max(1e-6, current_scale + zoom_delta)
+                camera.SetParallelScale(new_scale)
             else:
-                # Use camera's view direction
-                view_dir = camera.GetDirectionOfProjection()
-                mag = math.sqrt(sum(v * v for v in view_dir))
-                if mag > 1e-6:
-                    view_vector_normalized = [-v / mag for v in view_dir]
-                else:
-                    view_vector_normalized = [0.0, 0.0, -1.0]
+                # Very small scale, use absolute zoom
+                zoom_factor = 0.1
+                zoom_delta = direction * zoom_factor * 1.0
+                new_scale = max(1e-6, current_scale + zoom_delta)
+                camera.SetParallelScale(new_scale)
+        else:
+            # Perspective projection mode: move camera along view vector
+            focal_point = camera.GetFocalPoint()
+            position = camera.GetPosition()
             
-            new_distance = max(min_distance, distance + zoom_delta)
-            new_position = [
-                focal_point[i] + view_vector_normalized[i] * new_distance 
-                for i in range(3)
-            ]
-            camera.SetPosition(new_position)
+            # Calculate vector from focal point to camera position
+            view_vector = [position[i] - focal_point[i] for i in range(3)]
+            distance = math.sqrt(sum(v * v for v in view_vector))
+            
+            # Zoom factor (10% per wheel step)
+            zoom_factor = 0.1
+            zoom_delta = direction * zoom_factor * distance
+            
+            # Apply zoom - allow zooming to arbitrarily close
+            min_distance = 1e-6  # Very small minimum to avoid numerical issues
+            if distance > min_distance:
+                view_vector_normalized = [v / distance for v in view_vector]
+                new_distance = max(min_distance, distance + zoom_delta)
+                new_position = [
+                    focal_point[i] + view_vector_normalized[i] * new_distance 
+                    for i in range(3)
+                ]
+                camera.SetPosition(new_position)
+            else:
+                # Already very close, use normalized direction
+                if distance > 1e-9:
+                    view_vector_normalized = [v / distance for v in view_vector]
+                else:
+                    # Use camera's view direction
+                    view_dir = camera.GetDirectionOfProjection()
+                    mag = math.sqrt(sum(v * v for v in view_dir))
+                    if mag > 1e-6:
+                        view_vector_normalized = [-v / mag for v in view_dir]
+                    else:
+                        view_vector_normalized = [0.0, 0.0, -1.0]
+                
+                new_distance = max(min_distance, distance + zoom_delta)
+                new_position = [
+                    focal_point[i] + view_vector_normalized[i] * new_distance 
+                    for i in range(3)
+                ]
+                camera.SetPosition(new_position)
         
         # Reset camera clipping range after zoom
         if renderer:

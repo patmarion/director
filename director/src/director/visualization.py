@@ -281,6 +281,344 @@ class PolyDataItem(om.ObjectModelItem):
             view.vtk_widget.render()
 
 
+class Image2DItem(om.ObjectModelItem):
+    """2D image overlay item for displaying images in the viewport."""
+    
+    def __init__(self, name, image, view):
+        """Initialize Image2DItem.
+        
+        Args:
+            name: Name for the object model item
+            image: vtkImageData instance
+            view: VTKWidget view instance
+        """
+        om.ObjectModelItem.__init__(self, name, om.Icons.Robot)
+        
+        self.views = []
+        self.image = image
+        
+        defaultWidth = 300
+        defaultHeight = self._getHeightForWidth(image, defaultWidth)
+        
+        # Flag to prevent recursive property updates during aspect ratio sync
+        self._syncing_aspect_ratio = False
+        
+        self.actor = vtk.vtkLogoRepresentation()
+        self.actor.SetImage(image)
+        self.actor.GetImageProperty().SetOpacity(1.0)
+        
+        actors = vtk.vtkPropCollection()
+        self.actor.GetActors2D(actors)
+        self.texture = actors.GetItemAsObject(0).GetTexture()
+        self.actors = [actors.GetItemAsObject(i) for i in range(actors.GetNumberOfItems())]
+        
+        self.addProperty('Visible', True)
+        self.addProperty('Anchor', 1,
+                         attributes=om.PropertyAttributes(enumNames=['Top Left', 'Top Right', 'Bottom Left', 'Bottom Right']))
+        self.addProperty('Width', defaultWidth,
+                         attributes=om.PropertyAttributes(minimum=0, maximum=9999, singleStep=50))
+        self.addProperty('Height', defaultHeight,
+                         attributes=om.PropertyAttributes(minimum=0, maximum=9999, singleStep=50))
+        self.addProperty('Keep Aspect Ratio', True,
+                         attributes=om.PropertyAttributes(hidden=True))
+        self.addProperty('Alpha', 1.0,
+                         attributes=om.PropertyAttributes(decimals=2, minimum=0, maximum=1.0, singleStep=0.1))
+        
+        if view is not None:
+            self.addToView(view)
+    
+    def _renderAllViews(self):
+        """Render all views containing this item."""
+        for view in self.views:
+            view.render()
+    
+    def hasDataSet(self, dataSet):
+        """Check if this item uses the given dataset."""
+        return dataSet == self.image
+    
+    def hasActor(self, actor):
+        """Check if this item uses the given actor."""
+        return actor == self.actor
+    
+    def setImage(self, image):
+        """Update the image displayed by this item.
+        
+        Args:
+            image: vtkImageData instance
+        """
+        self.image = image
+        self.actor.SetImage(image)
+        
+        # Also set the image on the texture, otherwise
+        # the texture input won't update until the next
+        # render where this actor is visible
+        self.texture.SetInputData(image)
+        
+        if self.getProperty('Visible'):
+            self._renderAllViews()
+    
+    def addToView(self, view):
+        """Add this item to a view.
+        
+        Args:
+            view: VTKWidget view instance
+        """
+        if view in self.views:
+            return
+        self.views.append(view)
+        
+        # Get renderer
+        renderer = view.renderer()
+        self._updatePositionCoordinates(view)
+        
+        renderer.AddActor(self.actor)
+        view.render()
+    
+    def _getHeightForWidth(self, image, width):
+        """Calculate height for a given width maintaining aspect ratio.
+        
+        Args:
+            image: vtkImageData instance
+            width: Desired width in pixels
+            
+        Returns:
+            Height in pixels
+        """
+        dims = image.GetDimensions()
+        w, h = dims[0], dims[1]
+        aspect = w / float(h) if h > 0 else 1.0
+        return int(np.round(width / aspect))
+    
+    def _getWidthForHeight(self, image, height):
+        """Calculate width for a given height maintaining aspect ratio.
+        
+        Args:
+            image: vtkImageData instance
+            height: Desired height in pixels
+            
+        Returns:
+            Width in pixels
+        """
+        dims = image.GetDimensions()
+        w, h = dims[0], dims[1]
+        aspect = w / float(h) if h > 0 else 1.0
+        return int(np.round(height * aspect))
+    
+    def _getAspectRatio(self, image):
+        """Get the aspect ratio of the image.
+        
+        Args:
+            image: vtkImageData instance
+            
+        Returns:
+            Aspect ratio (width/height)
+        """
+        dims = image.GetDimensions()
+        w, h = dims[0], dims[1]
+        return w / float(h) if h > 0 else 1.0
+    
+    def _updatePositionCoordinates(self, view):
+        """Update the position coordinates for the image overlay.
+        
+        Args:
+            view: VTKWidget view instance
+        """
+        width = self.getProperty('Width')
+        height = self.getProperty('Height')
+        
+        # Get renderer
+        renderer = view.renderer()
+        
+        pc0 = vtk.vtkCoordinate()
+        pc1 = self.actor.GetPositionCoordinate()
+        pc2 = self.actor.GetPosition2Coordinate()
+        
+        for pc in [pc0, pc1, pc2]:
+            pc.SetViewport(renderer)
+        
+        pc0.SetReferenceCoordinate(None)
+        pc0.SetCoordinateSystemToNormalizedDisplay()
+        pc1.SetReferenceCoordinate(pc0)
+        pc1.SetCoordinateSystemToDisplay()
+        
+        anchor = self.properties.getPropertyEnumValue('Anchor')
+        if anchor == 'Top Left':
+            pc0.SetValue(0.0, 1.0)
+            pc1.SetValue(0.0, -height)
+        elif anchor == 'Top Right':
+            pc0.SetValue(1.0, 1.0)
+            pc1.SetValue(-width, -height)
+        elif anchor == 'Bottom Left':
+            pc0.SetValue(0.0, 0.0)
+            pc1.SetValue(0.0, 0.0)
+        elif anchor == 'Bottom Right':
+            pc0.SetValue(1.0, 0.0)
+            pc1.SetValue(-width, 0.0)
+        
+        pc2.SetCoordinateSystemToDisplay()
+        pc2.SetReferenceCoordinate(pc1)
+        pc2.SetValue(width, height)
+    
+    def _onPropertyChanged(self, propertySet, propertyName):
+        """Handle property changes.
+        
+        Args:
+            propertySet: PropertySet instance
+            propertyName: Name of the property that changed
+        """
+        om.ObjectModelItem._onPropertyChanged(self, propertySet, propertyName)
+        
+        # Skip aspect ratio sync if we're already syncing (prevents recursive updates)
+        if self._syncing_aspect_ratio:
+            if propertyName in ('Width', 'Height', 'Keep Aspect Ratio'):
+                if self.views:
+                    self._updatePositionCoordinates(self.views[0])
+                self._renderAllViews()
+            return
+        
+        if propertyName == 'Alpha':
+            self.actor.GetImageProperty().SetOpacity(self.getProperty(propertyName))
+        elif propertyName == 'Visible':
+            self.actor.SetVisibility(self.getProperty(propertyName))
+        elif propertyName == 'Width':
+            # If keeping aspect ratio, update height
+            if self.getProperty('Keep Aspect Ratio'):
+                self._syncing_aspect_ratio = True
+                try:
+                    new_height = self._getHeightForWidth(self.image, self.getProperty('Width'))
+                    self.setProperty('Height', new_height)
+                finally:
+                    self._syncing_aspect_ratio = False
+            if self.views:
+                self._updatePositionCoordinates(self.views[0])
+        elif propertyName == 'Height':
+            # If keeping aspect ratio, update width
+            if self.getProperty('Keep Aspect Ratio'):
+                self._syncing_aspect_ratio = True
+                try:
+                    new_width = self._getWidthForHeight(self.image, self.getProperty('Height'))
+                    self.setProperty('Width', new_width)
+                finally:
+                    self._syncing_aspect_ratio = False
+            if self.views:
+                self._updatePositionCoordinates(self.views[0])
+        elif propertyName == 'Anchor':
+            if self.views:
+                self._updatePositionCoordinates(self.views[0])
+        self._renderAllViews()
+    
+    def onRemoveFromObjectModel(self):
+        """Called when item is removed from object model."""
+        om.ObjectModelItem.onRemoveFromObjectModel(self)
+        self.removeFromAllViews()
+    
+    def removeFromAllViews(self):
+        """Remove this item from all views."""
+        for view in list(self.views):
+            self.removeFromView(view)
+        assert len(self.views) == 0
+    
+    def removeFromView(self, view):
+        """Remove this item from a view.
+        
+        Args:
+            view: VTKWidget view instance
+        """
+        assert view in self.views
+        self.views.remove(view)
+        
+        # Get renderer
+        if hasattr(view, 'renderer'):
+            renderer = view.renderer()
+        elif hasattr(view, 'vtk_widget') and hasattr(view.vtk_widget, 'renderer'):
+            renderer = view.vtk_widget.renderer()
+        else:
+            return
+        
+        renderer.RemoveActor(self.actor)
+        
+        if hasattr(view, 'render'):
+            view.render()
+        elif hasattr(view, 'vtk_widget'):
+            view.vtk_widget.render()
+
+
+def showImage(image, name, anchor='Top Left', parent=None, view=None):
+    """Show an image in the view and optionally add it to the object model if initialized.
+    
+    Args:
+        image: vtkImageData instance
+        name: Name for the Image2DItem
+        anchor: Anchor position ('Top Left', 'Top Right', 'Bottom Left', 'Bottom Right')
+        parent: Parent container (string name or ObjectModelItem)
+        view: VTKWidget view instance (if None, tries to get from applogic)
+    
+    Returns:
+        Image2DItem instance
+    """
+    if view is None:
+        # Try to get current view from applogic
+        try:
+            view = app.getCurrentRenderView()
+        except:
+            raise ValueError("view must be provided or applogic.getCurrentRenderView() must return a valid view")
+    
+    assert view
+    
+    item = Image2DItem(name, image, view)
+    
+    # Set anchor property - can be string or index
+    if isinstance(anchor, str):
+        # Find the index for the anchor string
+        anchor_map = {
+            'Top Left': 0,
+            'Top Right': 1,
+            'Bottom Left': 2,
+            'Bottom Right': 3
+        }
+        anchor_index = anchor_map.get(anchor, 1)  # Default to 'Top Right'
+        item.setProperty('Anchor', anchor_index)
+    else:
+        # Assume it's already an index
+        item.setProperty('Anchor', anchor)
+    
+    # Only add to object model if it's initialized
+    if om.isInitialized():
+        parent_obj = getParentObj(parent)
+        if parent_obj is not None:
+            om.addToObjectModel(item, parent_obj)
+        else:
+            om.addToObjectModel(item)
+    
+    return item
+
+
+def updatePolyData(polyData, name, **kwargs):
+    obj = om.findObjectByName(name, parent=getParentObj(kwargs.get('parent')))
+    if obj is None:
+        obj = showPolyData(polyData, name, **kwargs)
+    else:
+        obj.setPolyData(polyData)
+    return obj
+
+
+def updateFrame(frame, name, **kwargs):
+    obj = om.findObjectByName(name, parent=getParentObj(kwargs.get('parent')))
+    if obj is None:
+        obj = showFrame(frame, name, **kwargs)
+    else:
+        obj.copyFrame(frame)
+    return obj
+
+def updateImage(image, name, **kwargs):
+    obj = om.findObjectByName(name, parent=getParentObj(kwargs.get('parent')))
+    if obj is None:
+        obj = showImage(image, name, **kwargs)
+    else:
+        obj.setImage(image)
+    return obj
+
+
 def createAxesPolyData(scale, useTube, tubeWidth=0.002):
     axes = vtk.vtkAxes()
     axes.SetComputeNormals(0)
@@ -421,7 +759,9 @@ class FrameItem(PolyDataItem):
 
 def getParentObj(parent):
     """Get parent object from name or object."""
-    if isinstance(parent, om.ObjectModelItem):
+    if parent is None:
+        return None
+    elif isinstance(parent, om.ObjectModelItem):
         return parent
     elif isinstance(parent, str):
         return om.getOrCreateContainer(parent)

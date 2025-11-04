@@ -494,8 +494,6 @@ class MainWindowAppFactory(object):
         def loadScripts():
             if hasattr(fields.commandLineArgs, 'scripts') and fields.commandLineArgs.scripts:
                 for scriptArgs in fields.commandLineArgs.scripts:
-                    print("loading script")
-                    print(scriptArgs)
                     fields.runScript(scriptArgs[0], scriptArgs[1:])
         fields.app.registerStartupCallback(loadScripts)
         return FieldContainer()
