@@ -204,11 +204,11 @@ class MainWindowAppFactory(object):
             'MainToolBar' : ['View', 'Grid', 'MainWindow'],
             'ViewBehaviors' : ['View'],
             'Grid': ['View', 'ObjectModel'],
-            'PythonConsole' : [],
+            'PythonConsole' : ['Globals', 'GlobalModules'],
             'MainWindow' : ['View', 'ObjectModel', 'PythonConsole'],
             'SignalHandlers' : ['MainWindow'],  # Setup after MainWindow is created
             'AdjustedClippingRange' : ['View'],
-            'RunScriptFunction' : ['Globals'],
+            'RunScriptFunction' : ['Globals', 'PythonConsole'],
             'ScriptLoader' : ['MainWindow', 'RunScriptFunction']}
 
         disabledComponents = []
@@ -385,7 +385,6 @@ class MainWindowAppFactory(object):
         
         return FieldContainer(pythonConsoleWidget=console_widget_manager)
 
-
     def initMainToolBar(self, fields):
 
         # viewcolors.ViewBackgroundLightHandler not yet ported - commented out for now
@@ -486,7 +485,7 @@ class MainWindowAppFactory(object):
                     del globalsDict[k]
                 for k, v in prev_args.items():
                     globalsDict[k] = v
-
+                fields.pythonConsoleWidget.push_variables(globalsDict)
         return FieldContainer(runScript=runScript)
 
 
@@ -537,6 +536,7 @@ def construct(command_line_args=None, **kwargs):
     # Push variables to Python console if it exists
     if hasattr(fields, 'pythonConsoleWidget') and fields.pythonConsoleWidget is not None:
         variables = dict()
+        fields.globalsDict['fields'] = fields
         variables.update(fields.globalsDict)
         variables['fields'] = fields
         variables['view'] = fields.view
