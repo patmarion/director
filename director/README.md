@@ -32,7 +32,15 @@ sudo apt-get install libxcb-cursor0
 
 ### Python Dependencies
 
-The most basic starting point is:
+This project manages it dependencies and runtime with `uv`.  If you need to install uv then
+you can install it from the official source with their install script:
+
+```bash
+# See https://docs.astral.sh/uv/getting-started/installation/
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+With `uv` installed then the most basic starting point is:
 
 ```bash
 uv run python -m director.hello_world
@@ -41,10 +49,7 @@ uv run python -m director.hello_world
 Or you can install just the package dependencies:
 ```bash
 # Sync dependencies from pyproject.toml
-uv sync
-
-# or use a specific python version
-uv sync --python 3.10.19
+uv sync # optionally, request a specific python version: --python 3.10.19
 ```
 
 Using uv sync will create a virtual environment as an initial step.  You can also
@@ -52,7 +57,7 @@ directly create the virtual environment:
 
 ```bash
 # Create a virtual environment (in `.venv` by default)
-uv venv
+uv venv  # optionally, request a specific python version: --python 3.10.19
 
 # Install dependencies
 uv sync
