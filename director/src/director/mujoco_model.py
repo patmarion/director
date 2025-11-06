@@ -97,6 +97,8 @@ def print_model_info(model):
     
     print(f"\nMeshes: {model.nmesh}")
     for i in range(model.nmesh):
+        mesh = model.mesh(i)
+        print(mesh, mesh.name)
         mesh_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MESH, i)
         if mesh_name:
             vert_count = model.mesh_vertnum[i]
@@ -413,7 +415,11 @@ def load_geom_mesh(model, geom_id, model_dir=None):
     
     # Fallback: try to load from file
     try:
+        mesh_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MESH, mesh_id)
+        print(mesh_id, mesh_name)
+
         mesh_file_id = model.mesh_fileid[mesh_id]
+        print("mesh_file_id", mesh_file_id)
         if mesh_file_id >= 0 and mesh_file_id < model.nfile:
             # Try to get filename from MuJoCo
             # Note: MuJoCo API for getting filenames may vary by version

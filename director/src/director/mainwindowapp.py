@@ -95,6 +95,7 @@ class MainWindowApp(object):
             self._python_console_dock.hide()
         else:
             self._python_console_dock.show()
+            self._python_console_widget_manager.console_widget.layout().currentWidget().setFocus()
             self._python_console_dock.raise_()
 
     def showOnlineDocumentation(self):
@@ -208,6 +209,7 @@ class MainWindowAppFactory(object):
             'MainWindow' : ['View', 'ObjectModel', 'PythonConsole'],
             'SignalHandlers' : ['MainWindow'],  # Setup after MainWindow is created
             'AdjustedClippingRange' : ['View'],
+            'StartupRender' : ['View', 'MainWindow'],
             'RunScriptFunction' : ['Globals', 'PythonConsole'],
             'ScriptLoader' : ['MainWindow', 'RunScriptFunction']}
 
@@ -497,6 +499,13 @@ class MainWindowAppFactory(object):
         fields.app.registerStartupCallback(loadScripts)
         return FieldContainer()
 
+    def initStartupRender(self, fields):
+        def startupRender():
+            print("startupRender")
+            fields.view.forceRender()
+            fields.app.applicationInstance().processEvents()
+        fields.app.registerStartupCallback(startupRender, priority=0)
+        return FieldContainer()
 
 # MainWindowPanelFactory removed - optional panels not yet ported
 # These included:
