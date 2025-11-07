@@ -13,6 +13,7 @@ from director import mainwindowapp
 from director import mujoco_model
 from director import applogic
 from director import argutils
+import qtpy.QtCore as QtCore
 
 
 def main():
@@ -34,19 +35,11 @@ Examples:
         help='Path to MuJoCo MJCF XML file'
     )
     
-    # Add standard Director arguments
-    argutils.add_standard_args(parser)
-    
     # Parse arguments (using parse_known_args to handle any remaining args)
     args = parser.parse_known_args()[0]
     
     
-    # Construct the main window using component factory with command line args
-    fields = mainwindowapp.construct(
-        command_line_args=args,
-        windowTitle="Director 2.0 - MuJoCo Model Visualization"
-    )
-    
+
     
     # Get path to model file
     if args.model_path:
@@ -64,16 +57,29 @@ Examples:
     print(f"Loading MuJoCo model from: {model_path}")
     print("=" * 60)
     
-
-    model, data, body_poses, geom_items = mujoco_model.load_and_visualize_mujoco_model(model_path)
+    # Create and visualize the robot model
+    robot_model = mujoco_model.MujocoRobotModel(model_path)
+    robot_model.show_model()
     
-    fields._add_fields(model=model, data=data, body_poses=body_poses, geom_items=geom_items)
+    # Create properties panel for joint control
+    from director.propertiespanel import PropertiesPanel
+    joint_properties_panel = PropertiesPanel()
+    joint_properties_panel.setWindowTitle('MuJoCo Joint Control')
+    joint_properties_panel.connectProperties(robot_model.joint_properties_item.properties)
+    
+    # Add properties panel to dock on the right side
+    fields.app.addWidgetToDock(joint_properties_panel, QtCore.Qt.RightDockWidgetArea, visible=True)
+    
+    # Add to fields for access in console
+    fields._add_fields(robot_model=robot_model, joint_properties_panel=joint_properties_panel)
 
     print("\n" + "=" * 60)
     print(f"Successfully loaded and visualized model")
-    print(f"  Bodies: {model.nbody}")
-    print(f"  Geoms: {model.ngeom}")
-    print(f"  Visualized geoms: {len(geom_items)}")
+    print(f"  Bodies: {robot_model.model.nbody}")
+    print(f"  Geoms: {robot_model.model.ngeom}")
+    print(f"  Visualized geoms: {len(robot_model.geom_items)}")
+    print(f"  Joint names: {robot_model.get_joint_names()}")
+    print(f"  1 DOF joints: {robot_model.get_1dof_joint_names()}")
     print("=" * 60)
     
     # Print available body poses
@@ -87,9 +93,6 @@ Examples:
     
     # Reset camera to view the model
     applogic.resetCamera(viewDirection=[-1, -1, -0.3])
-    
-    # Start the application (shows main window and enters event loop)
-    fields.app.start()
 
 
 if __name__ == "__main__":

@@ -594,6 +594,7 @@ def visualize_mujoco_model(model, body_to_geom, mesh_resolver):
         if folder_key in ["Scene", "mocap"] or folder_key == "group_3":
             if folder_obj.hasProperty('Visible'):
                 folder_obj.setProperty('Visible', False)
+        om.addChildPropertySync(folder_obj)
     
     return geom_items
 
@@ -610,53 +611,218 @@ def apply_body_poses_to_geoms(body_poses, geom_items):
         geom_item.getChildFrame().copyFrame(mj_matrix_to_vtk_transform(world_T_body))
 
 
-def load_and_visualize_mujoco_model(xml_path):
+class MujocoRobotModel:
     """
-    Load a MuJoCo model and visualize it in Director.
+    A class for loading and visualizing MuJoCo robot models in Director.
     
-    This is a convenience function that combines loading, FK, and visualization.
+    This class provides methods to load a MuJoCo model, visualize it, and
+    update its pose using forward kinematics.
+    """
     
-    Args:
-        xml_path: Path to MJCF XML file
-        view: VTK view widget
-        qpos: Joint positions (optional)
-        parent_obj: Parent object in object model (optional)
+    def __init__(self, xml_path: str):
+        """
+        Initialize the MuJoCo robot model.
         
-    Returns:
-        tuple: (model, data, body_poses, geom_items)
-            - model: MuJoCo model
-            - data: MuJoCo data (None if not available)
-            - body_poses: Dictionary of body name to 4x4 matrix
-            - geom_items: Dictionary of geom ID to PolyDataItem
-    """
-    # Load model
-
-    model = mujoco.MjModel.from_xml_path(xml_path)
-    data = mujoco.MjData(model)
-
+        Args:
+            xml_path: Path to the MJCF XML file
+        """
+        if not os.path.exists(xml_path):
+            raise FileNotFoundError(f"MJCF XML file not found: {xml_path}")
+        
+        self.xml_path = os.path.abspath(xml_path)
+        self.model = mujoco.MjModel.from_xml_path(xml_path)
+        self.data = mujoco.MjData(self.model)
+        self.mesh_resolver = None
+        self.body_to_geom = None
+        self.geom_items = {}
+        self.body_poses = {}
+        # Initialize previous q to default qpos0
+        self.prev_q = self.model.qpos0.copy()
     
-    # Create mesh resolver
-    mesh_resolver = MuJoCoMeshResolver(model, xml_path)
+    def get_body_names(self) -> list[str]:
+        """
+        Get a list of all body names in the model.
+        
+        Returns:
+            List of body names
+        """
+        body_names = []
+        for body_id in range(self.model.nbody):
+            body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, body_id)
+            body_name = body_name or f"body_{body_id}"
+            body_names.append(body_name)
+        return body_names
     
+    def get_joint_names(self) -> list[str]:
+        """
+        Get a list of all joint names in the model.
+        
+        Returns:
+            List of joint names
+        """
+        joint_names = []
+        for joint_id in range(self.model.njnt):
+            joint_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_JOINT, joint_id)
+            if joint_name:
+                joint_names.append(joint_name)
+        return joint_names
     
-    # Build body to geom mapping
-    body_to_geom = build_body_to_geom_mapping(model)
+    def get_1dof_joint_names(self) -> list[str]:
+        """
+        Get a list of 1 DOF joint names (hinge and slide joints).
+        
+        Returns:
+            List of 1 DOF joint names
+        """
+        joint_names = []
+        for joint_id in range(self.model.njnt):
+            joint_type = self.model.jnt_type[joint_id]
+            # Only include hinge and slide joints (1 DOF)
+            if joint_type in [mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE]:
+                joint_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_JOINT, joint_id)
+                if joint_name:
+                    joint_names.append(joint_name)
+        return joint_names
     
+    def get_joint_ranges(self) -> dict[str, tuple[float, float]]:
+        """
+        Get joint position ranges (min, max) for all 1 DOF joints.
+        
+        Returns:
+            Dictionary mapping joint names to (min, max) tuples
+        """
+        ranges = {}
+        for joint_id in range(self.model.njnt):
+            joint_type = self.model.jnt_type[joint_id]
+            # Only include hinge and slide joints (1 DOF)
+            if joint_type in [mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE]:
+                joint_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_JOINT, joint_id)
+                if joint_name:
+                    # Get range from joint limits
+                    range_min = self.model.jnt_range[joint_id, 0]
+                    range_max = self.model.jnt_range[joint_id, 1]
+                    ranges[joint_name] = (float(range_min), float(range_max))
+        return ranges
     
-    # Visualize
-    geom_items = visualize_mujoco_model(
-        model, body_to_geom, 
-        mesh_resolver
-    )
-
-
-    # Perform forward kinematics
-    body_poses = forward_kinematics(model, data, model.qpos0)
-
-    # Apply body poses to geom items
-    apply_body_poses_to_geoms(body_poses, geom_items)
+    def show_model(self):
+        """
+        Visualize the model with default joint positions (qpos0).
+        
+        This method creates the mesh resolver, loads meshes, shows them with
+        showPolyData, and applies forward kinematics with the default qpos0.
+        """
+        # Create mesh resolver
+        if self.mesh_resolver is None:
+            self.mesh_resolver = MuJoCoMeshResolver(self.model, self.xml_path)
+        
+        # Build body to geom mapping
+        if self.body_to_geom is None:
+            self.body_to_geom = build_body_to_geom_mapping(self.model)
+        
+        # Visualize
+        self.geom_items = visualize_mujoco_model(
+            self.model, self.body_to_geom, 
+            self.mesh_resolver
+        )
+        
+        # Perform forward kinematics with default qpos
+        self.body_poses = forward_kinematics(self.model, self.data, self.model.qpos0)
+        
+        # Apply body poses to geom items
+        apply_body_poses_to_geoms(self.body_poses, self.geom_items)
+        
+        # Create ObjectModelItem with joint properties
+        self._create_joint_properties_item()
     
-    #print_model_info(model)
-    #print_body_geom_tree(model, body_to_geom)
-
-    return model, data, body_poses, geom_items
+    def show_forward_kinematics(self, q_dict: dict[str, float]):
+        """
+        Update the model pose using forward kinematics with specified joint positions.
+        
+        Args:
+            q_dict: Dictionary mapping joint names to joint positions.
+                   Can contain a subset of joints; unspecified joints use previous values.
+        """
+        # Start with previous q values
+        q = self.prev_q.copy()
+        
+        # Fill in specified joint positions
+        for joint_name, joint_value in q_dict.items():
+            joint_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+            if joint_id < 0:
+                print(f"Warning: Joint '{joint_name}' not found in model")
+                continue
+            
+            # Get qpos address for this joint
+            qpos_addr = self.model.jnt_qposadr[joint_id]
+            joint_type = self.model.jnt_type[joint_id]
+            
+            # Handle different joint types
+            if joint_type == mujoco.mjtJoint.mjJNT_FREE:
+                # Free joint has 7 DOF (3 pos + 4 quat)
+                if isinstance(joint_value, (list, tuple, np.ndarray)) and len(joint_value) == 7:
+                    q[qpos_addr:qpos_addr + 7] = joint_value
+                else:
+                    print(f"Warning: Free joint '{joint_name}' requires 7 values (pos[3] + quat[4])")
+            elif joint_type == mujoco.mjtJoint.mjJNT_BALL:
+                # Ball joint has 4 DOF (quaternion)
+                if isinstance(joint_value, (list, tuple, np.ndarray)) and len(joint_value) == 4:
+                    q[qpos_addr:qpos_addr + 4] = joint_value
+                else:
+                    print(f"Warning: Ball joint '{joint_name}' requires 4 values (quaternion)")
+            else:
+                # Hinge or slide joint has 1 DOF
+                q[qpos_addr] = float(joint_value)
+        
+        # Perform forward kinematics
+        self.body_poses = forward_kinematics(self.model, self.data, q)
+        
+        # Update prev_q for next call
+        self.prev_q = q.copy()
+        
+        # Apply body poses to geom items
+        apply_body_poses_to_geoms(self.body_poses, self.geom_items)
+    
+    def _create_joint_properties_item(self):
+        """Create an ObjectModelItem with properties for each 1 DOF joint."""
+        # Create the item
+        self.joint_properties_item = om.ObjectModelItem('MuJoCo Joints', om.Icons.Robot)
+        
+        # Get 1 DOF joint names and ranges
+        joint_names = self.get_1dof_joint_names()
+        joint_ranges = self.get_joint_ranges()
+        
+        # Get initial joint positions from qpos0
+        initial_qpos = {}
+        for joint_name in joint_names:
+            joint_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+            if joint_id >= 0:
+                qpos_addr = self.model.jnt_qposadr[joint_id]
+                initial_qpos[joint_name] = float(self.model.qpos0[qpos_addr])
+        
+        # Add properties for each joint
+        for joint_name in joint_names:
+            initial_value = initial_qpos.get(joint_name, 0.0)
+            range_min, range_max = joint_ranges.get(joint_name, (-np.inf, np.inf))
+            
+            # Create property attributes with range
+            attrs = om.PropertyAttributes(
+                minimum=range_min,
+                maximum=range_max,
+                decimals=4,
+                singleStep=0.01
+            )
+            self.joint_properties_item.addProperty(joint_name, initial_value, attributes=attrs)
+        
+        # Connect property changed callback
+        self.joint_properties_item.properties.connectPropertyChanged(self._on_joint_property_changed)
+    
+    def _on_joint_property_changed(self, propertySet, propertyName):
+        """Callback when a joint property is changed."""
+        # Build q_dict from all joint properties
+        q_dict = {}
+        for joint_name in self.get_1dof_joint_names():
+            if self.joint_properties_item.hasProperty(joint_name):
+                q_dict[joint_name] = self.joint_properties_item.getProperty(joint_name)
+        
+        # Update forward kinematics
+        self.show_forward_kinematics(q_dict)
