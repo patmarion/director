@@ -5,24 +5,77 @@ kinematics, and visualize the model geometry in Director using PolyDataItem obje
 """
 
 import os
+import xml.etree.ElementTree as ET
 import numpy as np
-try:
-    import mujoco
-    MUJOCO_AVAILABLE = True
-except ImportError:
-    MUJOCO_AVAILABLE = False
-
-try:
-    from scipy.spatial.transform import Rotation
-    SCIPY_AVAILABLE = True
-except ImportError:
-    SCIPY_AVAILABLE = False
+import mujoco
+from scipy.spatial.transform import Rotation
 
 import director.vtkAll as vtk
 from director import transformUtils
 from director import ioUtils
+from director import filterUtils
 from director import visualization as vis
 from director import objectmodel as om
+
+
+class MuJoCoMeshResolver:
+    """
+    Resolves mesh names to absolute file paths by parsing the MJCF XML file.
+    
+    Parses the <asset> section of the MJCF XML to extract mesh definitions
+    and builds a mapping from mesh names to absolute file paths.
+    """
+    
+    def __init__(self, model, xml_path: str):
+        """
+        Initialize the mesh resolver.
+        
+        Args:
+            model: MuJoCo model object
+            xml_path: Path to the original MJCF XML file
+        """
+        self.model = model
+        self.xml_path = os.path.abspath(xml_path)
+        self.xml_dir = os.path.dirname(self.xml_path)
+        self.mesh_name_to_file = {}
+        self._parse_xml()
+    
+    def _parse_xml(self):
+        """Parse the MJCF XML file to extract mesh definitions."""
+        try:
+            tree = ET.parse(self.xml_path)
+            root = tree.getroot()
+            
+            # Find the <asset> tag
+            asset = root.find('asset')
+            if asset is not None:
+                # Find all <mesh> elements within <asset>
+                for mesh_elem in asset.findall('mesh'):
+                    mesh_name = mesh_elem.get('name')
+                    mesh_file = mesh_elem.get('file')
+                    
+                    if mesh_name and mesh_file:
+                        # Resolve relative path to absolute path
+                        if os.path.isabs(mesh_file):
+                            abs_path = mesh_file
+                        else:
+                            abs_path = os.path.join(self.xml_dir, mesh_file)
+                        abs_path = os.path.normpath(abs_path)
+                        self.mesh_name_to_file[mesh_name] = abs_path
+        except Exception as e:
+            print(f"Warning: Failed to parse XML for mesh resolution: {e}")
+    
+    def resolve_mesh_file(self, mesh_name: str) -> str | None:
+        """
+        Resolve a mesh name to its absolute file path.
+        
+        Args:
+            mesh_name: Name of the mesh as defined in the MJCF XML
+            
+        Returns:
+            Absolute path to the mesh file, or None if not found
+        """
+        return self.mesh_name_to_file.get(mesh_name)
 
 
 def mj_matrix_to_vtk_transform(matrix):
@@ -37,28 +90,6 @@ def mj_matrix_to_vtk_transform(matrix):
     """
     return transformUtils.getTransformFromNumpy(matrix)
 
-
-def load_mjcf_xml(xml_path):
-    """
-    Load a MuJoCo MJCF XML file.
-    
-    Args:
-        xml_path: Path to the MJCF XML file
-        
-    Returns:
-        mjModel: MuJoCo model object
-        
-    Raises:
-        ImportError: If mujoco is not available
-        Exception: If file cannot be loaded
-    """
-    if not MUJOCO_AVAILABLE:
-        raise ImportError("MuJoCo is not available. Please install mujoco: pip install mujoco")
-    
-    if not os.path.exists(xml_path):
-        raise FileNotFoundError(f"MJCF XML file not found: {xml_path}")
-    
-    return mujoco.MjModel.from_xml_path(xml_path)
 
 
 def print_model_info(model):
@@ -174,7 +205,7 @@ def print_body_geom_tree(model, body_to_geom):
     print_body_recursive(0)
 
 
-def forward_kinematics(model, qpos=None):
+def forward_kinematics(model, data, qpos):
     """
     Perform forward kinematics to compute body poses.
     
@@ -188,19 +219,12 @@ def forward_kinematics(model, qpos=None):
     Raises:
         ImportError: If scipy is not available
     """
-    if not SCIPY_AVAILABLE:
-        raise ImportError("scipy is required for forward kinematics. Please install: pip install scipy")
-    
-    # Create data object
-    data = mujoco.MjData(model)
+
     
     # Set joint positions
-    if qpos is not None:
-        if len(qpos) != model.nq:
-            raise ValueError(f"qpos length ({len(qpos)}) must match model.nq ({model.nq})")
-        data.qpos[:] = qpos
-    else:
-        data.qpos[:] = model.qpos0
+    if len(qpos) != model.nq:
+        raise ValueError(f"qpos length ({len(qpos)}) must match model.nq ({model.nq})")
+    data.qpos[:] = qpos
     
     # Forward kinematics
     mujoco.mj_forward(model, data)
@@ -210,26 +234,18 @@ def forward_kinematics(model, qpos=None):
     
     for body_id in range(model.nbody):
         body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
-        
+        body_name = body_name or f"body_{body_id}"
+
         # Get position and quaternion from MuJoCo
         pos = data.xpos[body_id]
-        quat = data.xquat[body_id]  # w, x, y, z format
-        
-        # Convert quaternion to rotation matrix using scipy
-        # scipy uses x, y, z, w format
-        rotation = Rotation.from_quat([quat[1], quat[2], quat[3], quat[0]])
-        rot_matrix = rotation.as_matrix()
-        
-        # Build 4x4 transformation matrix
+        rot_matrix = data.xmat[body_id].reshape(3, 3)
+
+
         transform_matrix = np.eye(4)
         transform_matrix[:3, :3] = rot_matrix
         transform_matrix[:3, 3] = pos
         
-        # Use body name as key (or generate one if no name)
-        if body_name:
-            body_poses[body_name] = transform_matrix
-        else:
-            body_poses[f"body_{body_id}"] = transform_matrix
+        body_poses[body_name] = transform_matrix
     
     return body_poses
 
@@ -250,12 +266,8 @@ def get_geom_pose_in_body(model, geom_id):
     geom_quat = model.geom_quat[geom_id]  # w, x, y, z format
     
     # Convert quaternion to rotation matrix
-    if SCIPY_AVAILABLE:
-        rotation = Rotation.from_quat([geom_quat[1], geom_quat[2], geom_quat[3], geom_quat[0]])
-        rot_matrix = rotation.as_matrix()
-    else:
-        # Fallback: use identity if scipy not available
-        rot_matrix = np.eye(3)
+    rotation = Rotation.from_quat([geom_quat[1], geom_quat[2], geom_quat[3], geom_quat[0]])
+    rot_matrix = rotation.as_matrix()
     
     # Build 4x4 transformation matrix
     transform_matrix = np.eye(4)
@@ -377,17 +389,22 @@ def create_primitive_geom(model, geom_id):
         return None
 
 
-def load_geom_mesh(model, geom_id, model_dir=None):
+# Global cache for mesh file PolyData
+_mesh_file_cache: dict[str, vtk.vtkPolyData] = {}
+
+
+def load_geom_mesh(model, geom_id, mesh_resolver):
     """
     Load mesh geometry for a geom.
     
-    For mesh types: tries to convert MuJoCo mesh data directly, then falls back to file loading.
+    For mesh types: tries to load from file using mesh resolver, then falls back to direct conversion.
     For primitive types: creates geometry using VTK sources.
     
     Args:
         model: MuJoCo model object
         geom_id: Geom ID
-        model_dir: Directory containing mesh files (optional, defaults to model file directory)
+        model_dir: Directory containing mesh files (optional, deprecated - use mesh_resolver instead)
+        mesh_resolver: MuJoCoMeshResolver instance for resolving mesh file paths (optional)
         
     Returns:
         vtkPolyData: Mesh geometry, or None if geom cannot be loaded
@@ -408,36 +425,40 @@ def load_geom_mesh(model, geom_id, model_dir=None):
     if mesh_id < 0 or mesh_id >= model.nmesh:
         return None
     
-    # First, try to convert MuJoCo mesh data directly
+    # Get mesh name
+    mesh_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MESH, mesh_id)
+    
+    # Try to resolve mesh file using resolver
+    if mesh_resolver and mesh_name:
+        mesh_file = mesh_resolver.resolve_mesh_file(mesh_name)
+        if mesh_file:
+            # Check cache first
+            if mesh_file in _mesh_file_cache:
+                return _mesh_file_cache[mesh_file]
+            
+            # Load mesh file
+            if os.path.exists(mesh_file):
+                polyData = ioUtils.readPolyData(mesh_file)
+                if not polyData.GetPointData().GetNormals():
+                    polyData = filterUtils.computeNormals(polyData)
+                # Cache the result
+                _mesh_file_cache[mesh_file] = polyData
+                return polyData
+            else:
+                print(f"Error: Mesh file not found '{mesh_file}' for mesh '{mesh_name}'")
+        else:
+            print(f"Error: Could not resolve mesh file for mesh name '{mesh_name}'")
+    
+    # Fallback: convert MuJoCo mesh data directly
+    print(f"Mesh {mesh_id} {mesh_name} not found in mesh resolver, converting to mjMesh tovtkPolyData")
     polyData = mj_mesh_to_vtk_polydata(model, mesh_id)
     if polyData is not None:
         return polyData
     
-    # Fallback: try to load from file
-    try:
-        mesh_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MESH, mesh_id)
-        print(mesh_id, mesh_name)
-
-        mesh_file_id = model.mesh_fileid[mesh_id]
-        print("mesh_file_id", mesh_file_id)
-        if mesh_file_id >= 0 and mesh_file_id < model.nfile:
-            # Try to get filename from MuJoCo
-            # Note: MuJoCo API for getting filenames may vary by version
-            # This is a fallback approach
-            mesh_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MESH, mesh_id)
-            if mesh_name:
-                # Try common mesh file extensions
-                for ext in ['.stl', '.obj', '.ply', '.vtp', '.vtk']:
-                    mesh_path = os.path.join(model_dir, mesh_name + ext) if model_dir else (mesh_name + ext)
-                    if os.path.exists(mesh_path):
-                        return ioUtils.readPolyData(mesh_path)
-    except Exception:
-        pass
-    
     return None
 
 
-def visualize_mujoco_model(model, body_poses, body_to_geom, view, model_dir=None, parent_obj=None):
+def visualize_mujoco_model(model, body_to_geom, mesh_resolver):
     """
     Visualize MuJoCo model geoms using PolyDataItem objects, organized by group in folders.
     
@@ -446,30 +467,49 @@ def visualize_mujoco_model(model, body_poses, body_to_geom, view, model_dir=None
         body_poses: Dictionary mapping body names to 4x4 transformation matrices
         body_to_geom: Dictionary mapping body IDs to geom IDs
         view: VTK view widget
-        model_dir: Directory containing mesh files (optional)
+        model_dir: Directory containing mesh files (optional, deprecated - use mesh_resolver instead)
         parent_obj: Parent object in object model (optional)
+        mesh_resolver: MuJoCoMeshResolver instance for resolving mesh file paths (optional)
         
     Returns:
         dict: Mapping from geom IDs to PolyDataItem objects
     """
-    if parent_obj is None:
-        parent_obj = om.getOrCreateContainer('mujoco_model')
+    parent_obj = om.getOrCreateContainer('mujoco_model')
     
     geom_items = {}
     # Dictionary to cache group folders
     group_folders = {}
+    # Create Robot folder for Group folders
+    robot_folder = om.getOrCreateContainer('Robot', parentObj=parent_obj)
+    
+    # Helper function to check if a body should go in the Scene folder
+    def is_scene_body(body_id):
+        """Check if body should be in Scene folder (floor geom, plane type, or named 'table')."""
+        body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
+        if body_name and body_name.lower() == 'table':
+            return True
+        if body_id not in body_to_geom:
+            return False
+        for geom_id in body_to_geom[body_id]:
+            geom_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
+            if geom_name and geom_name.lower() == 'floor':
+                return True
+            if model.geom_type[geom_id] == mujoco.mjtGeom.mjGEOM_PLANE:
+                return True
+        return False
+    
+    # Helper function to check if a body is a mocap body
+    def is_mocap_body(body_id):
+        """Check if body is a mocap body."""
+        body_info = model.body(body_id)
+        return body_info.mocapid.size > 0 and body_info.mocapid[0] >= 0
     
     for body_id in range(model.nbody):
         body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
         if not body_name:
             body_name = f"body_{body_id}"
         
-        # Get body pose
-        if body_name not in body_poses:
-            continue
-        
-        body_pose = body_poses[body_name]
-        
+
         # Process geoms for this body
         if body_id in body_to_geom:
             for geom_id in body_to_geom[body_id]:
@@ -477,31 +517,51 @@ def visualize_mujoco_model(model, body_poses, body_to_geom, view, model_dir=None
                 if not geom_name:
                     geom_name = f"geom_{geom_id}"
                 
-                # Get geom group (MuJoCo geom groups are integers, typically 0-5)
-                geom_group = int(model.geom_group[geom_id])
+                # Determine folder based on special rules, then fall back to geom group
+                group_folder = None
+                if is_scene_body(body_id):
+                    folder_name = "Scene"
+                    group_key = folder_name
+                    parent_for_folder = parent_obj
+                elif is_mocap_body(body_id):
+                    folder_name = "mocap"
+                    group_key = folder_name
+                    parent_for_folder = parent_obj
+                else:
+                    # Get geom group (MuJoCo geom groups are integers, typically 0-5)
+                    geom_group = int(model.geom_group[geom_id])
+                    folder_name = f"Group {geom_group}"
+                    group_key = f"group_{geom_group}"
+                    parent_for_folder = robot_folder
                 
                 # Get or create folder for this group
-                group_key = f"group_{geom_group}"
                 if group_key not in group_folders:
                     group_folders[group_key] = om.getOrCreateContainer(
-                        f"Group {geom_group}", 
-                        parentObj=parent_obj
+                        folder_name, 
+                        parentObj=parent_for_folder
                     )
                 
                 group_folder = group_folders[group_key]
                 
-                # Get geom pose relative to body
-                geom_pose_in_body = get_geom_pose_in_body(model, geom_id)
+                # Get geom type
+                geom_type = model.geom_type[geom_id]
                 
-                # Compute geom pose in world frame: body_pose * geom_pose_in_body
-                geom_pose_world = body_pose @ geom_pose_in_body
+                # Compute geom pose in world frame
+                # For mesh geoms, ignore geom_pose_in_body (mesh transformations are already applied)
+                # For other geoms, apply geom_pose_in_body
+                if geom_type == mujoco.mjtGeom.mjGEOM_MESH:
+                    geom_pose_in_body = None
+                else:
+                    geom_pose_in_body = get_geom_pose_in_body(model, geom_id)
                 
                 # Load geometry for this geom (mesh or primitive)
-                geom_polydata = load_geom_mesh(model, geom_id, model_dir)
-                
-                if geom_polydata is None:
-                    # Skip geoms that can't be loaded
-                    continue
+                geom_polydata = load_geom_mesh(model, geom_id, mesh_resolver)
+                assert geom_polydata is not None
+
+                if geom_pose_in_body is not None:
+                    geom_polydata = filterUtils.transformPolyData(geom_polydata,
+                        mj_matrix_to_vtk_transform(geom_pose_in_body))
+
                 
                 # Get geom color and alpha from MuJoCo
                 geom_rgba = model.geom_rgba[geom_id]
@@ -512,25 +572,45 @@ def visualize_mujoco_model(model, body_poses, body_to_geom, view, model_dir=None
                 # Create PolyDataItem for the geometry, adding it to the group folder
                 obj = vis.showPolyData(
                     geom_polydata, 
-                    geom_name, 
-                    view=view, 
+                    geom_name,
                     parent=group_folder,
                     color=geom_color,
                     alpha=geom_alpha
                 )
+
+                obj.body_name = get_body_name(model, body_id)
+
+                prop = obj.actor.GetProperty()
+                prop.SetSpecular(0.4)
+                prop.SetSpecularPower(40)
                 
                 # Set geom pose using child frame
-                vtk_transform = mj_matrix_to_vtk_transform(geom_pose_world)
                 child_frame = vis.addChildFrame(obj)
-                if child_frame:
-                    child_frame.copyFrame(vtk_transform)
-                
+
                 geom_items[geom_id] = obj
+    
+    # Set visibility to false for Scene, mocap, and Group 3 folders
+    for folder_key, folder_obj in group_folders.items():
+        if folder_key in ["Scene", "mocap"] or folder_key == "group_3":
+            if folder_obj.hasProperty('Visible'):
+                folder_obj.setProperty('Visible', False)
     
     return geom_items
 
 
-def load_and_visualize_mujoco_model(xml_path, view, qpos=None, parent_obj=None):
+def get_body_name(model, body_id):
+    body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
+    body_name = body_name or f"body_{body_id}"
+    return body_name
+
+
+def apply_body_poses_to_geoms(body_poses, geom_items):
+    for geom_item in geom_items.values():
+        world_T_body = body_poses[geom_item.body_name]
+        geom_item.getChildFrame().copyFrame(mj_matrix_to_vtk_transform(world_T_body))
+
+
+def load_and_visualize_mujoco_model(xml_path):
     """
     Load a MuJoCo model and visualize it in Director.
     
@@ -550,38 +630,33 @@ def load_and_visualize_mujoco_model(xml_path, view, qpos=None, parent_obj=None):
             - geom_items: Dictionary of geom ID to PolyDataItem
     """
     # Load model
-    model = load_mjcf_xml(xml_path)
+
+    model = mujoco.MjModel.from_xml_path(xml_path)
+    data = mujoco.MjData(model)
+
     
-    # Get model directory for resolving mesh paths
-    model_dir = os.path.dirname(os.path.abspath(xml_path))
+    # Create mesh resolver
+    mesh_resolver = MuJoCoMeshResolver(model, xml_path)
     
-    # Print model information
-    print_model_info(model)
     
     # Build body to geom mapping
     body_to_geom = build_body_to_geom_mapping(model)
     
-    # Print body-geom tree
-    print_body_geom_tree(model, body_to_geom)
-    
-    # Perform forward kinematics
-    body_poses = forward_kinematics(model, qpos=qpos)
     
     # Visualize
     geom_items = visualize_mujoco_model(
-        model, body_poses, body_to_geom, view, 
-        model_dir=model_dir, parent_obj=parent_obj
+        model, body_to_geom, 
+        mesh_resolver
     )
-    
-    # Return data if available
-    data = None
-    if MUJOCO_AVAILABLE:
-        data = mujoco.MjData(model)
-        if qpos is not None:
-            data.qpos[:] = qpos
-        else:
-            data.qpos[:] = model.qpos0
-        mujoco.mj_forward(model, data)
-    
-    return model, data, body_poses, geom_items
 
+
+    # Perform forward kinematics
+    body_poses = forward_kinematics(model, data, model.qpos0)
+
+    # Apply body poses to geom items
+    apply_body_poses_to_geoms(body_poses, geom_items)
+    
+    #print_model_info(model)
+    #print_body_geom_tree(model, body_to_geom)
+
+    return model, data, body_poses, geom_items
