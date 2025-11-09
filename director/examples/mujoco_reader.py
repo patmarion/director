@@ -62,35 +62,18 @@ Examples:
     robot_model.show_model()
     
     # Create properties panel for joint control
-    from director.propertiespanel import PropertiesPanel
-    joint_properties_panel = PropertiesPanel()
-    joint_properties_panel.setWindowTitle('MuJoCo Joint Control')
-    joint_properties_panel.connectProperties(robot_model.joint_properties_item.properties)
-    
-    # Add properties panel to dock on the right side
-    fields.app.addWidgetToDock(joint_properties_panel, QtCore.Qt.RightDockWidgetArea, visible=True)
+    joint_properties_panel = None
+    if show_joint_properties := False:
+        from director.propertiespanel import PropertiesPanel
+        joint_properties_panel = PropertiesPanel()
+        joint_properties_panel.setWindowTitle('MuJoCo Joint Control')
+        joint_properties_panel.connectProperties(robot_model.joint_properties_item.properties)    
+        fields.app.addWidgetToDock(joint_properties_panel, QtCore.Qt.RightDockWidgetArea, visible=True)
     
     # Add to fields for access in console
     fields._add_fields(robot_model=robot_model, joint_properties_panel=joint_properties_panel)
 
-    print("\n" + "=" * 60)
-    print(f"Successfully loaded and visualized model")
-    print(f"  Bodies: {robot_model.model.nbody}")
-    print(f"  Geoms: {robot_model.model.ngeom}")
-    print(f"  Visualized geoms: {len(robot_model.geom_items)}")
-    print(f"  Joint names: {robot_model.get_joint_names()}")
-    print(f"  1 DOF joints: {robot_model.get_1dof_joint_names()}")
-    print("=" * 60)
-    
-    # Print available body poses
-    # if body_poses:
-    #     print("\nBody poses (forward kinematics):")
-    #     for body_name, pose in sorted(body_poses.items()):
-    #         pos = pose[:3, 3]
-    #         print(f"  {body_name}: position = [{pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}]")
-    
-
-    
+        
     # Reset camera to view the model
     applogic.resetCamera(viewDirection=[-1, -1, -0.3])
 

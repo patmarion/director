@@ -164,15 +164,8 @@ class TerrainInteractorStyle(vtk.vtkInteractorStyle):
             self._zoom_camera(camera, dx, dy, renderer)
         
         self._last_pos = (x, y)
-        
-        # Note: View up is set appropriately in _rotate_camera to avoid gimbal lock
-        # Don't override it here - let _rotate_camera handle it
-        
-        # Reset camera clipping range after camera movement
-        renderer.ResetCameraClippingRange()
-        
-        # Render
-        interactor.Render()
+
+        self._render()
     
     def _on_wheel_forward(self, obj, event):
         """Handle mouse wheel forward (zoom in)."""
@@ -182,8 +175,7 @@ class TerrainInteractorStyle(vtk.vtkInteractorStyle):
             camera = renderer.GetActiveCamera()
             if camera:
                 self._zoom_camera_wheel(camera, -1, renderer)
-                renderer.ResetCameraClippingRange()
-                interactor.Render()
+                self._render()
     
     def _on_wheel_backward(self, obj, event):
         """Handle mouse wheel backward (zoom out)."""
@@ -193,9 +185,14 @@ class TerrainInteractorStyle(vtk.vtkInteractorStyle):
             camera = renderer.GetActiveCamera()
             if camera:
                 self._zoom_camera_wheel(camera, 1, renderer)
-                renderer.ResetCameraClippingRange()
-                interactor.Render()
+                self._render()
     
+    def _render(self):
+        interactor = self.GetInteractor()
+        renderer = interactor.GetRenderWindow().GetRenderers().GetFirstRenderer()
+        renderer.ResetCameraClippingRange()
+        interactor.Render()
+
     # Override base class methods to prevent default camera behavior
     # but still allow FindPokedRenderer and other setup
     def OnLeftButtonDown(self):

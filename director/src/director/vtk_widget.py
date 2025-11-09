@@ -178,6 +178,8 @@ class VTKWidget(QWidget):
     
     def forceRender(self):
         """Force an immediate render."""
+        self._render_pending = False
+        self._render_timer.stop()
         self._renderer.ResetCameraClippingRange()
         self._render_window.Render()
     
@@ -324,7 +326,6 @@ class VTKWidget(QWidget):
         """Handle render timer timeout."""
         if self._render_pending:
             self.forceRender()
-            self._render_pending = False
     
     def _on_end_render(self, obj, event):
         """Handle end render event to update FPS counter."""

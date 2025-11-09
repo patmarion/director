@@ -211,7 +211,8 @@ class MainWindowAppFactory(object):
             'AdjustedClippingRange' : ['View'],
             'StartupRender' : ['View', 'MainWindow'],
             'RunScriptFunction' : ['Globals', 'PythonConsole'],
-            'ScriptLoader' : ['MainWindow', 'RunScriptFunction']}
+            'ScriptLoader' : ['MainWindow', 'RunScriptFunction'],
+            'ProfilerTool' : ['MainWindow']}
 
         disabledComponents = []
 
@@ -303,7 +304,7 @@ class MainWindowAppFactory(object):
 
         organizationName = 'RobotLocomotion'
         applicationName = 'DirectorMainWindow'
-        windowTitle = 'Director App'
+        windowTitle = 'Director'
         windowIcon = None  # Icon resources not yet set up
 
         if hasattr(fields, 'organizationName'):
@@ -506,6 +507,37 @@ class MainWindowAppFactory(object):
             fields.app.applicationInstance().processEvents()
         fields.app.registerStartupCallback(startupRender, priority=0)
         return FieldContainer()
+
+    def initProfilerTool(self, fields):
+        """Initialize profiler tool menu action."""
+        from director.profiler import Profiler
+        
+        class ProfilerToolMenu(object):
+            """Manages the profiler tool menu action."""
+            
+            def __init__(self, toolsMenu):
+                self.toolsMenu = toolsMenu
+                self.profiler = None
+                self.action = self.toolsMenu.addAction('Start &Profiler')
+                self.action.setCheckable(True)
+                self.action.triggered.connect(self._onToggled)
+            
+            def _onToggled(self, checked):
+                """Handle action toggle."""
+                if checked:
+                    # Start profiling
+                    self.profiler = Profiler()
+                    self.profiler.start()
+                    self.action.setText('Stop &Profiler')
+                else:
+                    # Stop profiling
+                    if self.profiler:
+                        self.profiler.stop()
+                        self.profiler = None
+                    self.action.setText('Start &Profiler')
+        
+        profilerTool = ProfilerToolMenu(fields.app.toolsMenu)
+        return FieldContainer(profilerTool=profilerTool)
 
 # MainWindowPanelFactory removed - optional panels not yet ported
 # These included:

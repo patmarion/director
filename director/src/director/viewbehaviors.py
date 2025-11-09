@@ -145,6 +145,9 @@ def toggleFrameWidget(displayPoint, view):
     if not obj:
         return False
     
+    if obj.getPropertyAttribute('Edit', 'readOnly'):
+        return False
+
     edit = not obj.getProperty('Edit')
     obj.setProperty('Edit', edit)
     

@@ -128,7 +128,7 @@ class CallbackRegistry:
             # be able to remove the dead proxy
             try:
                 proxy(*args, **kwargs)
-            except ref.ReferenceError:
+            except ReferenceError:
                 self.callbacks[signal].discard(proxy)
 
     class _BoundMethodProxy(object):
@@ -154,7 +154,7 @@ class CallbackRegistry:
                 # bound method
                 obj = self._obj()
                 if obj is None:
-                    raise ref.ReferenceError
+                    raise ReferenceError
                 return self._func(obj, *args, **kwargs)
             else:
                 # regular function

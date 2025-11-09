@@ -46,6 +46,19 @@ class MuJoCoMeshResolver:
             tree = ET.parse(self.xml_path)
             root = tree.getroot()
             
+            # Find the <compiler> tag and check for meshdir attribute
+            compiler = root.find('compiler')
+            meshdir = self.xml_dir  # Default to xml_dir
+            if compiler is not None:
+                meshdir_attr = compiler.get('meshdir')
+                if meshdir_attr:
+                    # Resolve meshdir path relative to xml_dir
+                    if os.path.isabs(meshdir_attr):
+                        meshdir = meshdir_attr
+                    else:
+                        meshdir = os.path.join(self.xml_dir, meshdir_attr)
+                    meshdir = os.path.normpath(meshdir)
+            
             # Find the <asset> tag
             asset = root.find('asset')
             if asset is not None:
@@ -59,7 +72,8 @@ class MuJoCoMeshResolver:
                         if os.path.isabs(mesh_file):
                             abs_path = mesh_file
                         else:
-                            abs_path = os.path.join(self.xml_dir, mesh_file)
+                            # Join with meshdir (which is always set)
+                            abs_path = os.path.join(meshdir, mesh_file)
                         abs_path = os.path.normpath(abs_path)
                         self.mesh_name_to_file[mesh_name] = abs_path
         except Exception as e:
@@ -464,23 +478,21 @@ def visualize_mujoco_model(model, body_to_geom, mesh_resolver):
     
     Args:
         model: MuJoCo model object
-        body_poses: Dictionary mapping body names to 4x4 transformation matrices
         body_to_geom: Dictionary mapping body IDs to geom IDs
-        view: VTK view widget
-        model_dir: Directory containing mesh files (optional, deprecated - use mesh_resolver instead)
-        parent_obj: Parent object in object model (optional)
         mesh_resolver: MuJoCoMeshResolver instance for resolving mesh file paths (optional)
         
     Returns:
-        dict: Mapping from geom IDs to PolyDataItem objects
+        ObjectModelItem: Folder containing the model, robot, and body frames
     """
-    parent_obj = om.getOrCreateContainer('mujoco_model')
+    model_folder = om.getOrCreateContainer('mujoco_model')
     
     geom_items = {}
     # Dictionary to cache group folders
     group_folders = {}
     # Create Robot folder for Group folders
-    robot_folder = om.getOrCreateContainer('Robot', parentObj=parent_obj)
+    robot_folder = om.getOrCreateContainer('Robot', parentObj=model_folder)
+
+    body_frame_folder = om.getOrCreateContainer('Body Frames', parentObj=model_folder)
     
     # Helper function to check if a body should go in the Scene folder
     def is_scene_body(body_id):
@@ -509,6 +521,9 @@ def visualize_mujoco_model(model, body_to_geom, mesh_resolver):
         if not body_name:
             body_name = f"body_{body_id}"
         
+        frame_obj =vis.showFrame(vtk.vtkTransform(), body_name, parent=body_frame_folder)
+        frame_obj.properties.scale = 0.1
+        frame_obj.setPropertyAttribute('Edit', "readOnly", True)
 
         # Process geoms for this body
         if body_id in body_to_geom:
@@ -522,11 +537,11 @@ def visualize_mujoco_model(model, body_to_geom, mesh_resolver):
                 if is_scene_body(body_id):
                     folder_name = "Scene"
                     group_key = folder_name
-                    parent_for_folder = parent_obj
+                    parent_for_folder = model_folder
                 elif is_mocap_body(body_id):
                     folder_name = "mocap"
                     group_key = folder_name
-                    parent_for_folder = parent_obj
+                    parent_for_folder = model_folder
                 else:
                     # Get geom group (MuJoCo geom groups are integers, typically 0-5)
                     geom_group = int(model.geom_group[geom_id])
@@ -586,6 +601,7 @@ def visualize_mujoco_model(model, body_to_geom, mesh_resolver):
                 
                 # Set geom pose using child frame
                 child_frame = vis.addChildFrame(obj)
+                child_frame.setPropertyAttribute('Edit', "readOnly", True)
 
                 geom_items[geom_id] = obj
     
@@ -595,8 +611,10 @@ def visualize_mujoco_model(model, body_to_geom, mesh_resolver):
             if folder_obj.hasProperty('Visible'):
                 folder_obj.setProperty('Visible', False)
         om.addChildPropertySync(folder_obj)
-    
-    return geom_items
+
+    body_frame_folder.properties.visible = False
+    model_folder.geom_items = geom_items
+    return model_folder
 
 
 def get_body_name(model, body_id):
@@ -605,10 +623,25 @@ def get_body_name(model, body_id):
     return body_name
 
 
-def apply_body_poses_to_geoms(body_poses, geom_items):
-    for geom_item in geom_items.values():
-        world_T_body = body_poses[geom_item.body_name]
-        geom_item.getChildFrame().copyFrame(mj_matrix_to_vtk_transform(world_T_body))
+class KinematicsUpdater:
+    def __init__(self, model):
+        self.model = model
+        self.reset()
+
+    def reset(self):
+        self.q_dict = {}
+        self.world_T_base = None
+
+    def push_q_dict(self, q_dict: dict[str, float]):
+        self.q_dict.update(q_dict)
+
+    def push_world_T_base(self, world_T_base: np.ndarray):
+        self.world_T_base = world_T_base
+
+    def commit(self):
+        if self.q_dict or self.world_T_base is not None:
+            self.model.show_forward_kinematics(self.q_dict, self.world_T_base)
+            self.reset()
 
 
 class MujocoRobotModel:
@@ -634,10 +667,13 @@ class MujocoRobotModel:
         self.data = mujoco.MjData(self.model)
         self.mesh_resolver = None
         self.body_to_geom = None
-        self.geom_items = {}
         self.body_poses = {}
         # Initialize previous q to default qpos0
         self.prev_q = self.model.qpos0.copy()
+        # Initialize world_T_base to identity
+        self.prev_world_T_base = np.eye(4)
+        self.model_folder = None
+        self.kinematics_updater = KinematicsUpdater(self)
     
     def get_body_names(self) -> list[str]:
         """
@@ -720,27 +756,28 @@ class MujocoRobotModel:
             self.body_to_geom = build_body_to_geom_mapping(self.model)
         
         # Visualize
-        self.geom_items = visualize_mujoco_model(
+        self.model_folder = visualize_mujoco_model(
             self.model, self.body_to_geom, 
             self.mesh_resolver
         )
-        
+
         # Perform forward kinematics with default qpos
         self.body_poses = forward_kinematics(self.model, self.data, self.model.qpos0)
-        
-        # Apply body poses to geom items
-        apply_body_poses_to_geoms(self.body_poses, self.geom_items)
+        self._update_body_frames(self.body_poses, self.model_folder)
         
         # Create ObjectModelItem with joint properties
         self._create_joint_properties_item()
+        return self.model_folder
     
-    def show_forward_kinematics(self, q_dict: dict[str, float]):
+    def show_forward_kinematics(self, q_dict: dict[str, float], world_T_base: np.ndarray | None = None):
         """
         Update the model pose using forward kinematics with specified joint positions.
         
         Args:
             q_dict: Dictionary mapping joint names to joint positions.
                    Can contain a subset of joints; unspecified joints use previous values.
+            world_T_base: Optional 4x4 numpy array representing world_T_base transform.
+                        If None, uses identity matrix. If not provided, uses previous value.
         """
         # Start with previous q values
         q = self.prev_q.copy()
@@ -773,15 +810,46 @@ class MujocoRobotModel:
                 # Hinge or slide joint has 1 DOF
                 q[qpos_addr] = float(joint_value)
         
-        # Perform forward kinematics
-        self.body_poses = forward_kinematics(self.model, self.data, q)
+        # Handle world_T_base transform
+        if world_T_base is None:
+            world_T_base = self.prev_world_T_base
+        else:
+            # Validate shape
+            if world_T_base.shape != (4, 4):
+                raise ValueError(f"world_T_base must be a 4x4 matrix, got shape {world_T_base.shape}")
         
-        # Update prev_q for next call
-        self.prev_q = q.copy()
+        # Perform forward kinematics (returns base_T_body transforms)
+        base_T_body_poses = forward_kinematics(self.model, self.data, q)
+        
+        # Transform base_T_body to world_T_body by multiplying with world_T_base
+        self.body_poses = {}
+        for body_name, base_T_body in base_T_body_poses.items():
+            world_T_body = world_T_base @ base_T_body
+            self.body_poses[body_name] = world_T_body
         
         # Apply body poses to geom items
-        apply_body_poses_to_geoms(self.body_poses, self.geom_items)
-    
+        self._update_body_frames(self.body_poses, self.model_folder)
+
+        # Update prev_q for next call
+        self.prev_q = q.copy()
+        self.prev_world_T_base = world_T_base.copy()
+
+
+    def _update_body_frames(self, body_poses, model_folder):
+
+        vtk_frames = {body_name: mj_matrix_to_vtk_transform(body_pose) for body_name, body_pose in body_poses.items()}
+        # update geom frames
+        for geom_item in model_folder.geom_items.values():
+            world_T_body = vtk_frames[geom_item.body_name]
+            geom_item.getChildFrame().copyFrame(world_T_body)
+
+        # update body frames
+        body_frame_folder = model_folder.findChild('Body Frames')
+        for body_name, world_T_body in vtk_frames.items():
+            frame_obj = body_frame_folder.findChild(body_name)
+            frame_obj.copyFrame(world_T_body)
+
+
     def _create_joint_properties_item(self):
         """Create an ObjectModelItem with properties for each 1 DOF joint."""
         # Create the item
@@ -826,3 +894,52 @@ class MujocoRobotModel:
         
         # Update forward kinematics
         self.show_forward_kinematics(q_dict)
+
+    def print_model_info(self):
+        model = self.model
+        print_model_info(self.model)
+
+        print("\n" + "=" * 60)
+        print(f"  Num bodies: {model.nbody}")
+        print(f"  Num geoms: {model.ngeom}")
+        print(f"  Joint names: {self.get_joint_names()}")
+        print(f"  1 DOF joints: {self.get_1dof_joint_names()}")
+        print("=" * 60)
+
+    def print_body_poses(self):
+        """
+        Print the pose of each body in world and base (body 0) frames.
+        World-to-body: the pose in world coordinates.
+        Base-to-body: the pose in body 0 (world) coordinates.
+        """
+        model = self.model
+        data = self.data
+
+        # For MuJoCo, body 0 is always the world
+        print("=" * 60)
+        print("MuJoCo Body Poses")
+        print("=" * 60)
+        print("{:>3}  {:<30} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10}".format(
+            "ID", "Body Name", "X [world]", "Y [world]", "Z [world]",
+            "X [base]", "Y [base]", "Z [base]"
+        ))
+
+        base_pos = data.xpos[0].copy()
+        base_mat = data.xmat[0].reshape(3, 3).copy()
+
+        for body_id in range(model.nbody):
+            body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
+            body_pos = data.xpos[body_id]  # World position of body origin
+            body_mat = data.xmat[body_id].reshape(3, 3)
+
+            # Compute base-to-body transform: base_T_body = inv(base_M) dot body_M
+            # For position: p_base = R_base^T @ (p_body - p_base)
+            rel_pos = np.dot(base_mat.T, body_pos - base_pos)
+
+            print("{:>3}  {:<30} {:10.4f} {:10.4f} {:10.4f} {:10.4f} {:10.4f} {:10.4f}".format(
+                body_id,
+                body_name if body_name is not None else f"body_{body_id}",
+                body_pos[0], body_pos[1], body_pos[2],
+                rel_pos[0], rel_pos[1], rel_pos[2],
+            ))
+        print("=" * 60)

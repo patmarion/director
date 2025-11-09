@@ -731,9 +731,7 @@ class PropertiesPanel(QWidget):
         
         # Populate from existing properties
         for propName in propertySet.propertyNames():
-            attributes = propertySet._attributes.get(propName)
-            if not attributes or not attributes.hidden:
-                self._addProperty(propName)
+            self._addProperty(propName)
     
     def _addProperty(self, propertyName):
         """Add a property to the tree (handles nested paths)."""
@@ -794,6 +792,9 @@ class PropertiesPanel(QWidget):
             self.itemToEditor[item] = editor
         
         parent_item.setExpanded(True)
+
+        item.setHidden(bool(attributes.hidden))
+
     
     def _createEditor(self, propertyName, value, attributes):
         """Create an appropriate editor widget for a property."""
@@ -847,23 +848,51 @@ class PropertiesPanel(QWidget):
     
     def _onPropertyAdded(self, propertySet, propertyName):
         """Handle property added."""
-        attributes = propertySet._attributes.get(propertyName)
-        if not attributes or not attributes.hidden:
-            self._addProperty(propertyName)
+        self._addProperty(propertyName)
     
     def _onPropertyRemoved(self, propertySet, propertyName):
         """Handle property removed."""
         self._removeProperty(propertyName)
     
     def _onPropertyAttributeChanged(self, propertySet, propertyName, attributeName):
-        """Handle property attribute change."""
+        """Handle property attribute change, including hidden and readOnly."""
         if propertyName in self.propertyToItem:
             item = self.propertyToItem[propertyName]
-            if item in self.itemToEditor:
-                editor = self.itemToEditor[item]
-                
+            editor = self.itemToEditor.get(item)
+
+            # Handle 'hidden' attribute: show/hide the row
+            if attributeName == "hidden":
+                attributes = propertySet._attributes.get(propertyName)
+                if attributes and hasattr(item, 'setHidden'):  # Qt API: QTreeWidgetItem.setHidden(bool)
+                    item.setHidden(bool(attributes.hidden))
+
+            # Handle 'readOnly' attribute: set editor enabled/disabled or swap for label
+            elif attributeName == "readOnly":
+                attributes = propertySet._attributes.get(propertyName)
+                read_only = attributes.readOnly if attributes else False
+                if item in self.itemToEditor:
+                    editor = self.itemToEditor[item]
+                    if hasattr(editor, 'setEnabled'):
+                        # Try disabling/enabling the editor widget itself
+                        try:
+                            editor.setEnabled(not read_only)
+                        except Exception:
+                            pass
+                    elif read_only:
+                        # Fallback: replace with a label showing value
+                        from qtpy.QtWidgets import QLabel
+                        value = propertySet.getProperty(propertyName)
+                        label = QLabel(str(value), self.tree)
+                        self.tree.setItemWidget(item, 1, label)
+                        self.itemToEditor[item] = label
+                    else:
+                        # If not readOnly and previously swapped with a label, try to restore editor
+                        self._onPropertyChanged(propertySet, propertyName)
+                return
+
+            elif attributeName == 'enumNames':
+                if isinstance(editor, EnumEditor):
                 # For enum properties, if enumNames changed, recreate the editor
-                if attributeName == 'enumNames' and isinstance(editor, EnumEditor):
                     # Recreate the editor with new enum values
                     value = propertySet.getProperty(propertyName)
                     attributes = propertySet._attributes.get(propertyName)
@@ -876,7 +905,7 @@ class PropertiesPanel(QWidget):
                     new_editor = EnumEditor(self.propertySet, propertyName)
                     self.tree.setItemWidget(item, 1, new_editor)
                     self.itemToEditor[item] = new_editor
-                elif hasattr(editor, 'updateFromPropertySet'):
-                    # For other attributes, just update the existing editor
-                    editor.updateFromPropertySet()
+            elif hasattr(editor, 'updateFromPropertySet'):
+                # For other attributes, just update the existing editor
+                editor.updateFromPropertySet()
 

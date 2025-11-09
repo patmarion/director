@@ -13,6 +13,130 @@ from director.viewbounds import computeViewBoundsNoGrid, computeViewBoundsSoloGr
 import numpy as np
 import colorsys
 
+try:
+    import matplotlib
+    import matplotlib.cm as cm
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+
+assert MATPLOTLIB_AVAILABLE, "matplotlib is not available"
+
+
+class MatplotlibColormaps:
+    """Utility class for working with matplotlib colormaps in VTK."""
+    
+    @staticmethod
+    def getColormapNames():
+        """Get list of all available matplotlib colormap names.
+        
+        Returns:
+            List of colormap name strings
+        """
+        if not MATPLOTLIB_AVAILABLE:
+            return []
+        # Get all registered colormaps
+        colormaps = []
+        # Built-in colormaps - try different methods for different matplotlib versions
+        try:
+            # Newer matplotlib versions
+            if hasattr(cm, 'cmaps_listed'):
+                colormaps.extend(cm.cmaps_listed)
+            # Also try the registry
+            if hasattr(cm, '_colormaps'):
+                colormaps.extend(sorted(cm._colormaps.keys()))
+            # Fallback: try to get from matplotlib directly
+            try:
+                import matplotlib.pyplot as plt
+                colormaps.extend(plt.colormaps())
+            except:
+                pass
+        except Exception:
+            # If all else fails, return some common colormaps
+            colormaps = ['viridis', 'plasma', 'inferno', 'magma', 'jet', 'hot', 'cool', 'spring', 'summer', 'autumn', 'winter']
+        # Remove duplicates and sort
+        return sorted(set(colormaps))
+    
+    @staticmethod
+    def getColormapArray(name, numColors=256):
+        """Get colormap data as a numpy array.
+        
+        Args:
+            name: Name of the colormap
+            numColors: Number of colors to sample
+            
+        Returns:
+            numpy array of shape (numColors, 3) with RGB values in [0, 1]
+        """
+        if not MATPLOTLIB_AVAILABLE:
+            return np.zeros((numColors, 3))
+        
+        try:
+            # Try newer matplotlib API first
+            try:
+                colormap = matplotlib.colormaps[name]
+            except (KeyError, AttributeError):
+                # Fallback to older API
+                colormap = cm.get_cmap(name)
+            # Sample the colormap
+            colors = colormap(np.linspace(0, 1, numColors))
+            # Extract RGB (first 3 components, ignore alpha if present)
+            return colors[:, :3]
+        except (ValueError, KeyError):
+            # Fallback to default colormap if name not found
+            try:
+                colormap = matplotlib.colormaps['viridis']
+            except (KeyError, AttributeError):
+                colormap = cm.get_cmap('viridis')
+            colors = colormap(np.linspace(0, 1, numColors))
+            return colors[:, :3]
+    
+    @staticmethod
+    def getColormapAsVTK(name, scalarRange=None, numColors=256, reverse=False):
+        """Get colormap as a VTK lookup table.
+        
+        Args:
+            name: Name of the matplotlib colormap
+            scalarRange: Optional tuple (min, max) for scalar range. If None, uses (0, 1)
+            numColors: Number of colors in the lookup table
+            reverse: If True, reverse the colormap
+            
+        Returns:
+            vtkLookupTable instance
+        """
+        if not MATPLOTLIB_AVAILABLE:
+            # Fallback to default VTK lookup table
+            lut = vtk.vtkLookupTable()
+            lut.SetNumberOfColors(numColors)
+            if scalarRange:
+                lut.SetRange(scalarRange)
+            lut.Build()
+            return lut
+        
+        # Get colormap data as array
+        colors = MatplotlibColormaps.getColormapArray(name, numColors)
+        
+        # Reverse if requested
+        if reverse:
+            colors = colors[::-1]
+        
+        # Create VTK lookup table
+        lut = vtk.vtkLookupTable()
+        lut.SetNumberOfColors(numColors)
+        
+        # Set scalar range
+        if scalarRange:
+            lut.SetRange(scalarRange)
+        else:
+            lut.SetRange(0.0, 1.0)
+        
+        # Set colors
+        for i in range(numColors):
+            lut.SetTableValue(i, colors[i][0], colors[i][1], colors[i][2], 1.0)
+        
+        lut.Build()
+        return lut
+
 
 class PolyDataItem(om.ObjectModelItem):
 
@@ -49,10 +173,23 @@ class PolyDataItem(om.ObjectModelItem):
                          attributes=om.PropertyAttributes(decimals=0, minimum=1, maximum=20, singleStep=1, hidden=False))
         self.addProperty('Line Width', self.actor.GetProperty().GetLineWidth(),
                          attributes=om.PropertyAttributes(decimals=0, minimum=1, maximum=20, singleStep=1, hidden=False))
+        self.addProperty('Render Points As Spheres', False)
         self.addProperty('Surface Mode', 0,
                          attributes=om.PropertyAttributes(enumNames=['Surface', 'Wireframe', 'Surface with edges', 'Points'], hidden=True))
         self.addProperty('Color', [1.0, 1.0, 1.0])
         self.addProperty('Show Scalar Bar', False)
+        
+        # Get available colormap names
+        colormapNames = MatplotlibColormaps.getColormapNames()
+        # Always add 'Default' as the first option
+        if colormapNames:
+            colormapNames = ['Default'] + colormapNames
+        else:
+            # Fallback if matplotlib not available
+            colormapNames = ['Default']
+        self.addProperty('Color Map', 0,
+                        attributes=om.PropertyAttributes(enumNames=colormapNames, hidden=True))
+        self.addProperty('Color Map Reverse', False, attributes=om.PropertyAttributes(hidden=True))
 
         self._updateSurfaceProperty()
         self._updateColorByProperty()
@@ -80,6 +217,10 @@ class PolyDataItem(om.ObjectModelItem):
         self._updateSurfaceProperty()
         self._updateColorByProperty()
         self._updateColorBy(retainColorMap=True)
+        # Update scalar range properties if coloring by scalar
+        arrayName = self.properties.getPropertyEnumValue('Color By')
+        if arrayName != 'Solid Color':
+            self._updateScalarRangeProperties(hidden=False)
 
         if self.getProperty('Visible'):
             self._renderAllViews()
@@ -156,6 +297,8 @@ class PolyDataItem(om.ObjectModelItem):
 
         if propertyName == 'Point Size':
             self.actor.GetProperty().SetPointSize(self.getProperty(propertyName))
+        elif propertyName == 'Render Points As Spheres':
+            self.actor.GetProperty().SetRenderPointsAsSpheres(bool(self.getProperty(propertyName)))
         elif propertyName == 'Line Width':
             self.actor.GetProperty().SetLineWidth(self.getProperty(propertyName))
         elif propertyName == 'Alpha':
@@ -186,14 +329,31 @@ class PolyDataItem(om.ObjectModelItem):
             self._updateColorBy()
         elif propertyName == 'Show Scalar Bar':
             self._updateScalarBar()
+        elif propertyName in ('Scalar Range Min', 'Scalar Range Max'):
+            self._onScalarRangePropertyChanged()
+        elif propertyName in ('Color Map', 'Color Map Reverse'):
+            # Update color mapping when colormap changes
+            arrayName = self.properties.getPropertyEnumValue('Color By')
+            if arrayName != 'Solid Color':
+                self._updateColorBy(retainColorMap=False)
+                # Update scalar bar widget if it's being shown
+                if self.scalarBarWidget:
+                    lut = self.mapper.GetLookupTable()
+                    bar = self.scalarBarWidget.GetScalarBarActor()
+                    bar.SetLookupTable(lut)
 
         self._renderAllViews()
 
     def setScalarRange(self, rangeMin, rangeMax):
         arrayName = self.properties.getPropertyEnumValue('Color By')
         if arrayName != 'Solid Color':
-            lut = self.mapper.GetLookupTable()
             self.colorBy(arrayName, scalarRange=(rangeMin, rangeMax))
+            # Update scalar bar widget if it's being shown
+            if self.scalarBarWidget:
+                lut = self.mapper.GetLookupTable()
+                bar = self.scalarBarWidget.GetScalarBarActor()
+                bar.SetLookupTable(lut)
+                self._renderAllViews()
 
     def _updateSurfaceProperty(self):
         hasPolys = self.polyData.GetNumberOfPolys() or self.polyData.GetNumberOfStrips()
@@ -212,9 +372,17 @@ class PolyDataItem(om.ObjectModelItem):
         arrayName = self.properties.getPropertyEnumValue('Color By')
         if arrayName == 'Solid Color':
             self.colorBy(None)
+            self._updateScalarRangeProperties(hidden=True)
+            # Hide colormap properties
+            self.properties.setPropertyAttribute('Color Map', 'hidden', True)
+            self.properties.setPropertyAttribute('Color Map Reverse', 'hidden', True)
         else:
             lut = self.mapper.GetLookupTable() if retainColorMap else None
             self.colorBy(arrayName, lut=lut)
+            self._updateScalarRangeProperties(hidden=False)
+            # Show colormap properties
+            self.properties.setPropertyAttribute('Color Map', 'hidden', False)
+            self.properties.setPropertyAttribute('Color Map Reverse', 'hidden', False)
 
         self._updateScalarBar()
 
@@ -225,13 +393,114 @@ class PolyDataItem(om.ObjectModelItem):
             self.setProperty('Color By', 0)
         self.properties.setPropertyAttribute('Color By', 'enumNames', enumNames)
 
+    def _updateScalarRangeProperties(self, hidden=True):
+        """Update scalar range properties visibility and values.
+        
+        Args:
+            hidden: If True, hide the properties. If False, show and update them.
+        """
+        arrayName = self.properties.getPropertyEnumValue('Color By')
+        
+        if hidden or arrayName == 'Solid Color':
+            # Hide properties if not coloring by scalar
+            if self.hasProperty('Scalar Range Min'):
+                self.properties.setPropertyAttribute('Scalar Range Min', 'hidden', True)
+            if self.hasProperty('Scalar Range Max'):
+                self.properties.setPropertyAttribute('Scalar Range Max', 'hidden', True)
+        else:
+            # Show and update properties
+            array = self.polyData.GetPointData().GetArray(arrayName)
+            if array:
+                name = array.GetName() if array.GetName() else ''
+                scalarRange = self.rangeMap.get(name, array.GetRange())
+                rangeMin, rangeMax = scalarRange
+                
+                # Add or update properties
+                if not self.hasProperty('Scalar Range Min'):
+                    self.addProperty('Scalar Range Min', rangeMin,
+                                   attributes=om.PropertyAttributes(decimals=3, singleStep=0.1))
+                else:
+                    self.setProperty('Scalar Range Min', rangeMin)
+                    self.properties.setPropertyAttribute('Scalar Range Min', 'hidden', False)
+                
+                if not self.hasProperty('Scalar Range Max'):
+                    self.addProperty('Scalar Range Max', rangeMax,
+                                   attributes=om.PropertyAttributes(decimals=3, singleStep=0.1))
+                else:
+                    self.setProperty('Scalar Range Max', rangeMax)
+                    self.properties.setPropertyAttribute('Scalar Range Max', 'hidden', False)
+
+    def _onScalarRangePropertyChanged(self):
+        """Handle changes to scalar range properties."""
+        if self.hasProperty('Scalar Range Min') and self.hasProperty('Scalar Range Max'):
+            rangeMin = self.getProperty('Scalar Range Min')
+            rangeMax = self.getProperty('Scalar Range Max')
+            if rangeMin < rangeMax:
+                self.setScalarRange(rangeMin, rangeMax)
+
     def _updateScalarBar(self):
-        # Scalar bar implementation can be added later if needed
-        pass
+        barEnabled = self.getProperty('Show Scalar Bar')
+        colorBy = self.getProperty('Color By')
+        if barEnabled and colorBy != 0:
+            self._showScalarBar()
+        else:
+            self._hideScalarBar()
+
+    def _hideScalarBar(self):
+        if self.scalarBarWidget:
+            self.scalarBarWidget.Off()
+            self.scalarBarWidget.SetInteractor(None)
+            self.scalarBarWidget = None
+            self._renderAllViews()
+
+    def _showScalarBar(self):
+        title = self.properties.getPropertyEnumValue('Color By')
+        view = self.views[0]
+        lut = self.mapper.GetLookupTable()
+        self.scalarBarWidget = createScalarBarWidget(view, lut, title)
+        self._renderAllViews()
+
+    def _setScalarBarTextColor(self, color=(0,0,0)):
+        act = self.scalarBarWidget.GetScalarBarActor()
+        act.GetTitleTextProperty().SetColor(color)
+        act.GetLabelTextProperty().SetColor(color)
+
+    def _setScalarBarTitle(self, titleText):
+        act = self.scalarBarWidget.GetScalarBarActor()
+        act.SetTitle(titleText)
+
+    def getCoolToWarmColorMap(self, scalarRange):
+        """Create a cool-to-warm diverging color map.
+        
+        Args:
+            scalarRange: Tuple of (min, max) scalar values
+            
+        Returns:
+            vtkDiscretizableColorTransferFunction instance
+        """
+        f = vtk.vtkDiscretizableColorTransferFunction()
+        f.DiscretizeOn()
+        f.SetColorSpaceToDiverging()
+        f.SetNumberOfValues(256)
+        f.AddRGBPoint(scalarRange[0],  0.23, 0.299, 0.754)
+        f.AddRGBPoint(scalarRange[1], 0.706, 0.016, 0.15)
+        f.Build()
+        return f
 
     def _getDefaultColorMap(self, array, scalarRange=None, hueRange=None):
         name = array.GetName() if array.GetName() else ''
 
+        # Check if a matplotlib colormap is selected
+        if self.hasProperty('Color Map') and not self.properties.getPropertyAttribute('Color Map', 'hidden'):
+            colormapName = self.properties.getPropertyEnumValue('Color Map')
+            colormapNames = MatplotlibColormaps.getColormapNames()
+            if colormapNames and colormapName != 'Default' and colormapName in colormapNames:
+                # Use matplotlib colormap
+                scalarRange = scalarRange or self.rangeMap.get(name, array.GetRange())
+                reverse = self.getProperty('Color Map Reverse') if self.hasProperty('Color Map Reverse') else False
+                return MatplotlibColormaps.getColormapAsVTK(colormapName, scalarRange, numColors=256, reverse=reverse)
+
+        # Default behavior: use hue-based lookup table
         blueToRed = (0.667, 0)
         redtoBlue = (0, 0.667)
 
@@ -258,6 +527,7 @@ class PolyDataItem(om.ObjectModelItem):
         for view in list(self.views):
             self.removeFromView(view)
         assert len(self.views) == 0
+        self._hideScalarBar()
 
     def removeFromView(self, view):
         assert view in self.views
@@ -699,7 +969,6 @@ class FrameItem(PolyDataItem):
         PolyDataItem._onPropertyChanged(self, propertySet, propertyName)
         
         if propertyName == 'Edit':
-            print("Edit changed:", self.properties.edit)
             self._updateFrameWidget()
 
         elif propertyName == 'Visible':
@@ -1071,6 +1340,33 @@ def setCameraToPerspectiveProjection(camera):
     desiredCameraPosition = focalPoint + desiredViewDistance * viewPlaneNormal
     camera.SetPosition(desiredCameraPosition)
     camera.ParallelProjectionOff()
+
+
+def createScalarBarWidget(view, lookupTable, title):
+    """Create and configure a scalar bar widget for displaying color maps.
+    
+    Args:
+        view: VTKWidget view instance
+        lookupTable: vtkLookupTable or vtkColorTransferFunction instance
+        title: Title text for the scalar bar
+        
+    Returns:
+        vtkScalarBarWidget instance
+    """
+    w = vtk.vtkScalarBarWidget()
+    bar = w.GetScalarBarActor()
+    bar.SetTitle(title)
+    bar.SetLookupTable(lookupTable)
+    w.SetRepositionable(True)
+    w.SetInteractor(view.renderWindow().GetInteractor())
+    w.On()
+
+    rep = w.GetRepresentation()
+    rep.SetOrientation(0)
+    rep.SetPosition(0.77, 0.92)
+    rep.SetPosition2(0.20, 0.07)
+
+    return w
 
 
 def enableEyeDomeLighting(view):

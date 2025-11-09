@@ -1,0 +1,208 @@
+import numpy as np
+
+from director.valueslider import ValueSlider
+from director import callbacks
+from director.propertyset import PropertySet
+import qtpy.QtGui as QtGui
+import qtpy.QtWidgets as QtWidgets
+
+
+def find_timestamp_index(timestamps, query_timestamp, clamp: bool = True) -> int:
+    """
+    Return the index of the latest timestamp less than or equal to `query_timestamp`.
+    Assumes the provided timestamps are in sorted order, otherwise the result will be incorrect.
+    If `query_timestamp` is less than all values and clamp is True, return 0.
+    If out of range and clamp is False, raise ValueError.
+    Raises ValueError if `timestamps` is empty.
+    """
+    if len(timestamps) == 0:
+        raise ValueError("Timestamps array is empty.")
+
+    idx = np.searchsorted(timestamps, query_timestamp, side='right') - 1
+
+    if idx < 0:
+        if clamp:
+            return 0
+        else:
+            raise ValueError(f"timestamp {query_timestamp} is before earliest time {timestamps[0]}")
+    return idx
+
+
+class TimestampSlider:
+    """Wrapper around ValueSlider for timestamp playback with absolute timestamp callbacks."""
+    
+    def __init__(self, min_timestamp: float, max_timestamp: float, step_frequency: int = 100):
+        """
+        Initialize timestamp slider.
+        
+        Args:
+            min_timestamp: Minimum absolute timestamp in seconds
+            max_timestamp: Maximum absolute timestamp in seconds
+            step_frequency: Resolution multiplier for slider
+        """
+        self.min_timestamp = min_timestamp
+        self.max_timestamp = max_timestamp
+        self.duration_s = max_timestamp - min_timestamp
+        
+        # Create callback registry for on_time_changed
+        self.callbacks = callbacks.CallbackRegistry(['on_time_changed'])
+        
+        # Create ValueSlider from 0 to duration
+        self.slider = ValueSlider(minValue=0.0, maxValue=self.duration_s, resolution=self.duration_s * step_frequency)
+
+        # Connect slider value changed to convert to absolute timestamp
+        def on_time_value_changed(relative_timestamp_s):
+            """Convert relative timestamp to absolute and call callbacks."""
+            absolute_timestamp_s = relative_timestamp_s + self.min_timestamp
+            self.callbacks.process('on_time_changed', absolute_timestamp_s)
+        
+        self.slider.connectValueChanged(on_time_value_changed)
+        
+        # PropertySet for keyboard shortcut increment sizes
+        self.properties = PropertySet()
+        self.properties.addProperty('Arrow Key Increment (s)', 1.0)
+        self.properties.addProperty('Shift+Arrow Increment (s)', 0.1)
+        self.properties.addProperty('Ctrl+Arrow Increment (s)', 0.01)
+        
+        # Store shortcuts for cleanup if needed
+        self._shortcuts = []
+    
+    def add_to_toolbar(self, app, toolbar_name: str):
+        """
+        Add the slider to a toolbar.
+        
+        Args:
+            toolbar_name: Name of the toolbar
+        """
+        toolBar = app.addToolBar(toolbar_name)
+        toolBar.addWidget(self.slider.widget)
+    
+    def connect_on_time_changed(self, callback):
+        """
+        Connect a callback to be called when the timestamp changes.
+        
+        Args:
+            callback: Function that takes absolute_timestamp_s as argument
+            
+        Returns:
+            Callback ID for disconnection
+        """
+        return self.callbacks.connect('on_time_changed', callback)
+    
+    def disconnect_on_time_changed(self, callback_id):
+        """
+        Disconnect a callback.
+        
+        Args:
+            callback_id: Callback ID returned from connect_on_time_changed
+        """
+        self.callbacks.disconnect(callback_id)
+    
+    def get_time(self) -> float:
+        """
+        Get the current absolute timestamp (in seconds) selected by the slider.
+        
+        Returns:
+            Absolute timestamp in seconds.
+        """
+        relative_timestamp_s = self.slider.getValue()
+        absolute_timestamp_s = relative_timestamp_s + self.min_timestamp
+        return absolute_timestamp_s
+
+    def set_time(self, absolute_timestamp_s: float):
+        """
+        Set the slider to a specific absolute timestamp.
+        
+        Args:
+            absolute_timestamp_s: Absolute timestamp in seconds
+        """
+        relative_timestamp_s = absolute_timestamp_s - self.min_timestamp
+        self.slider.setValue(relative_timestamp_s)
+
+    def set_time_from_start(self, relative_timestamp_s: float):
+        """
+        Set the slider position using a relative timestamp (seconds since start).
+        
+        Args:
+            relative_timestamp_s: Timestamp in seconds from the start (relative to min_timestamp)
+        """
+        self.slider.setValue(relative_timestamp_s)
+
+    def get_time_from_start(self) -> float:
+        """
+        Get the current slider value as a relative timestamp (seconds since start).
+        
+        Returns:
+            Relative timestamp in seconds from the start (min_timestamp)
+        """
+        return self.slider.getValue()
+    
+    def _toggle_play_pause(self):
+        """Toggle play/pause state."""
+        if self.slider.animationTimer.isActive():
+            self.slider.pause()
+        else:
+            self.slider.play()
+    
+    def _skip_forward(self, increment_s: float):
+        """Skip time forward by the specified increment."""
+        current_time = self.get_time()
+        new_time = min(self.max_timestamp, current_time + increment_s)
+        self.set_time(new_time)
+    
+    def _skip_backward(self, increment_s: float):
+        """Skip time backward by the specified increment."""
+        current_time = self.get_time()
+        new_time = max(self.min_timestamp, current_time - increment_s)
+        self.set_time(new_time)
+    
+    def add_keyboard_shortcuts(self, main_window: QtWidgets.QMainWindow):
+        """
+        Add keyboard shortcuts to the main window.
+        
+        Args:
+            main_window: QMainWindow instance to add shortcuts to
+        """
+        # Space bar: toggle play/pause
+        space_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Space'), main_window)
+        space_shortcut.activated.connect(self._toggle_play_pause)
+        self._shortcuts.append(space_shortcut)
+        
+        # Left/Right arrow keys: skip backward/forward (default increment)
+        left_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Left'), main_window)
+        left_shortcut.activated.connect(
+            lambda: self._skip_backward(self.properties.getProperty('Arrow Key Increment (s)'))
+        )
+        self._shortcuts.append(left_shortcut)
+        
+        right_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Right'), main_window)
+        right_shortcut.activated.connect(
+            lambda: self._skip_forward(self.properties.getProperty('Arrow Key Increment (s)'))
+        )
+        self._shortcuts.append(right_shortcut)
+        
+        # Shift+Left/Right: skip with shift increment
+        shift_left_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Shift+Left'), main_window)
+        shift_left_shortcut.activated.connect(
+            lambda: self._skip_backward(self.properties.getProperty('Shift+Arrow Increment (s)'))
+        )
+        self._shortcuts.append(shift_left_shortcut)
+        
+        shift_right_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Shift+Right'), main_window)
+        shift_right_shortcut.activated.connect(
+            lambda: self._skip_forward(self.properties.getProperty('Shift+Arrow Increment (s)'))
+        )
+        self._shortcuts.append(shift_right_shortcut)
+        
+        # Ctrl+Left/Right: skip with ctrl increment
+        ctrl_left_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+Left'), main_window)
+        ctrl_left_shortcut.activated.connect(
+            lambda: self._skip_backward(self.properties.getProperty('Ctrl+Arrow Increment (s)'))
+        )
+        self._shortcuts.append(ctrl_left_shortcut)
+        
+        ctrl_right_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+Right'), main_window)
+        ctrl_right_shortcut.activated.connect(
+            lambda: self._skip_forward(self.properties.getProperty('Ctrl+Arrow Increment (s)'))
+        )
+        self._shortcuts.append(ctrl_right_shortcut)
