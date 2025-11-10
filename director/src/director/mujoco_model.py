@@ -403,6 +403,15 @@ def create_primitive_geom(model, geom_id):
         return None
 
 
+def apply_mesh_transform(poly_data, mesh_name):
+    # hack, need to be parsing the body_T_geom for the non-compiled model
+    if mesh_name.endswith("robot_hand_mesh"):
+        t = vtk.vtkTransform()
+        t.RotateY(np.rad2deg(0.3490658503988659))
+        poly_data = filterUtils.transformPolyData(poly_data, t)
+    return poly_data
+
+
 # Global cache for mesh file PolyData
 _mesh_file_cache: dict[str, vtk.vtkPolyData] = {}
 
@@ -453,6 +462,7 @@ def load_geom_mesh(model, geom_id, mesh_resolver):
             # Load mesh file
             if os.path.exists(mesh_file):
                 polyData = ioUtils.readPolyData(mesh_file)
+                polyData = apply_mesh_transform(polyData, mesh_name)
                 if not polyData.GetPointData().GetNormals():
                     polyData = filterUtils.computeNormals(polyData)
                 # Cache the result

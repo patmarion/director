@@ -2,6 +2,7 @@
 
 import time
 import vtk
+import numpy as np
 from qtpy.QtWidgets import QWidget, QVBoxLayout
 from qtpy.QtCore import QTimer, QObject, Signal
 
@@ -157,6 +158,60 @@ class VTKWidget(QWidget):
     def camera(self):
         """Return the active camera."""
         return self._renderer.GetActiveCamera()
+    
+    def setCameraExtrinsics(self, world_T_camera: vtk.vtkTransform):
+        '''world_T_camera is a right-down-forward transform.
+        Set the vtkCamera so that view direction is +Z and view up is -Y'''
+        origin = np.array(world_T_camera.GetPosition())
+        yaxis = np.array(world_T_camera.TransformNormal(0, 1, 0))
+        zaxis = np.array(world_T_camera.TransformNormal(0, 0, 1))
+
+        camera = self.camera()
+        camera.SetPosition(origin)
+        camera.SetFocalPoint(origin+zaxis)
+        camera.SetViewUp(-yaxis)
+        self.render()
+
+    def setCameraIntrinsics(self, fx, fy, cx, cy):
+        """Set camera intrinsics (focal length and principal point).
+        
+        Args:
+            fx: Focal length in pixels (x direction)
+            fy: Focal length in pixels (y direction)
+            cx: Principal point x coordinate in pixels
+            cy: Principal point y coordinate in pixels
+            
+        Note:
+            This method requires the render window to have a valid size.
+            The view angle is computed from fy and the window height.
+            The window center is set based on cx, cy and the window size.
+        """        
+        camera = self.camera()
+        
+        # Get render window size
+        window_size = self.renderWindow().GetSize()
+        width = window_size[0]
+        height = window_size[1]
+        
+        if width <= 0 or height <= 0:
+            # Window not yet sized, can't set intrinsics
+            return
+        
+        camera.SetViewAngle(np.rad2deg(2.0 * np.arctan2(height / 2.0, fy)))
+        
+        window_center_x = -2.0 * (cx - width / 2.0) / width
+        window_center_y = 2.0 * (cy - height / 2.0) / height
+
+        camera.SetWindowCenter(window_center_x, window_center_y)
+
+        aspect = fy / fx
+        m = np.eye(4)
+        m[0, 0] = 1.0 / aspect
+        
+        transform = vtk.vtkTransform()
+        transform.SetMatrix(m.flatten())
+        camera.SetUserTransform(transform)
+        self.render()
     
     def lightKit(self):
         """Return the light kit."""

@@ -230,3 +230,60 @@ class DSCamera(object):
         img_pts, valid_mask = self.world2cam(point3D)
         out = self._warp_img(img, img_pts, valid_mask)
         return out
+
+
+    def from_perspective(self, img_persp, img_size=None, f=0.25):
+        """
+        Inverse of to_perspective(): warp a perspective (rectified) image
+        back into the Double Sphere fisheye image domain.
+
+        Parameters
+        ----------
+        img_persp : np.ndarray
+            Rectified pinhole image (output of to_perspective()).
+        img_size : (h, w), optional
+            Output size of fisheye image (default: self.img_size).
+        f : float
+            The 'f' parameter used in to_perspective().
+
+        Returns
+        -------
+        np.ndarray
+            Warped fisheye image.
+        """
+        if img_size is None:
+            h, w = self.img_size
+        else:
+            h, w = img_size
+
+        # Compute the intrinsics of the perspective image
+        h_p, w_p = img_persp.shape[:2]
+        focal = f * min(h_p, w_p)
+        fx_p = fy_p = focal
+        cx_p = w_p / 2.0
+        cy_p = h_p / 2.0
+
+        # Generate pixel grid for fisheye output
+        x = np.arange(w)
+        y = np.arange(h)
+        x_grid, y_grid = np.meshgrid(x, y, indexing="xy")
+
+        # Get corresponding 3D rays from fisheye pixels
+        dirs, valid_mask = self.cam2world([x_grid, y_grid])
+
+        # Project those 3D directions into the perspective image plane
+        X, Y, Z = dirs[..., 0], dirs[..., 1], dirs[..., 2]
+        u_p = fx_p * (X / Z) + cx_p
+        v_p = fy_p * (Y / Z) + cy_p
+
+        # Stack into mapping coordinates
+        map_xy = np.stack([u_p, v_p], axis=-1).astype(np.float32)
+
+        # Remap from perspective to fisheye
+        img_fisheye = cv2.remap(
+            img_persp, map_xy[..., 0], map_xy[..., 1], interpolation=cv2.INTER_LINEAR
+        )
+
+        # Mask out invalid regions
+        img_fisheye[~valid_mask] = 0.0
+        return img_fisheye

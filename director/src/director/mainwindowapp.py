@@ -10,6 +10,7 @@ from director.fieldcontainer import FieldContainer
 from director import applogic
 from director import appsettings
 from director import argutils
+from director.timercallback import TimerCallback
 
 import qtpy.QtCore as QtCore
 import qtpy.QtWidgets as QtWidgets
@@ -212,7 +213,9 @@ class MainWindowAppFactory(object):
             'StartupRender' : ['View', 'MainWindow'],
             'RunScriptFunction' : ['Globals', 'PythonConsole'],
             'ScriptLoader' : ['MainWindow', 'RunScriptFunction'],
-            'ProfilerTool' : ['MainWindow']}
+            'ProfilerTool' : ['MainWindow'],
+            'ScreenRecorder' : ['MainWindow', 'View'],
+            'WaitCursor' : ['MainWindow']}
 
         disabledComponents = []
 
@@ -502,7 +505,6 @@ class MainWindowAppFactory(object):
 
     def initStartupRender(self, fields):
         def startupRender():
-            print("startupRender")
             fields.view.forceRender()
             fields.app.applicationInstance().processEvents()
         fields.app.registerStartupCallback(startupRender, priority=0)
@@ -538,6 +540,39 @@ class MainWindowAppFactory(object):
         
         profilerTool = ProfilerToolMenu(fields.app.toolsMenu)
         return FieldContainer(profilerTool=profilerTool)
+
+    def initScreenRecorder(self, fields):
+        """Initialize screen recorder tool."""
+        from director.screen_recorder import ScreenRecorder
+        
+        screen_recorder = ScreenRecorder(
+            main_window=fields.app.mainWindow,
+            view=fields.view
+        )
+        
+        # Add to toolbar
+        toolbar = fields.app.addToolBar('Recording')
+        toolbar.addWidget(screen_recorder.get_widget())
+        
+        return FieldContainer(screen_recorder=screen_recorder)
+
+    def initWaitCursor(self, fields):
+        
+        class WaitCursorHelper:
+
+            def __init__(self):
+                self.timer = TimerCallback(callback=self.restore)
+            
+            def show(self, timeout_seconds):
+                QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+                self.timer.singleShot(timeout_seconds)
+            
+            def restore(self):
+                QtWidgets.QApplication.restoreOverrideCursor()
+        
+        wait_cursor = WaitCursorHelper()
+        wait_cursor.show(1.0)
+        return FieldContainer(waitCursor=wait_cursor)
 
 # MainWindowPanelFactory removed - optional panels not yet ported
 # These included:
