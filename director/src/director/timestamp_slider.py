@@ -3,6 +3,7 @@ import numpy as np
 from director.valueslider import ValueSlider
 from director import callbacks
 from director.propertyset import PropertySet
+from director.timercallback import TimerCallback
 import qtpy.QtGui as QtGui
 import qtpy.QtWidgets as QtWidgets
 
@@ -63,10 +64,21 @@ class TimestampSlider:
         self.properties.addProperty('Arrow Key Increment (s)', 1.0)
         self.properties.addProperty('Shift+Arrow Increment (s)', 0.1)
         self.properties.addProperty('Ctrl+Arrow Increment (s)', 0.01)
+        self.properties.addProperty('Ctrl+Shift+Arrow Increment (s)', 10.0)
+
+        self.timer = TimerCallback(callback=self._on_timer_tick)
+        self._skip_increment = None
         
         # Store shortcuts for cleanup if needed
         self._shortcuts = []
     
+    def _on_timer_tick(self):
+        if self._skip_increment:
+            current_time = self.get_time()
+            new_time = max(self.min_timestamp, min(self.max_timestamp, current_time + self._skip_increment))
+            self.set_time(new_time)
+            self._skip_increment = None
+
     def add_to_toolbar(self, app, toolbar_name: str):
         """
         Add the slider to a toolbar.
@@ -166,43 +178,26 @@ class TimestampSlider:
         # Space bar: toggle play/pause
         space_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Space'), main_window)
         space_shortcut.activated.connect(self._toggle_play_pause)
-        self._shortcuts.append(space_shortcut)
+
+        def on_skip(increment_s: float):
+            # schedule the skip with a single shot timer to prevent keyboard events
+            # from stacking up in the qt event buffer
+            self._skip_increment = increment_s
+            self.timer.start()
         
-        # Left/Right arrow keys: skip backward/forward (default increment)
-        left_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Left'), main_window)
-        left_shortcut.activated.connect(
-            lambda: self._skip_backward(self.properties.getProperty('Arrow Key Increment (s)'))
-        )
-        self._shortcuts.append(left_shortcut)
+        # Use arrow keys to skip forward and backward.
+        # This dict maps keyboard modifiers to increment property names.
+        skip_shortcuts = {
+            '': 'Arrow Key Increment (s)',
+            'Shift+': 'Shift+Arrow Increment (s)',
+            'Ctrl+': 'Ctrl+Arrow Increment (s)',
+            'Ctrl+Shift+': 'Ctrl+Shift+Arrow Increment (s)',
+        }
         
-        right_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Right'), main_window)
-        right_shortcut.activated.connect(
-            lambda: self._skip_forward(self.properties.getProperty('Arrow Key Increment (s)'))
-        )
-        self._shortcuts.append(right_shortcut)
-        
-        # Shift+Left/Right: skip with shift increment
-        shift_left_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Shift+Left'), main_window)
-        shift_left_shortcut.activated.connect(
-            lambda: self._skip_backward(self.properties.getProperty('Shift+Arrow Increment (s)'))
-        )
-        self._shortcuts.append(shift_left_shortcut)
-        
-        shift_right_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Shift+Right'), main_window)
-        shift_right_shortcut.activated.connect(
-            lambda: self._skip_forward(self.properties.getProperty('Shift+Arrow Increment (s)'))
-        )
-        self._shortcuts.append(shift_right_shortcut)
-        
-        # Ctrl+Left/Right: skip with ctrl increment
-        ctrl_left_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+Left'), main_window)
-        ctrl_left_shortcut.activated.connect(
-            lambda: self._skip_backward(self.properties.getProperty('Ctrl+Arrow Increment (s)'))
-        )
-        self._shortcuts.append(ctrl_left_shortcut)
-        
-        ctrl_right_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+Right'), main_window)
-        ctrl_right_shortcut.activated.connect(
-            lambda: self._skip_forward(self.properties.getProperty('Ctrl+Arrow Increment (s)'))
-        )
-        self._shortcuts.append(ctrl_right_shortcut)
+        # Add keyboard shortcuts for the left and right arrow keys with control and shift modifiers.
+        # The left arrow key multiplies increment by -1 to skip backward.
+        for modifier, property_name in skip_shortcuts.items():
+            for direction, sign in [('Left', -1), ('Right', 1)]:
+                shortcut = QtGui.QShortcut(QtGui.QKeySequence(f'{modifier}{direction}'), main_window)
+                increment = sign * self.properties.getProperty(property_name)
+                shortcut.activated.connect(lambda inc=increment: on_skip(inc))

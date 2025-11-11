@@ -29,17 +29,21 @@ class ValueSlider(object):
         self.spinbox.setSuffix('s')
         self.slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.playButton = QtWidgets.QPushButton('Play')
+        self.speedComboBox = QtWidgets.QComboBox()
+        self._setupSpeedComboBox()
         self.setValueRange(minValue, maxValue)
         self.setResolution(resolution)
         self.slider.valueChanged.connect(self._onSliderValueChanged)
         self.spinbox.valueChanged.connect(self._onSpinboxValueChanged)
         self.playButton.clicked.connect(self._onPlayClicked)
+        self.speedComboBox.currentTextChanged.connect(self._onSpeedComboBoxChanged)
         self.widget = QtWidgets.QWidget()
         layout = QtWidgets.QHBoxLayout(self.widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.playButton)
         layout.addWidget(self.spinbox)
         layout.addWidget(self.slider)
+        layout.addWidget(self.speedComboBox)
 
         self.animationPrevTime = 0.0
         self.animationRate = 1.0
@@ -184,6 +188,57 @@ class ValueSlider(object):
         self._value = (self.minValue + (self.maxValue - self.minValue) * (sliderValue / float(self.slider.maximum())))
         self._syncSpinBox()
         self._notifyValueChanged()
+
+    def _setupSpeedComboBox(self):
+        """Setup speed combobox with predefined speed options."""
+        speed_options = ['10x', '8x', '6x', '5x', '4x', '3x', '2x', '1x', '0.5x', '0.25x', '0.1x']
+        self.speedComboBox.addItems(speed_options)
+        # Add separator after predefined speeds
+        self.speedComboBox.insertSeparator(len(speed_options))
+        # Add "Enter custom value" after separator
+        self.speedComboBox.addItem('Enter custom value')
+        # Set default to 1x
+        self.speedComboBox.setCurrentText('1x')
+
+    def _onSpeedComboBoxChanged(self, text):
+        """Handle speed combobox selection change."""
+        if text == 'Enter custom value':
+            # Open input dialog for custom value
+            value, ok = QtWidgets.QInputDialog.getDouble(
+                self.widget,
+                'Custom Playback Speed',
+                'Enter playback speed:',
+                1.0,  # value
+                0.01,  # min
+                100.0,  # max
+                2  # decimals
+            )
+            if ok:
+                # Format the custom value
+                custom_text = f'{value}x'
+                # Check if this custom value already exists
+                existing_index = self.speedComboBox.findText(custom_text)
+                if existing_index >= 0:
+                    # If it exists, just select it
+                    with qtutils.BlockSignals(self.speedComboBox):
+                        self.speedComboBox.setCurrentText(custom_text)
+                else:
+                    # Find the index of "Enter custom value" (after separator)
+                    enter_custom_index = self.speedComboBox.findText('Enter custom value')
+                    # Insert the custom value after the separator, before "Enter custom value"
+                    with qtutils.BlockSignals(self.speedComboBox):
+                        self.speedComboBox.insertItem(enter_custom_index, custom_text)
+                        self.speedComboBox.setCurrentText(custom_text)
+                # Set the animation rate
+                self.setAnimationRate(value)
+        else:
+            # Parse the speed value from text (e.g., "2x" -> 2.0, "0.5x" -> 0.5)
+            try:
+                speed_value = float(text.rstrip('x'))
+                self.setAnimationRate(speed_value)
+            except ValueError:
+                # If parsing fails, default to 1x
+                self.setAnimationRate(1.0)
 
 
 class SliderEventFilter(QtCore.QObject):
