@@ -298,8 +298,15 @@ class VTKWidget(QWidget):
         if len(bounds) == 6:
             self._custom_bounds.append(list(bounds))
     
-    def resetCamera(self):
+    def resetCamera(self, viewDirection=None):
         """Reset the camera to fit all actors, excluding the grid if present."""
+
+        if viewDirection is not None:
+            camera = self.camera()
+            camera.SetPosition([0, 0, 0])
+            camera.SetFocalPoint(viewDirection)
+            #camera.SetViewUp([0,0,1])
+
         # Try to compute bounds excluding grid
         bounds = None
         if hasattr(self, '_grid_obj') and self._grid_obj:
