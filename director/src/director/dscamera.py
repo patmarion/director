@@ -1,4 +1,5 @@
 import json
+from functools import lru_cache
 from typing import Dict, Optional, Tuple
 
 import cv2
@@ -19,7 +20,6 @@ class DSCamera(object):
         intrinsic: Optional[Dict[str, float]] = None,
         fov: float = 180,
     ):
-
         # Fisheye camera parameters
         self.h, self.w = img_size
         self.fx = intrinsic["fx"]
@@ -194,13 +194,12 @@ class DSCamera(object):
     def _warp_img(self, img, img_pts, valid_mask):
         # Remap
         img_pts = img_pts.astype(np.float32)
-        out = cv2.remap(
-            img, img_pts[..., 0], img_pts[..., 1], cv2.INTER_LINEAR
-        )
+        out = cv2.remap(img, img_pts[..., 0], img_pts[..., 1], cv2.INTER_LINEAR)
         out[~valid_mask] = 0.0
         return out
 
-    def to_perspective(self, img, img_size=(512, 512), f=0.25):
+    @lru_cache(maxsize=30)
+    def _get_perspective_img_pts_and_valid_mask(self, img_size, f):
         # Generate 3D points
         h, w = img_size
         z = f * min(img_size)
@@ -211,6 +210,11 @@ class DSCamera(object):
 
         # Project on image plane
         img_pts, valid_mask = self.world2cam(point3D)
+        img_pts = img_pts.astype(np.float32)
+        return img_pts, valid_mask
+
+    def to_perspective(self, img, img_size=(512, 512), f=0.25):
+        img_pts, valid_mask = self._get_perspective_img_pts_and_valid_mask(img_size, f)
         out = self._warp_img(img, img_pts, valid_mask)
         return out
 
@@ -230,7 +234,6 @@ class DSCamera(object):
         img_pts, valid_mask = self.world2cam(point3D)
         out = self._warp_img(img, img_pts, valid_mask)
         return out
-
 
     def from_perspective(self, img_persp, img_size=None, f=0.25):
         """
@@ -258,12 +261,31 @@ class DSCamera(object):
 
         # Compute the intrinsics of the perspective image
         h_p, w_p = img_persp.shape[:2]
+        map_xy, valid_mask = self._get_from_perspective_img_pts_and_valid_mask(
+            (h_p, w_p), img_size, f
+        )
+
+        # Remap from perspective to fisheye
+        img_fisheye = cv2.remap(
+            img_persp, map_xy[..., 0], map_xy[..., 1], interpolation=cv2.INTER_LINEAR
+        )
+
+        # Mask out invalid regions
+        img_fisheye[~valid_mask] = 0.0
+        return img_fisheye
+
+    @lru_cache(maxsize=30)
+    def _get_from_perspective_img_pts_and_valid_mask(
+        self, input_img_size, output_img_size, f
+    ):
+        h_p, w_p = input_img_size
         focal = f * min(h_p, w_p)
         fx_p = fy_p = focal
         cx_p = w_p / 2.0
         cy_p = h_p / 2.0
 
         # Generate pixel grid for fisheye output
+        h, w = output_img_size
         x = np.arange(w)
         y = np.arange(h)
         x_grid, y_grid = np.meshgrid(x, y, indexing="xy")
@@ -278,12 +300,4 @@ class DSCamera(object):
 
         # Stack into mapping coordinates
         map_xy = np.stack([u_p, v_p], axis=-1).astype(np.float32)
-
-        # Remap from perspective to fisheye
-        img_fisheye = cv2.remap(
-            img_persp, map_xy[..., 0], map_xy[..., 1], interpolation=cv2.INTER_LINEAR
-        )
-
-        # Mask out invalid regions
-        img_fisheye[~valid_mask] = 0.0
-        return img_fisheye
+        return map_xy, valid_mask
