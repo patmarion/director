@@ -38,15 +38,18 @@ class MuJoCoMeshResolver:
         self.xml_path = os.path.abspath(xml_path)
         self.xml_dir = os.path.dirname(self.xml_path)
         self.mesh_name_to_file = {}
+        self.geom_name_to_element = {}
+        self.angle_unit = "radian"  # Default MuJoCo angle unit
+        self.euler_seq = "xyz"  # Default MuJoCo euler sequence
         self._parse_xml()
     
     def _parse_xml(self):
-        """Parse the MJCF XML file to extract mesh definitions."""
+        """Parse the MJCF XML file to extract mesh definitions and geom elements."""
         try:
             tree = ET.parse(self.xml_path)
             root = tree.getroot()
             
-            # Find the <compiler> tag and check for meshdir attribute
+            # Find the <compiler> tag and check for meshdir and angle attributes
             compiler = root.find('compiler')
             meshdir = self.xml_dir  # Default to xml_dir
             if compiler is not None:
@@ -58,6 +61,16 @@ class MuJoCoMeshResolver:
                     else:
                         meshdir = os.path.join(self.xml_dir, meshdir_attr)
                     meshdir = os.path.normpath(meshdir)
+                
+                # Get angle unit (default is "radian")
+                angle_attr = compiler.get('angle')
+                if angle_attr:
+                    self.angle_unit = angle_attr.lower()
+                
+                # Get euler sequence (default is "xyz")
+                eulerseq_attr = compiler.get('eulerseq')
+                if eulerseq_attr:
+                    self.euler_seq = eulerseq_attr.lower()
             
             # Find the <asset> tag
             asset = root.find('asset')
@@ -76,6 +89,12 @@ class MuJoCoMeshResolver:
                             abs_path = os.path.join(meshdir, mesh_file)
                         abs_path = os.path.normpath(abs_path)
                         self.mesh_name_to_file[mesh_name] = abs_path
+            
+            # Find all <geom> elements throughout the XML tree
+            for geom_elem in root.iter('geom'):
+                geom_name = geom_elem.get('name')
+                if geom_name:
+                    self.geom_name_to_element[geom_name] = geom_elem
         except Exception as e:
             print(f"Warning: Failed to parse XML for mesh resolution: {e}")
     
@@ -90,6 +109,55 @@ class MuJoCoMeshResolver:
             Absolute path to the mesh file, or None if not found
         """
         return self.mesh_name_to_file.get(mesh_name)
+    
+    def get_geom_transform(self, geom_name: str) -> np.ndarray | None:
+        """
+        Get the transform from parent body to geom as a 4x4 matrix.
+        
+        The transform is built from the pos and euler attributes of the geom element.
+        The euler angles are interpreted according to the compiler angle and eulerseq settings.
+        
+        Args:
+            geom_name: Name of the geom as defined in the MJCF XML
+            
+        Returns:
+            4x4 numpy array representing parent_T_geom transform, or None if geom not found
+        """
+        geom_elem = self.geom_name_to_element.get(geom_name)
+        if geom_elem is None:
+            return None
+        
+        # Get pos attribute (default to "0 0 0")
+        pos_str = geom_elem.get('pos', '0 0 0')
+        pos_values = [float(x) for x in pos_str.split()]
+        if len(pos_values) != 3:
+            print(f"Warning: Invalid pos attribute for geom '{geom_name}': {pos_str}")
+            pos_values = [0.0, 0.0, 0.0]
+        pos = np.array(pos_values)
+        
+        # Get euler attribute (default to "0 0 0")
+        euler_str = geom_elem.get('euler', '0 0 0')
+        euler_values = [float(x) for x in euler_str.split()]
+        if len(euler_values) != 3:
+            print(f"Warning: Invalid euler attribute for geom '{geom_name}': {euler_str}")
+            euler_values = [0.0, 0.0, 0.0]
+        euler = np.array(euler_values)
+        
+        # Convert euler angles to radians if needed
+        if self.angle_unit == "degree":
+            euler = np.deg2rad(euler)
+        
+        # Convert euler angles to rotation matrix
+        # Use the euler sequence from compiler settings (defaults to 'xyz')
+        rotation = Rotation.from_euler(self.euler_seq, euler)
+        rot_matrix = rotation.as_matrix()
+        
+        # Build 4x4 transformation matrix
+        transform_matrix = np.eye(4)
+        transform_matrix[:3, :3] = rot_matrix
+        transform_matrix[:3, 3] = pos
+        
+        return transform_matrix
 
 
 def mj_matrix_to_vtk_transform(matrix):
@@ -403,15 +471,6 @@ def create_primitive_geom(model, geom_id):
         return None
 
 
-def apply_mesh_transform(poly_data, mesh_name):
-    # hack, need to be parsing the body_T_geom for the non-compiled model
-    if mesh_name.endswith("robot_hand_mesh"):
-        t = vtk.vtkTransform()
-        t.RotateY(np.rad2deg(0.3490658503988659))
-        poly_data = filterUtils.transformPolyData(poly_data, t)
-    return poly_data
-
-
 # Global cache for mesh file PolyData
 _mesh_file_cache: dict[str, vtk.vtkPolyData] = {}
 
@@ -461,8 +520,10 @@ def load_geom_mesh(model, geom_id, mesh_resolver):
             
             # Load mesh file
             if os.path.exists(mesh_file):
+                print("loading mesh file", mesh_file)
                 polyData = ioUtils.readPolyData(mesh_file)
-                polyData = apply_mesh_transform(polyData, mesh_name)
+                print("Loaded", polyData.GetNumberOfPoints(), "points")
+                print("Loaded", polyData.GetNumberOfCells(), "cells")
                 if not polyData.GetPointData().GetNormals():
                     polyData = filterUtils.computeNormals(polyData)
                 # Cache the result
@@ -575,7 +636,8 @@ def visualize_mujoco_model(model, body_to_geom, mesh_resolver):
                 # For mesh geoms, ignore geom_pose_in_body (mesh transformations are already applied)
                 # For other geoms, apply geom_pose_in_body
                 if geom_type == mujoco.mjtGeom.mjGEOM_MESH:
-                    geom_pose_in_body = None
+                    geom_pose_in_body = geom_pose_in_body = mesh_resolver.get_geom_transform(geom_name)
+                    print(geom_name, geom_pose_in_body)
                 else:
                     geom_pose_in_body = get_geom_pose_in_body(model, geom_id)
                 
