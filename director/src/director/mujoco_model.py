@@ -38,7 +38,9 @@ class MuJoCoMeshResolver:
         self.xml_path = os.path.abspath(xml_path)
         self.xml_dir = os.path.dirname(self.xml_path)
         self.mesh_name_to_file = {}
+        self.mesh_name_to_material = {}  # Map mesh names to their material names
         self.geom_name_to_element = {}
+        self.material_name_to_rgba = {}
         self.angle_unit = "radian"  # Default MuJoCo angle unit
         self.euler_seq = "xyz"  # Default MuJoCo euler sequence
         self._parse_xml()
@@ -89,6 +91,25 @@ class MuJoCoMeshResolver:
                             abs_path = os.path.join(meshdir, mesh_file)
                         abs_path = os.path.normpath(abs_path)
                         self.mesh_name_to_file[mesh_name] = abs_path
+                    
+                    # Store mesh's material attribute if present
+                    if mesh_name:
+                        mesh_material = mesh_elem.get('material')
+                        if mesh_material:
+                            self.mesh_name_to_material[mesh_name] = mesh_material
+                
+                # Find all <material> elements within <asset>
+                for material_elem in asset.findall('material'):
+                    material_name = material_elem.get('name')
+                    rgba_str = material_elem.get('rgba')
+                    
+                    if material_name and rgba_str:
+                        # Parse rgba string (e.g., "0.033 0.033 0.033 1")
+                        rgba_values = [float(x) for x in rgba_str.split()]
+                        if len(rgba_values) == 4:
+                            self.material_name_to_rgba[material_name] = rgba_values
+                        else:
+                            print(f"Warning: Invalid rgba attribute for material '{material_name}': {rgba_str}")
             
             # Find all <geom> elements throughout the XML tree
             for geom_elem in root.iter('geom'):
@@ -110,18 +131,34 @@ class MuJoCoMeshResolver:
         """
         return self.mesh_name_to_file.get(mesh_name)
     
+    def get_material_rgba(self, material_name: str) -> list[float] | None:
+        """
+        Get the RGBA color values for a material by name.
+        
+        Args:
+            material_name: Name of the material as defined in the MJCF XML
+            
+        Returns:
+            List of 4 floats [R, G, B, A] in range [0-1], or None if material not found
+        """
+        return self.material_name_to_rgba.get(material_name)
+    
     def get_geom_transform(self, geom_name: str) -> np.ndarray | None:
         """
         Get the transform from parent body to geom as a 4x4 matrix.
         
-        The transform is built from the pos and euler attributes of the geom element.
+        The transform is built from the pos and either euler or quat attributes of the geom element.
         The euler angles are interpreted according to the compiler angle and eulerseq settings.
+        Quaternions are parsed as "w x y z" format (MuJoCo standard).
         
         Args:
             geom_name: Name of the geom as defined in the MJCF XML
             
         Returns:
             4x4 numpy array representing parent_T_geom transform, or None if geom not found
+            
+        Raises:
+            ValueError: If both euler and quat attributes are specified
         """
         geom_elem = self.geom_name_to_element.get(geom_name)
         if geom_elem is None:
@@ -135,22 +172,49 @@ class MuJoCoMeshResolver:
             pos_values = [0.0, 0.0, 0.0]
         pos = np.array(pos_values)
         
-        # Get euler attribute (default to "0 0 0")
-        euler_str = geom_elem.get('euler', '0 0 0')
-        euler_values = [float(x) for x in euler_str.split()]
-        if len(euler_values) != 3:
-            print(f"Warning: Invalid euler attribute for geom '{geom_name}': {euler_str}")
-            euler_values = [0.0, 0.0, 0.0]
-        euler = np.array(euler_values)
+        # Check for both euler and quat (error if both are specified)
+        has_euler = geom_elem.get('euler') is not None
+        has_quat = geom_elem.get('quat') is not None
         
-        # Convert euler angles to radians if needed
-        if self.angle_unit == "degree":
-            euler = np.deg2rad(euler)
+        if has_euler and has_quat:
+            raise ValueError(
+                f"Geom '{geom_name}' has both 'euler' and 'quat' attributes specified. "
+                "Only one orientation specification is allowed."
+            )
         
-        # Convert euler angles to rotation matrix
-        # Use the euler sequence from compiler settings (defaults to 'xyz')
-        rotation = Rotation.from_euler(self.euler_seq, euler)
-        rot_matrix = rotation.as_matrix()
+        # Get rotation from quat or euler
+        if has_quat:
+            # Parse quat as "w x y z" (MuJoCo format)
+            quat_str = geom_elem.get('quat')
+            quat_values = [float(x) for x in quat_str.split()]
+            if len(quat_values) != 4:
+                print(f"Warning: Invalid quat attribute for geom '{geom_name}': {quat_str}")
+                quat_values = [1.0, 0.0, 0.0, 0.0]  # Identity quaternion [w, x, y, z]
+            
+            # Convert from MuJoCo format (w x y z) to SciPy format (x y z w)
+            quat_wxyz = np.array(quat_values)
+            quat_xyzw = np.array([quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]])
+            
+            # Convert quaternion to rotation matrix
+            rotation = Rotation.from_quat(quat_xyzw)
+            rot_matrix = rotation.as_matrix()
+        else:
+            # Get euler attribute (default to "0 0 0")
+            euler_str = geom_elem.get('euler', '0 0 0')
+            euler_values = [float(x) for x in euler_str.split()]
+            if len(euler_values) != 3:
+                print(f"Warning: Invalid euler attribute for geom '{geom_name}': {euler_str}")
+                euler_values = [0.0, 0.0, 0.0]
+            euler = np.array(euler_values)
+            
+            # Convert euler angles to radians if needed
+            if self.angle_unit == "degree":
+                euler = np.deg2rad(euler)
+            
+            # Convert euler angles to rotation matrix
+            # Use the euler sequence from compiler settings (defaults to 'xyz')
+            rotation = Rotation.from_euler(self.euler_seq, euler)
+            rot_matrix = rotation.as_matrix()
         
         # Build 4x4 transformation matrix
         transform_matrix = np.eye(4)
@@ -522,8 +586,11 @@ def load_geom_mesh(model, geom_id, mesh_resolver):
             if os.path.exists(mesh_file):
                 print("loading mesh file", mesh_file)
                 polyData = ioUtils.readPolyData(mesh_file)
-                print("Loaded", polyData.GetNumberOfPoints(), "points")
-                print("Loaded", polyData.GetNumberOfCells(), "cells")
+                if not polyData.GetNumberOfPoints():
+                    print(f"Error: Mesh file {mesh_file} has no points")
+
+                #print("Loaded", polyData.GetNumberOfPoints(), "points")
+                #print("Loaded", polyData.GetNumberOfCells(), "cells")
                 if not polyData.GetPointData().GetNormals():
                     polyData = filterUtils.computeNormals(polyData)
                 # Cache the result
@@ -637,7 +704,6 @@ def visualize_mujoco_model(model, body_to_geom, mesh_resolver):
                 # For other geoms, apply geom_pose_in_body
                 if geom_type == mujoco.mjtGeom.mjGEOM_MESH:
                     geom_pose_in_body = geom_pose_in_body = mesh_resolver.get_geom_transform(geom_name)
-                    print(geom_name, geom_pose_in_body)
                 else:
                     geom_pose_in_body = get_geom_pose_in_body(model, geom_id)
                 
@@ -651,8 +717,48 @@ def visualize_mujoco_model(model, body_to_geom, mesh_resolver):
 
                 
                 # Get geom color and alpha from MuJoCo
-                geom_rgba = model.geom_rgba[geom_id]
-                # Convert numpy array to Python list for compatibility
+                # Priority order (per MuJoCo documentation):
+                # 1. Geom's material attribute
+                # 2. Mesh's material attribute (if geom references a mesh)
+                # 3. Geom's rgba attribute
+                # 4. Fall back to model.geom_rgba
+                geom_rgba = None
+                geom_elem = mesh_resolver.geom_name_to_element.get(geom_name)
+                
+                # First: Check if geom has a material attribute
+                if geom_elem is not None:
+                    material_name = geom_elem.get('material')
+                    if material_name:
+                        # Look up material rgba from mesh_resolver
+                        geom_rgba = mesh_resolver.get_material_rgba(material_name)
+                        if geom_rgba is None:
+                            print(f"Warning: Material '{material_name}' not found for geom '{geom_name}'")
+                
+                # Second: If no geom material, check mesh's material (if geom references a mesh)
+                if geom_rgba is None and geom_type == mujoco.mjtGeom.mjGEOM_MESH:
+                    mesh_id = model.geom_dataid[geom_id]
+                    if mesh_id >= 0 and mesh_id < model.nmesh:
+                        mesh_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MESH, mesh_id)
+                        if mesh_name:
+                            mesh_material_name = mesh_resolver.mesh_name_to_material.get(mesh_name)
+                            if mesh_material_name:
+                                geom_rgba = mesh_resolver.get_material_rgba(mesh_material_name)
+                                if geom_rgba is None:
+                                    print(f"Warning: Material '{mesh_material_name}' from mesh '{mesh_name}' not found for geom '{geom_name}'")
+                
+                # Third: If no material found, check for rgba attribute on geom
+                if geom_rgba is None and geom_elem is not None:
+                    rgba_str = geom_elem.get('rgba')
+                    if rgba_str:
+                        rgba_values = [float(x) for x in rgba_str.split()]
+                        if len(rgba_values) == 4:
+                            geom_rgba = rgba_values
+                
+                # Fourth: Fall back to MuJoCo model's geom_rgba if no XML attribute found
+                if geom_rgba is None:
+                    geom_rgba = model.geom_rgba[geom_id]
+                
+                # Convert to Python list for compatibility
                 geom_color = [float(geom_rgba[i]) for i in range(3)]  # RGB components [0-1]
                 geom_alpha = float(geom_rgba[3])   # Alpha component [0-1]
                 
@@ -679,7 +785,7 @@ def visualize_mujoco_model(model, body_to_geom, mesh_resolver):
     
     # Set visibility to false for Scene, mocap, and Group 3 folders
     for folder_key, folder_obj in group_folders.items():
-        if folder_key in ["Scene", "mocap"] or folder_key == "group_3":
+        if folder_key in ["Scene", "mocap", "group_2", "group_3", "group_4", "group_5"]:
             if folder_obj.hasProperty('Visible'):
                 folder_obj.setProperty('Visible', False)
         om.addChildPropertySync(folder_obj)
