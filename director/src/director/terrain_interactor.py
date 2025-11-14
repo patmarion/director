@@ -4,6 +4,7 @@ This interactor provides terrain-style camera controls:
 - Left mouse: rotate (azimuth/elevation around focal point)
 - Right mouse: zoom
 - Shift + Left mouse: pan/translate
+- Middle mouse: pan/translate
 
 The view up is kept aligned with the Z-axis (vertical).
 """
@@ -36,6 +37,7 @@ class TerrainInteractorStyle(vtk.vtkInteractorStyle):
         self._last_pos = None
         self._left_button_pressed = False
         self._right_button_pressed = False
+        self._middle_button_pressed = False
         self._pan_start_focal_point = None  # Store focal point when pan starts
         self._pan_start_3d_point = None  # Store the 3D point that was clicked (for panning)
         
@@ -49,43 +51,79 @@ class TerrainInteractorStyle(vtk.vtkInteractorStyle):
         self.AddObserver(vtk.vtkCommand.LeftButtonReleaseEvent, self._on_left_release)
         self.AddObserver(vtk.vtkCommand.RightButtonPressEvent, self._on_right_press)
         self.AddObserver(vtk.vtkCommand.RightButtonReleaseEvent, self._on_right_release)
+        self.AddObserver(vtk.vtkCommand.MiddleButtonPressEvent, self._on_middle_press)
+        self.AddObserver(vtk.vtkCommand.MiddleButtonReleaseEvent, self._on_middle_release)
         self.AddObserver(vtk.vtkCommand.MouseMoveEvent, self._on_mouse_move)
         self.AddObserver(vtk.vtkCommand.MouseWheelForwardEvent, self._on_wheel_forward)
         self.AddObserver(vtk.vtkCommand.MouseWheelBackwardEvent, self._on_wheel_backward)
     
+    def _get_interactor_state(self):
+        """Get interactor state and find renderer at mouse position.
+        
+        Returns:
+            tuple: (interactor, x, y, renderer) or (None, None, None, None) if invalid
+        """
+        interactor = self.GetInteractor()
+        if not interactor:
+            return (None, None, None, None)
+        
+        x, y = interactor.GetEventPosition()
+        self.FindPokedRenderer(x, y)
+        renderer = self.GetCurrentRenderer()
+        
+        return (interactor, x, y, renderer)
+    
+    def _init_pan_state(self, renderer, x, y):
+        """Initialize pan state by storing focal point and 3D intersection point.
+        
+        Args:
+            renderer: vtkRenderer instance
+            x: Mouse X position
+            y: Mouse Y position
+        """
+        if not renderer:
+            self._pan_start_focal_point = None
+            self._pan_start_3d_point = None
+            return
+        
+        camera = renderer.GetActiveCamera()
+        if not camera:
+            self._pan_start_focal_point = None
+            self._pan_start_3d_point = None
+            return
+        
+        self._pan_start_focal_point = camera.GetFocalPoint()[:3]
+        # Compute 3D point under mouse cursor (intersection with vertical plane)
+        plane_point = self._pan_start_focal_point
+        plane_normal = [0.0, 0.0, 1.0]  # Vertical plane
+        
+        # Convert display to world coordinates
+        world_pt1 = [0.0, 0.0, 0.0, 1.0]
+        world_pt2 = [0.0, 0.0, 0.0, 1.0]
+        vtk.vtkInteractorObserver.ComputeDisplayToWorld(renderer, x, y, 0.0, world_pt1)
+        vtk.vtkInteractorObserver.ComputeDisplayToWorld(renderer, x, y, 1.0, world_pt2)
+        
+        ray_start = world_pt1[:3]
+        ray_end = world_pt2[:3]
+        intersection = self._ray_plane_intersection(ray_start, ray_end, plane_point, plane_normal)
+        self._pan_start_3d_point = intersection
+    
+    def _clear_pan_state(self):
+        """Clear pan state."""
+        self._pan_start_focal_point = None
+        self._pan_start_3d_point = None
+    
     def _on_left_press(self, obj, event):
         """Handle left mouse button press."""
-        interactor = self.GetInteractor()
+        interactor, x, y, renderer = self._get_interactor_state()
         if not interactor:
             return
         
-        # Find the renderer at the mouse position
-        x, y = interactor.GetEventPosition()
-        self.FindPokedRenderer(x, y)
-        
-        # Store focal point and 3D point for panning (if shift is pressed)
-        renderer = self.GetCurrentRenderer()
-        if renderer:
-            camera = renderer.GetActiveCamera()
-            if camera and interactor.GetShiftKey():
-                self._pan_start_focal_point = camera.GetFocalPoint()[:3]
-                # Compute 3D point under mouse cursor (intersection with vertical plane)
-                plane_point = self._pan_start_focal_point
-                plane_normal = [0.0, 0.0, 1.0]  # Vertical plane
-                
-                # Convert display to world coordinates
-                world_pt1 = [0.0, 0.0, 0.0, 1.0]
-                world_pt2 = [0.0, 0.0, 0.0, 1.0]
-                vtk.vtkInteractorObserver.ComputeDisplayToWorld(renderer, x, y, 0.0, world_pt1)
-                vtk.vtkInteractorObserver.ComputeDisplayToWorld(renderer, x, y, 1.0, world_pt2)
-                
-                ray_start = world_pt1[:3]
-                ray_end = world_pt2[:3]
-                intersection = self._ray_plane_intersection(ray_start, ray_end, plane_point, plane_normal)
-                self._pan_start_3d_point = intersection
-            else:
-                self._pan_start_focal_point = None
-                self._pan_start_3d_point = None
+        # Initialize pan state if shift is pressed, otherwise clear it
+        if interactor.GetShiftKey():
+            self._init_pan_state(renderer, x, y)
+        else:
+            self._clear_pan_state()
         
         self._left_button_pressed = True
         self._last_pos = (x, y)
@@ -94,18 +132,13 @@ class TerrainInteractorStyle(vtk.vtkInteractorStyle):
         """Handle left mouse button release."""
         self._left_button_pressed = False
         self._last_pos = None
-        self._pan_start_focal_point = None
-        self._pan_start_3d_point = None
+        self._clear_pan_state()
     
     def _on_right_press(self, obj, event):
         """Handle right mouse button press."""
-        interactor = self.GetInteractor()
+        interactor, x, y, renderer = self._get_interactor_state()
         if not interactor:
             return
-        
-        # Find the renderer at the mouse position
-        x, y = interactor.GetEventPosition()
-        self.FindPokedRenderer(x, y)
         
         self._right_button_pressed = True
         self._last_pos = (x, y)
@@ -115,9 +148,27 @@ class TerrainInteractorStyle(vtk.vtkInteractorStyle):
         self._right_button_pressed = False
         self._last_pos = None
     
+    def _on_middle_press(self, obj, event):
+        """Handle middle mouse button press."""
+        interactor, x, y, renderer = self._get_interactor_state()
+        if not interactor:
+            return
+        
+        # Initialize pan state for middle button
+        self._init_pan_state(renderer, x, y)
+        
+        self._middle_button_pressed = True
+        self._last_pos = (x, y)
+    
+    def _on_middle_release(self, obj, event):
+        """Handle middle mouse button release."""
+        self._middle_button_pressed = False
+        self._last_pos = None
+        self._clear_pan_state()
+    
     def _on_mouse_move(self, obj, event):
         """Handle mouse movement."""
-        if not (self._left_button_pressed or self._right_button_pressed):
+        if not (self._left_button_pressed or self._right_button_pressed or self._middle_button_pressed):
             return
         
         interactor = self.GetInteractor()
@@ -162,6 +213,10 @@ class TerrainInteractorStyle(vtk.vtkInteractorStyle):
         elif self._right_button_pressed:
             # Right mouse: Zoom
             self._zoom_camera(camera, dx, dy, renderer)
+        
+        elif self._middle_button_pressed:
+            # Middle mouse: Pan/translate
+            self._pan_camera(camera, dx, dy, renderer)
         
         self._last_pos = (x, y)
 
@@ -212,6 +267,16 @@ class TerrainInteractorStyle(vtk.vtkInteractorStyle):
     
     def OnRightButtonUp(self):
         """Override to prevent default right button camera behavior."""
+        # Don't call parent
+        pass
+    
+    def OnMiddleButtonDown(self):
+        """Override to prevent default middle button camera behavior."""
+        # Don't call parent - we handle pan in observers
+        pass
+    
+    def OnMiddleButtonUp(self):
+        """Override to prevent default middle button camera behavior."""
         # Don't call parent
         pass
     
