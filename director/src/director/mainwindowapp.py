@@ -215,6 +215,7 @@ class MainWindowAppFactory(object):
             'ScriptLoader' : ['MainWindow', 'RunScriptFunction'],
             'ProfilerTool' : ['MainWindow'],
             'ScreenRecorder' : ['MainWindow', 'View'],
+            'UndoRedo' : ['MainWindow'],
             'WaitCursor' : ['MainWindow']}
 
         disabledComponents = []
@@ -431,6 +432,30 @@ class MainWindowAppFactory(object):
             # viewBackgroundLightHandler=viewBackgroundLightHandler,
             terrainToggle=terrainToggle,
             mainToolbar=toolBar
+        )
+
+    def initUndoRedo(self, fields):
+
+      undoStack = QtGui.QUndoStack()
+      undoView = QtWidgets.QUndoView(undoStack)
+      undoView.setEmptyLabel('Start')
+      undoView.setWindowTitle('History')
+      undoDock = fields.app.addWidgetToDock(undoView, QtCore.Qt.LeftDockWidgetArea, visible=False)
+
+      undoAction = undoStack.createUndoAction(undoStack)
+      redoAction = undoStack.createRedoAction(undoStack)
+      undoAction.setShortcut(QtGui.QKeySequence('Ctrl+Z'))
+      redoAction.setShortcut(QtGui.QKeySequence('Ctrl+Shift+Z'))
+
+      fields.app.editMenu.addAction(undoAction)
+      fields.app.editMenu.addAction(redoAction)
+
+      return FieldContainer(
+        undoDock=undoDock,
+        undoStack=undoStack,
+        undoView=undoView,
+        undoAction=undoAction,
+        redoAction=redoAction
         )
 
     def initGlobalModules(self, fields):

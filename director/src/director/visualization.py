@@ -918,17 +918,16 @@ class FrameItem(PolyDataItem):
 
         self.actor.SetUserTransform(transform)
 
-        self.addProperty('Scale', 1.0, attributes=om.PropertyAttributes(decimals=2, minimum=0.01, maximum=100, singleStep=0.1, hidden=False))
+        self.addProperty('Scale', 1.0, attributes=om.PropertyAttributes(decimals=2, minimum=0.01, maximum=3.0, singleStep=0.05, hidden=False))
         self.addProperty('Edit', False)
         self.addProperty('Tube', False)
-        self.addProperty('Tube Width', 0.002, attributes=om.PropertyAttributes(decimals=3, minimum=0.001, maximum=10, singleStep=0.01, hidden=True))
+        self.addProperty('Tube Width', 0.002, attributes=om.PropertyAttributes(decimals=3, minimum=0.001, maximum=0.3, singleStep=0.005, hidden=True))
         
         # Set Edit as the first property
         self.properties.setPropertyIndex('Edit', 0)
 
         # Initialize callbacks with FrameModified signal
         self.callbacks = callbacks.CallbackRegistry(['FrameModified'])
-        self.onTransformModifiedCallback = None
         self.observerTag = self.transform.AddObserver('ModifiedEvent', self.onTransformModified)
         self._updateAxesGeometry()
 
@@ -944,8 +943,6 @@ class FrameItem(PolyDataItem):
 
     def onTransformModified(self, transform, event):
         if not self._blockSignals:
-            if self.onTransformModifiedCallback:
-                self.onTransformModifiedCallback(self)
             self.callbacks.process('FrameModified', self)
 
     def copyFrame(self, transform):
@@ -978,6 +975,8 @@ class FrameItem(PolyDataItem):
         elif propertyName == 'Tube':
             self.properties.setPropertyAttribute('Tube Width', 'hidden', not self.getProperty(propertyName))
             self._updateAxesGeometry()
+        elif propertyName == 'Tube Width':
+            self._updateAxesGeometry()
     
     def _updateFrameWidget(self):
         """Create or destroy frame widget based on Edit property."""
@@ -997,8 +996,7 @@ class FrameItem(PolyDataItem):
                 from director.framewidget import FrameWidget
                 scale = self.getProperty('Scale')
                 # Set callback to trigger FrameModified signal when transform changes
-                self.frameWidget = FrameWidget(view, self.transform, scale=scale, 
-                                               onTransformModified=self.onTransformModified)
+                self.frameWidget = FrameWidget(view, self.transform, scale=scale)
             # Ensure widget is enabled and visible (regardless of whether it was just created)
             self.frameWidget.setEnabled(True)
             self.frameWidget.view.render()

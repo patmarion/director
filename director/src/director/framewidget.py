@@ -198,7 +198,7 @@ class FrameWidget(ViewEventFilter):
     TRANSLATING_IN_PLANE = 2
     ROTATING = 3
     
-    def __init__(self, view, transform, scale=0.5, useTubeFilter=True, useDiskRings=False, onTransformModified=None):
+    def __init__(self, view, transform, scale=0.5, useTubeFilter=True, useDiskRings=False):
         """
         Initialize the frame widget.
         
@@ -218,11 +218,11 @@ class FrameWidget(ViewEventFilter):
             Callback function called when transform is modified
         """
         super().__init__(view)
+        transform.PostMultiply()
         self.transform = transform
         self.scale = scale
         self.useTubeFilter = useTubeFilter
         self.useDiskRings = useDiskRings
-        self.onTransformModified = onTransformModified
         
         # Interaction state
         self.interactionState = self.OUTSIDE
@@ -240,26 +240,23 @@ class FrameWidget(ViewEventFilter):
         
         # Setup picker
         self.picker = vtk.vtkCellPicker()
-        self.picker.SetTolerance(0.005)
+        self.picker.SetTolerance(0.001)
         self.picker.PickFromListOn()
         for actor in self.axisActors + self.ringActors:
             self.picker.AddPickList(actor)
         
         # Add actors to renderer (axes first so they render behind rings if needed)
+        self._enabled = False
         renderer = view.renderer()
-        # Initially hide actors - they will be shown when setEnabled(True) is called
-        # This ensures proper visibility control
-        initial_visibility = 0  # Hidden by default, will be shown when Edit=True
         for actor in self.axisActors:
             renderer.AddActor(actor)
-            actor.SetVisibility(initial_visibility)
+            actor.SetVisibility(self._enabled)
         for actor in self.ringActors:
             renderer.AddActor(actor)
-            actor.SetVisibility(initial_visibility)
+            actor.SetVisibility(self._enabled)
         
         # Highlight state
         self.highlightedActor = None
-        self._enabled = False  # Track enabled state
         
     def _buildActors(self):
         """Build the actors for axes and rings."""
@@ -299,7 +296,6 @@ class FrameWidget(ViewEventFilter):
             actor = vtk.vtkActor()
             actor.SetMapper(mapper)
             actor.GetProperty().SetColor(ringColors[ringId])
-            actor.GetProperty().SetOpacity(0.8)  # More visible
             actor.SetUserTransform(self.transform)
             
             self.ringActors.append(actor)
@@ -323,40 +319,41 @@ class FrameWidget(ViewEventFilter):
                 return 'ring', i
         
         return None, -1
+        
     
-    def _brightenColor(self, color):
-        """Brighten a color by adding brightness and clamping to [0,1]."""
-        brightness = 0.3
-        return [min(1.0, c + brightness) for c in color]
+    def _clearHighlight(self):
+        if not self.highlightedActor:
+            return False
+        prop = self.highlightedActor.GetProperty()
+        prop.SetAmbient(0.0)
+        prop.SetDiffuse(1.0)
+        self.highlightedActor = None
+        return True
+    
+    def _applyHighlightToActor(self, actor):
+        if actor is None:
+            return False
+        prop = actor.GetProperty()
+        prop.SetAmbientColor(prop.GetColor())
+        prop.SetAmbient(0.8)
+        prop.SetDiffuse(0.3)
+        self.highlightedActor = actor
+        return True
     
     def _updateHighlight(self, pickedType, pickedId):
-        """Update highlight on hover - brightens original colors."""
-        # Remove previous highlight - restore original color
-        if self.highlightedActor:
-            prop = self.highlightedActor.GetProperty()
-            if hasattr(prop, '_originalColor'):
-                prop.SetColor(prop._originalColor)
-            self.highlightedActor = None
+        """Update highlight on hover by applying a custom style."""
+        highlightChanged = self._clearHighlight()
         
-        # Set new highlight - brighten original color
+        actor = None
         if pickedType == 'axis' and 0 <= pickedId < len(self.axisActors):
             actor = self.axisActors[pickedId]
-            prop = actor.GetProperty()
-            if not hasattr(prop, '_originalColor'):
-                prop._originalColor = list(prop.GetColor())
-            # Brighten the original color
-            brightColor = self._brightenColor(prop._originalColor)
-            prop.SetColor(brightColor)
-            self.highlightedActor = actor
         elif pickedType == 'ring' and 0 <= pickedId < len(self.ringActors):
             actor = self.ringActors[pickedId]
-            prop = actor.GetProperty()
-            if not hasattr(prop, '_originalColor'):
-                prop._originalColor = list(prop.GetColor())
-            # Brighten the original color
-            brightColor = self._brightenColor(prop._originalColor)
-            prop.SetColor(brightColor)
-            self.highlightedActor = actor
+        
+        if actor:
+            highlightChanged = self._applyHighlightToActor(actor) or highlightChanged
+        
+        return highlightChanged
     
     def _getWorldRay(self, x, y):
         """Get world ray from screen coordinates."""
@@ -426,9 +423,6 @@ class FrameWidget(ViewEventFilter):
         # Translate the transform
         self.transform.Translate(worldDelta[0], worldDelta[1], worldDelta[2])
         self.transform.Modified()
-        # Call callback if provided
-        if self.onTransformModified:
-            self.onTransformModified(self.transform, None)
     
     def _rotateAboutAxis(self, axisId, deltaX, deltaY):
         """Rotate the frame about an axis (matching C++ implementation)."""
@@ -496,11 +490,7 @@ class FrameWidget(ViewEventFilter):
         self.transform.Translate(-centerOfRotation[0], -centerOfRotation[1], -centerOfRotation[2])
         self.transform.RotateWXYZ(theta, rotateAxisWorld[0], rotateAxisWorld[1], rotateAxisWorld[2])
         self.transform.Translate(centerOfRotation[0], centerOfRotation[1], centerOfRotation[2])
-        self.transform.PreMultiply()
         self.transform.Modified()
-        # Call callback if provided
-        if self.onTransformModified:
-            self.onTransformModified(self.transform, None)
     
     def _translateInPlane(self, ringId, deltaX, deltaY):
         """Translate the frame in a plane using proper 3D ray-plane intersection."""
@@ -550,9 +540,6 @@ class FrameWidget(ViewEventFilter):
         # Translate the transform
         self.transform.Translate(worldDelta[0], worldDelta[1], worldDelta[2])
         self.transform.Modified()
-        # Call callback if provided
-        if self.onTransformModified:
-            self.onTransformModified(self.transform, None)
     
     def _rotateAboutPlaneNormal(self, ringId, deltaX, deltaY):
         """Rotate the frame about a plane normal."""
@@ -576,11 +563,7 @@ class FrameWidget(ViewEventFilter):
         # Apply rotation
         self.transform.PostMultiply()
         self.transform.Concatenate(rotation)
-        self.transform.PreMultiply()
         self.transform.Modified()
-        # Call callback if provided
-        if self.onTransformModified:
-            self.onTransformModified(self.transform, None)
     
     def onMouseMove(self, event):
         """Handle mouse move for hover highlighting and interaction."""
@@ -602,44 +585,15 @@ class FrameWidget(ViewEventFilter):
             # Frame widget is not interacting - check if camera is, and if so, don't consume
             camera_interacting = False
             
-            # Check Qt event buttons directly
-            from qtpy.QtCore import Qt
-            # buttons_pressed = event.buttons()
-            # if buttons_pressed & (Qt.LeftButton | Qt.RightButton | Qt.MiddleButton):
-            #     # Check if it's our terrain interactor style
-            #     interactor = self.view.renderWindow().GetInteractor()
-            #     if interactor:
-            #         style = interactor.GetInteractorStyle()
-            #         from director.terrain_interactor import TerrainInteractorStyle
-            #         if isinstance(style, TerrainInteractorStyle):
-            #             # Verify buttons match terrain interactor's internal state
-            #             if (buttons_pressed & Qt.LeftButton and 
-            #                 hasattr(style, '_left_button_pressed') and 
-            #                 style._left_button_pressed):
-            #                 camera_interacting = True
-            #             elif (buttons_pressed & Qt.RightButton and 
-            #                   hasattr(style, '_right_button_pressed') and 
-            #                   style._right_button_pressed):
-            #                 camera_interacting = True
-            #             else:
-            #                 # Buttons are pressed but not in terrain interactor state
-            #                 # Assume camera might be interacting anyway
-            #                 camera_interacting = True
-            
-            # # If camera is actively interacting and frame widget is not, don't consume events
-            # if camera_interacting:
-            #     self.lastEventPosition = [pos[0], pos[1]]
-            #     return False  # Don't consume - let camera interactor handle it
         
         consumed = False
         
         if self.interactionState == self.OUTSIDE:
             # Hover highlighting
             pickedType, pickedId = self._pickActor(pos[0], pos[1])
-            if pickedType is not None:
-                self._updateHighlight(pickedType, pickedId)
+            if self._updateHighlight(pickedType, pickedId):
                 self.view.render()
-                consumed = False #True  # Consume if hovering over widget
+            consumed = False #True  # Consume if hovering over widget
         elif self.interactionState == self.TRANSLATING:
             # Translating along axis
             if 0 <= self.interactingAxis < 3:
@@ -731,35 +685,11 @@ class FrameWidget(ViewEventFilter):
         return consumed
     
     def setEnabled(self, enabled):
-        """Enable or disable the widget."""
-        visibility = 1 if enabled else 0
-        renderer = self.view.renderer()
-        
-        # Ensure all actors are in the renderer
+        """Enable or disable the widget."""  
+        self._enabled = enabled      
         for actor in self.axisActors + self.ringActors:
-            # Check if actor is already in renderer by getting all actors
-            actors = renderer.GetActors()
-            actors.InitTraversal()
-            found = False
-            while True:
-                a = actors.GetNextItem()
-                if a is None:
-                    break
-                if a == actor:
-                    found = True
-                    break
-            
-            if not found:
-                renderer.AddActor(actor)
-            
-            # Set visibility
-            actor.SetVisibility(visibility)
-        
-        # Force immediate render to ensure visibility changes are shown
-        if hasattr(self.view, 'forceRender'):
-            self.view.forceRender()
-        else:
-            self.view.render()
+            actor.SetVisibility(enabled)
+        self.view.render()
     
     def setScale(self, scale):
         """Update the scale and rebuild actors."""
@@ -767,10 +697,7 @@ class FrameWidget(ViewEventFilter):
             return
         
         self.scale = scale
-        
-        # Get current visibility state before rebuilding
-        was_enabled = self._enabled
-        
+
         # Remove old actors from renderer
         renderer = self.view.renderer()
         for actor in self.axisActors + self.ringActors:
@@ -784,26 +711,19 @@ class FrameWidget(ViewEventFilter):
         self._buildActors()
         
         # Re-add actors to renderer
-        initial_visibility = 1 if was_enabled else 0
-        for actor in self.axisActors:
+        for actor in self.axisActors + self.ringActors:
+            actor.SetVisibility(self._enabled)
             renderer.AddActor(actor)
-            actor.SetVisibility(initial_visibility)
-        for actor in self.ringActors:
-            renderer.AddActor(actor)
-            actor.SetVisibility(initial_visibility)
         
         # Update picker
         self.picker = vtk.vtkCellPicker()
-        self.picker.SetTolerance(0.005)
+        self.picker.SetTolerance(0.001)
         self.picker.PickFromListOn()
         for actor in self.axisActors + self.ringActors:
             self.picker.AddPickList(actor)
         
         # Render
-        if hasattr(self.view, 'forceRender'):
-            self.view.forceRender()
-        else:
-            self.view.render()
+        self.view.render()
     
     def cleanup(self):
         """Clean up and remove actors."""
