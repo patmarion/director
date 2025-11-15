@@ -429,7 +429,8 @@ class MainWindowAppFactory(object):
 
         return FieldContainer(
             # viewBackgroundLightHandler=viewBackgroundLightHandler,
-            terrainToggle=terrainToggle
+            terrainToggle=terrainToggle,
+            mainToolbar=toolBar
         )
 
     def initGlobalModules(self, fields):
