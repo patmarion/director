@@ -6,7 +6,7 @@ from qtpy.QtWidgets import QPushButton
 from director import mainwindowapp
 from director import visualization as vis
 from director import vtkAll as vtk
-from director.frame_properties import FrameProperties
+from director.frame_properties import FrameProperties, FrameSync
 
 
 def main():
@@ -20,10 +20,21 @@ def main():
     undo_stack = getattr(fields, "undoStack", None)
     obj.frameProperties = FrameProperties(obj, undo_stack=undo_stack)
 
-    def on_frame_modified(frame):
-        pass
+    sync = FrameSync()
+    sync.addFrame(obj)
 
-    obj.connectFrameModified(on_frame_modified)
+    def add_frame_sync():
+        t2 = vtk.vtkTransform()
+        t2.Translate(0.3, 0.3, 0.0)
+        t2.RotateY(20)
+        child = vis.showFrame(t2, "synced frame", parent='data')
+        child.properties.edit = True
+        undo_stack = getattr(fields, "undoStack", None)
+        child.frameProperties = FrameProperties(child, undo_stack=undo_stack)
+        sync.addFrame(child)
+        return child
+
+    add_frame_sync()
 
     def reset_frame():
         obj.copyFrame(vtk.vtkTransform())

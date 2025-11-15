@@ -137,8 +137,8 @@ class MainWindowApp(object):
             dock.setWindowTitle(widget.objectName())
         dock.setObjectName(dock.windowTitle() + ' Dock')
         self.mainWindow.addDockWidget(dockArea, dock)
-        dock.setVisible(visible)
         self.addWidgetToViewMenu(dock)
+        dock.setVisible(visible)
         return dock
 
 
@@ -436,26 +436,25 @@ class MainWindowAppFactory(object):
 
     def initUndoRedo(self, fields):
 
-      undoStack = QtGui.QUndoStack()
-      undoView = QtWidgets.QUndoView(undoStack)
-      undoView.setEmptyLabel('Start')
-      undoView.setWindowTitle('History')
-      undoDock = fields.app.addWidgetToDock(undoView, QtCore.Qt.LeftDockWidgetArea, visible=False)
+        undoStack = QtGui.QUndoStack()
+        undoView = QtWidgets.QUndoView(undoStack)
+        undoView.setEmptyLabel('Start')
+        undoView.setWindowTitle('History')
+        undoDock = fields.app.addWidgetToDock(undoView, QtCore.Qt.LeftDockWidgetArea, visible=False)
+        undoAction = undoStack.createUndoAction(undoStack)
+        redoAction = undoStack.createRedoAction(undoStack)
+        undoAction.setShortcut(QtGui.QKeySequence('Ctrl+Z'))
+        redoAction.setShortcut(QtGui.QKeySequence('Ctrl+Shift+Z'))
 
-      undoAction = undoStack.createUndoAction(undoStack)
-      redoAction = undoStack.createRedoAction(undoStack)
-      undoAction.setShortcut(QtGui.QKeySequence('Ctrl+Z'))
-      redoAction.setShortcut(QtGui.QKeySequence('Ctrl+Shift+Z'))
+        fields.app.editMenu.addAction(undoAction)
+        fields.app.editMenu.addAction(redoAction)
 
-      fields.app.editMenu.addAction(undoAction)
-      fields.app.editMenu.addAction(redoAction)
-
-      return FieldContainer(
-        undoDock=undoDock,
-        undoStack=undoStack,
-        undoView=undoView,
-        undoAction=undoAction,
-        redoAction=redoAction
+        return FieldContainer(
+            undoDock=undoDock,
+            undoStack=undoStack,
+            undoView=undoView,
+            undoAction=undoAction,
+            redoAction=redoAction
         )
 
     def initGlobalModules(self, fields):

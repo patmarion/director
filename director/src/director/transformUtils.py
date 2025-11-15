@@ -161,7 +161,7 @@ def transformFromPose(position, quaternion):
 def poseFromTransform(transform):
     """Returns position, quaternion from transform."""
     mat = getNumpyFromTransform(transform)
-    return np.array(mat[:3,3]), transformations.quaternion_from_matrix(mat, isprecise=True)
+    return np.array(mat[:3,3]), transformations.quaternion_from_matrix(mat, isprecise=False)
 
 
 def frameFromPositionAndRPY(position, rpy):
