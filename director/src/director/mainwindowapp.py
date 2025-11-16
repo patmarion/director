@@ -216,11 +216,32 @@ class MainWindowAppFactory(object):
             'ProfilerTool' : ['MainWindow'],
             'ScreenRecorder' : ['MainWindow', 'View'],
             'UndoRedo' : ['MainWindow'],
-            'WaitCursor' : ['MainWindow']}
+            'WaitCursor' : ['MainWindow'],
+            'ApplicationSettings': ['Grid', 'ViewOptions', 'MainWindow'],
+        }
 
         disabledComponents = []
 
         return components, disabledComponents
+
+    def initApplicationSettings(self, fields):
+        from director.settings_dialog import SettingsDialog
+
+        dialog = SettingsDialog("Application Settings", parent=fields.mainWindow)
+        dialog.add_settings("Grid", fields.grid.properties)
+        dialog.add_settings("View", fields.viewOptions.properties)
+        dialog.restore_all()
+        dialog.resize(800, 600)
+
+        settings_action = fields.app.editMenu.addAction("Edit application settings...")
+
+        def show_dialog():
+            dialog.show()
+            dialog.raise_()
+
+        settings_action.triggered.connect(show_dialog)
+
+        return FieldContainer(settingsDialog=dialog, settingsAction=settings_action)
 
     def initView(self, fields):
         from director.vtk_widget import VTKWidget

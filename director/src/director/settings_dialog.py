@@ -45,10 +45,12 @@ class SettingsDialog(QtWidgets.QDialog):
             raise ValueError(f"Settings '{name}' already added.")
 
         default_state = property_set.get_state_dict()
+        change_id = property_set.connectPropertyChanged(self._on_any_property_changed)
         self._entries[name] = {
             "properties": property_set,
             "default_state": copy.deepcopy(default_state),
             "last_saved": copy.deepcopy(default_state),
+            "change_id": change_id,
         }
 
         item = QtWidgets.QListWidgetItem(name)
@@ -59,29 +61,35 @@ class SettingsDialog(QtWidgets.QDialog):
         self._apply_stored_selection()
 
     def apply_current_settings(self):
-        entry = self._current_entry()
-        if not entry:
+        if not self._entries:
             return
-        name = self._current_name()
-        save_properties_to_settings(
-            entry["properties"],
-            self._storage_key(name),
-            settings=self._qsettings,
-        )
-        entry["last_saved"] = entry["properties"].get_state_dict()
-        self._store_selected_name(name)
+
+        for name, entry in self._entries.items():
+            save_properties_to_settings(
+                entry["properties"],
+                self._storage_key(name),
+                settings=self._qsettings,
+            )
+            entry["last_saved"] = entry["properties"].get_state_dict()
+
+        self._store_selected_name(self._current_name())
         self._update_button_states()
 
     def reset_current_settings(self):
-        entry = self._current_entry()
-        if not entry:
+        if self.sender() is self.reset_defaults_button:
+            entry = self._current_entry()
+            if not entry:
+                return
+            entry["properties"].restore_from_state_dict(
+                copy.deepcopy(entry["default_state"]), merge=True
+            )
+            self._update_button_states()
             return
 
-        if self.sender() is self.reset_defaults_button:
-            state_copy = copy.deepcopy(entry["default_state"])
-        else:
-            state_copy = copy.deepcopy(entry["last_saved"])
-        entry["properties"].restore_from_state_dict(state_copy, merge=True)
+        for entry in self._entries.values():
+            entry["properties"].restore_from_state_dict(
+                copy.deepcopy(entry["last_saved"]), merge=True
+            )
         self._update_button_states()
 
     def restore_all(self):
@@ -122,7 +130,7 @@ class SettingsDialog(QtWidgets.QDialog):
         right_layout.addWidget(self.properties_panel, 1)
 
         button_row = QtWidgets.QHBoxLayout()
-        self.reset_defaults_button = QtWidgets.QPushButton("Reset to Defaults")
+        self.reset_defaults_button = QtWidgets.QPushButton("Restore Defaults")
         self.reset_defaults_button.clicked.connect(self.reset_current_settings)
         button_row.addWidget(self.reset_defaults_button)
         button_row.addStretch()
@@ -144,7 +152,6 @@ class SettingsDialog(QtWidgets.QDialog):
             return
         entry = self._entries[name]
         self.properties_panel.connectProperties(entry["properties"])
-        self._install_property_changed_hook(entry["properties"])
         self._store_selected_name(name)
         self._update_button_states()
 
@@ -165,21 +172,14 @@ class SettingsDialog(QtWidgets.QDialog):
     # State helpers
     # ------------------------------------------------------------------
 
-    def _install_property_changed_hook(self, property_set):
-        if hasattr(self, "_property_changed_hook_id"):
-            property_set.disconnectPropertyChanged(self._property_changed_hook_id)
-        self._property_changed_hook_id = property_set.connectPropertyChanged(
-            lambda *_: self._update_button_states()
-        )
+    def _entry_has_changes(self, entry: Dict[str, object]) -> bool:
+        return entry["properties"].get_state_dict() != entry["last_saved"]
 
-    def _has_changes(self, name: str) -> bool:
-        entry = self._entries[name]
-        current_state = entry["properties"].get_state_dict()
-        return current_state != entry["last_saved"]
+    def _any_changes(self) -> bool:
+        return any(self._entry_has_changes(entry) for entry in self._entries.values())
 
     def _update_button_states(self):
-        name = self._current_name()
-        has_changes = bool(name and self._has_changes(name))
+        has_changes = self._any_changes()
 
         def set_button_style(button: QtWidgets.QPushButton, enabled: bool, color: QtGui.QColor):
             button.setEnabled(enabled)
@@ -194,6 +194,9 @@ class SettingsDialog(QtWidgets.QDialog):
 
         set_button_style(self.reset_button, has_changes, QtGui.QColor("#1e88e5"))  # blue
         set_button_style(self.apply_button, has_changes, QtGui.QColor("#2e7d32"))  # green
+
+    def _on_any_property_changed(self, *_):
+        self._update_button_states()
 
     def _store_selected_name(self, name: Optional[str] = None):
         current_name = name or self._current_name()

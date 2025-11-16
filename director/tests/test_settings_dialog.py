@@ -61,6 +61,10 @@ def test_settings_dialog_save_restore(tmp_path, interactive=False):
     # Test reset for second entry
     dialog.list_widget.setCurrentRow(1)
     view.setProperty("Alpha", 0.9)
+    dialog.list_widget.setCurrentRow(0)
+    assert dialog.apply_button.isEnabled()
+    dialog.reset_button.click()
+    dialog.list_widget.setCurrentRow(1)
     dialog.reset_defaults_button.click()
     assert view.getProperty("Alpha") == 0.5
 
@@ -81,6 +85,13 @@ def test_settings_dialog_save_restore(tmp_path, interactive=False):
     assert stored is not None
     restored_state = json.loads(str(stored))
     assert restored_state["properties"]["Visible"] is False
+
+    # After applying, buttons should deactivate even if selection changes
+    dialog.list_widget.setCurrentRow(0)
+    camera.setProperty("Visible", True)
+    dialog.list_widget.setCurrentRow(1)
+    dialog.apply_button.click()
+    assert not dialog.apply_button.isEnabled()
 
     if interactive:
         dialog.show()

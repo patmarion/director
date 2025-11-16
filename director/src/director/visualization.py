@@ -1256,7 +1256,7 @@ class GridItem(PolyDataItem):
         self.addProperty('Major Tick Resolution', 10, 
                        attributes=om.PropertyAttributes(minimum=1, maximum=100, singleStep=1))
         self.addProperty('Minor Tick Resolution', 2, 
-                       attributes=om.PropertyAttributes(minimum=1, maximum=100, singleStep=1))
+                       attributes=om.PropertyAttributes(minimum=1, maximum=20, singleStep=1))
         self.addProperty('Major Tick Rings', True)
         self.addProperty('Minor Tick Rings', False)
         
@@ -1402,6 +1402,10 @@ class ViewOptionsItem(om.ObjectModelItem):
         om.ObjectModelItem._onPropertyChanged(self, propertySet, propertyName)
 
         if propertyName in ('Gradient background', 'Background color', 'Background color 2'):
+            if propertyName == 'Gradient background':
+                gradient_enabled = self.getProperty(propertyName)
+                self.setPropertyAttribute('Background color 2', 'hidden', not gradient_enabled)
+
             colors = [self.getProperty('Background color'), self.getProperty('Background color 2')]
 
             if not self.getProperty('Gradient background'):
