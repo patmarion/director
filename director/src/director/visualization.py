@@ -1245,42 +1245,122 @@ class GridItem(PolyDataItem):
     """Grid item for displaying a reference grid in the 3D view."""
     
     def __init__(self, name, view=None):
-        PolyDataItem.__init__(self, name, polyData=vtk.vtkPolyData(), view=view)
-        self.actor.PickableOff()  # Grid shouldn't be pickable
-        self.actor.GetProperty().LightingOff()  # No lighting for grid
-        self.textActors = []  # Text actors for grid labels (simplified for now)
-        
-        # Grid properties
-        self.addProperty('Grid Half Width', 10.0, 
-                       attributes=om.PropertyAttributes(minimum=0.01, maximum=1e6, singleStep=1, decimals=2))
-        self.addProperty('Major Tick Resolution', 10, 
-                       attributes=om.PropertyAttributes(minimum=1, maximum=100, singleStep=1))
-        self.addProperty('Minor Tick Resolution', 2, 
-                       attributes=om.PropertyAttributes(minimum=1, maximum=20, singleStep=1))
+        PolyDataItem.__init__(self, name, polyData=vtk.vtkPolyData(), view=None)
+        self.actor.PickableOff()
+        self.actor.GetProperty().LightingOff()
+        self.textActors = []
+        self.addProperty('Grid Half Width', 100.0,
+                         attributes=om.PropertyAttributes(minimum=0.01, maximum=1e6, singleStep=10, decimals=2))
+        self.addProperty('Major Tick Resolution', 10,
+                         attributes=om.PropertyAttributes(minimum=1, maximum=100, singleStep=1))
+        self.addProperty('Minor Tick Resolution', 2,
+                         attributes=om.PropertyAttributes(minimum=1, maximum=100, singleStep=1))
         self.addProperty('Major Tick Rings', True)
         self.addProperty('Minor Tick Rings', False)
-        
+        self.addProperty('Show Text', False)
+        self.addProperty('Text Angle', 0,
+                         attributes=om.PropertyAttributes(minimum=-999, maximum=999, singleStep=5))
+        self.addProperty('Text Size', 10, attributes=om.PropertyAttributes(minimum=4, maximum=100, singleStep=1))
+        self.addProperty('Text Color', [1.0, 1.0, 1.0])
+        self.addProperty('Text Alpha', 1.0,
+                         attributes=om.PropertyAttributes(decimals=2, minimum=0, maximum=1.0, singleStep=0.1))
         self._updateGrid()
         self.setProperty('Surface Mode', 'Wireframe')
-        self.setProperty('Color', [0.5, 0.5, 0.5])  # Gray grid
+        # Add to view after initialization is complete
+        if view is not None:
+            self.addToView(view)
     
     def _onPropertyChanged(self, propertySet, propertyName):
         PolyDataItem._onPropertyChanged(self, propertySet, propertyName)
         if propertyName in ('Grid Half Width', 'Major Tick Resolution',
                             'Minor Tick Resolution', 'Major Tick Rings', 'Minor Tick Rings'):
             self._updateGrid()
+        if propertyName in ('Visible', 'Show Text', 'Text Color', 'Text Alpha', 'Text Size', 'Text Angle'):
+            self._updateTextActorProperties()
     
     def _updateGrid(self):
-        """Update the grid geometry based on current properties."""
         gridHalfWidth = self.getProperty('Grid Half Width')
         majorTickSize = gridHalfWidth / self.getProperty('Major Tick Resolution')
         minorTickSize = majorTickSize / self.getProperty('Minor Tick Resolution')
         majorTickRings = self.getProperty('Major Tick Rings')
         minorTickRings = self.getProperty('Minor Tick Rings')
-        
-        polyData = makeGridPolyData(gridHalfWidth, majorTickSize, minorTickSize,
-                                   majorTickRings, minorTickRings)
+        polyData = makeGridPolyData(gridHalfWidth,
+                      majorTickSize, minorTickSize,
+                      majorTickRings, minorTickRings)
         self.setPolyData(polyData)
+        self._buildTextActors()
+
+    def _updateTextActorProperties(self):
+        self._repositionTextActors()
+
+        visible = self.getProperty('Visible') and self.getProperty('Show Text')
+        textAlpha = self.getProperty('Text Alpha')
+        color = self.getProperty('Text Color')
+        textSize = self.getProperty('Text Size')
+
+        for actor in self.textActors:
+            prop = actor.GetTextProperty()
+            actor.SetVisibility(visible)
+            prop.SetColor(color)
+            prop.SetFontSize(textSize)
+            prop.SetOpacity(textAlpha)
+
+    def addToView(self, view):
+        if view in self.views:
+            return
+        PolyDataItem.addToView(self, view)
+        self._addTextActorsToView(view)
+
+    def _addTextActorsToView(self, view):
+        for actor in self.textActors:
+            view.renderer().AddActor(actor)
+
+    def _removeTextActorsFromView(self, view):
+        for actor in self.textActors:
+            view.renderer().RemoveActor(actor)
+
+    def _clearTextActors(self):
+        for view in self.views:
+          self._removeTextActorsFromView(view)
+        self.textActors = []
+
+    def _repositionTextActors(self):
+        if not self.textActors:
+            return
+
+        angle = np.radians(self.getProperty('Text Angle'))
+        sinAngle = np.sin(angle)
+        cosAngle = np.cos(angle)
+
+        gridHalfWidth = self.getProperty('Grid Half Width')
+        majorTickSize = gridHalfWidth / self.getProperty('Major Tick Resolution')
+        transform = self.actor.GetUserTransform() or vtk.vtkTransform()
+        for i, actor in enumerate(self.textActors):
+            distance = i * majorTickSize
+            actor = self.textActors[i]
+            prop = actor.GetTextProperty()
+            coord = actor.GetPositionCoordinate()
+            coord.SetCoordinateSystemToWorld()
+            p = transform.TransformPoint((distance*cosAngle, distance*sinAngle, 0.0))
+            coord.SetValue(p)
+
+    def _buildTextActors(self):
+        self._clearTextActors()
+        gridHalfWidth = self.getProperty('Grid Half Width')
+        majorTickSize = gridHalfWidth / self.getProperty('Major Tick Resolution')
+        suffix = 'm'
+        for i in range(int(gridHalfWidth / majorTickSize)):
+            ringDistance = i * majorTickSize
+            actor = vtk.vtkTextActor()
+            prop = actor.GetTextProperty()
+            actor.SetInput('{:.3f}'.format(ringDistance).rstrip('0').rstrip('.') + suffix)
+            actor.SetPickable(False)
+            self.textActors.append(actor)
+
+        self._updateTextActorProperties()
+
+        for view in self.views:
+            self._addTextActorsToView(view)
 
 
 def showGrid(view, cellSize=0.5, numberOfCells=25, name='grid', parent='scene', 
@@ -1378,6 +1458,147 @@ def enableEyeDomeLighting(view):
 def disableEyeDomeLighting(view):
     """Disable eye dome lighting (EDL) shading for the view."""
     view.renderer().SetPass(None)
+
+
+class TextItem(om.ObjectModelItem):
+
+    def __init__(self, name, text='', view=None):
+        om.ObjectModelItem.__init__(self, name)
+
+        self.views = []
+        self.actor = vtk.vtkTextActor()
+        prop = self.actor.GetTextProperty()
+        prop.SetFontSize(18)
+        self.actor.SetPosition(10,10)
+        self.actor.SetInput(text)
+
+        self.addProperty('Visible', True)
+        self.addProperty('Text', text)
+        self.addProperty('Coordinates', 0, attributes=om.PropertyAttributes(enumNames=['Screen', 'World']))
+        self.addProperty('Position', [10, 10], attributes=om.PropertyAttributes(minimum=0, maximum=3000, singleStep=1))
+        self.addProperty('World Position', [0.0, 0.0, 0.0],
+                         attributes=om.PropertyAttributes(decimals=3, minimum=-1e6, maximum=1e6, singleStep=0.1, hidden=True))
+
+        self.addProperty('Font Size', 18, attributes=om.PropertyAttributes(minimum=6, maximum=128, singleStep=1))
+        self.addProperty('Bold', False)
+        self.addProperty('Italic', False)
+        self.addProperty('Color', [1.0, 1.0, 1.0])
+        self.addProperty('Background Color', [0.0, 0.0, 0.0])
+        self.addProperty('Alpha', 1.0, attributes=om.PropertyAttributes(decimals=2, minimum=0, maximum=1.0, singleStep=0.05))
+        self.addProperty('Background Alpha', 0.0, attributes=om.PropertyAttributes(decimals=2, minimum=0, maximum=1.0, singleStep=0.05))
+
+        if view:
+            self.addToView(view)
+
+
+    def addToView(self, view):
+        if view in self.views:
+            return
+
+        self.views.append(view)
+        view.renderer().AddActor(self.actor)
+        view.render()
+
+    def _renderAllViews(self):
+        for view in self.views:
+            view.render()
+
+    def onRemoveFromObjectModel(self):
+        om.ObjectModelItem.onRemoveFromObjectModel(self)
+        self.removeFromAllViews()
+
+    def removeFromAllViews(self):
+        for view in list(self.views):
+            self.removeFromView(view)
+
+    def removeFromView(self, view):
+        assert view in self.views
+        self.views.remove(view)
+        view.renderer().RemoveActor(self.actor)
+        view.render()
+
+    def _onPropertyChanged(self, propertySet, propertyName):
+
+        om.ObjectModelItem._onPropertyChanged(self, propertySet, propertyName)
+
+        if propertyName == 'Visible':
+            self.actor.SetVisibility(self.getProperty(propertyName))
+            self._renderAllViews()
+        elif propertyName == 'Text':
+            view = app.getCurrentRenderView()
+            self.actor.SetInput(self.getProperty(propertyName))
+        elif propertyName == 'Position':
+            pos = self.getProperty(propertyName)
+            self.actor.SetPosition(pos[0], pos[1])
+        elif propertyName == 'Font Size':
+            self.actor.GetTextProperty().SetFontSize(self.getProperty(propertyName))
+        elif propertyName == 'Bold':
+            self.actor.GetTextProperty().SetBold(self.getProperty(propertyName))
+        elif propertyName == 'Italic':
+            self.actor.GetTextProperty().SetItalic(self.getProperty(propertyName))
+        elif propertyName == 'Color':
+            color = self.getProperty(propertyName)
+            self.actor.GetTextProperty().SetColor(color)
+        elif propertyName == 'Alpha':
+            self.actor.GetTextProperty().SetOpacity(self.getProperty(propertyName))
+        elif propertyName == 'Background Color':
+            color = self.getProperty(propertyName)
+            self.actor.GetTextProperty().SetBackgroundColor(color)
+        elif propertyName == 'Background Alpha':
+            self.actor.GetTextProperty().SetBackgroundOpacity(self.getProperty(propertyName))
+        elif propertyName == 'Coordinates':
+            coord_system = self.getPropertyEnumValue('Coordinates')
+            pos_coord = self.actor.GetPositionCoordinate()
+            if coord_system == 'World':
+                world_pos = self.getProperty('World Position')
+                pos_coord.SetCoordinateSystemToWorld()
+                pos_coord.SetValue(world_pos[0], world_pos[1], world_pos[2])
+                self.setPropertyAttribute('Position', 'hidden', True)
+                self.setPropertyAttribute('World Position', 'hidden', False)
+            else:
+                screen_pos = self.getProperty('Position')
+                pos_coord.SetCoordinateSystemToDisplay()
+                pos_coord.SetValue(screen_pos[0], screen_pos[1])
+                self.setPropertyAttribute('Position', 'hidden', False)
+                self.setPropertyAttribute('World Position', 'hidden', True)
+        elif propertyName == 'World Position':
+            if self.getPropertyEnumValue('Coordinates') == 'World':
+                world_pos = self.getProperty(propertyName)
+                pos_coord = self.actor.GetPositionCoordinate()
+                pos_coord.SetCoordinateSystemToWorld()
+                pos_coord.SetValue(world_pos[0], world_pos[1], world_pos[2])
+        elif propertyName == 'Position':
+            if self.getPropertyEnumValue('Coordinates') == 'Screen':
+                pos = self.getProperty(propertyName)
+                pos_coord = self.actor.GetPositionCoordinate()
+                pos_coord.SetCoordinateSystemToDisplay()
+                pos_coord.SetValue(pos[0], pos[1])
+
+
+        if self.getProperty('Visible'):
+            self._renderAllViews()
+
+
+def updateText(text, name, **kwargs):
+    obj = om.findObjectByName(name, parent=getParentObj(kwargs.get('parent')))
+    if obj is None:
+        obj or showText(text, name, **kwargs)
+    else:
+        obj.setProperty('Text', text)
+    return obj
+
+
+def showText(text, name, fontSize=18, position=(10, 10), parent=None, view=None):
+
+    view = view or app.getCurrentRenderView()
+    assert view
+
+    item = TextItem(name, text, view=view)
+    item.setProperty('Font Size', fontSize)
+    item.setProperty('Position', list(position))
+
+    om.addToObjectModel(item, getParentObj(parent))
+    return item
 
 
 class ViewOptionsItem(om.ObjectModelItem):

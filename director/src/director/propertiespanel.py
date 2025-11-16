@@ -498,7 +498,9 @@ class ArrayEditor(PropertyEditor):
         # Instead, it manages child items in the tree
         self.treeItem = treeItem
         self.childEditors = {}
+        self.summaryWidget = None
         self._updateArrayChildren()
+        self._ensureSummaryWidget()
         # Update main row text and set expansion state
         self._updateMainRowText()
         if expanded_by_default:
@@ -546,6 +548,16 @@ class ArrayEditor(PropertyEditor):
             child_name = f"[{i}]"
             if child_name in self.childEditors:
                 self.childEditors[child_name].updateFromPropertySet()
+
+    def _ensureSummaryWidget(self):
+        if self.summaryWidget or self.treeItem.treeWidget() is None:
+            return
+        line_edit = QLineEdit(self.treeItem.treeWidget())
+        line_edit.setReadOnly(True)
+        line_edit.setFrame(False)
+        line_edit.setFocusPolicy(Qt.ClickFocus)
+        self.treeItem.treeWidget().setItemWidget(self.treeItem, 1, line_edit)
+        self.summaryWidget = line_edit
     
     def _createElementEditor(self, index, value):
         """Create an editor widget for an array element."""
@@ -570,10 +582,28 @@ class ArrayEditor(PropertyEditor):
         """Update the main row text with array representation."""
         value = self.getValue()
         if isinstance(value, (list, tuple)):
-            # Create string representation like "[1, 2, 3]"
-            str_values = [str(v) for v in value]
+            str_values = [self._format_component(v) for v in value]
             array_str = "[" + ", ".join(str_values) + "]"
-            self.treeItem.setText(1, array_str)
+            self._ensureSummaryWidget()
+            if self.summaryWidget:
+                self.summaryWidget.setText(array_str)
+            else:
+                self.treeItem.setText(1, array_str)
+
+    @staticmethod
+    def _format_component(value):
+        if isinstance(value, float):
+            formatted = f"{value:.6f}".rstrip('0').rstrip('.')
+            if formatted in ('', '-', '-0'):
+                formatted = '0'
+            if formatted == '-':
+                formatted = '0'
+            if formatted == '-0':
+                formatted = '0'
+            if formatted.startswith('-0.') and formatted != '-0':
+                formatted = '-' + formatted[1:]
+            return formatted
+        return str(value)
     
     def updateFromPropertySet(self):
         """Update array editor when property changes."""
@@ -600,15 +630,23 @@ class ArrayElementEditor(PropertyEditor):
             layout.addWidget(self.editor)
         elif isinstance(initial_value, int):
             self.editor = QSpinBox(self)
-            self.editor.setMinimum(-2147483647)
-            self.editor.setMaximum(2147483647)
+            attributes = propertySet._attributes.get(propertyName)
+            if attributes:
+                self.editor.setMinimum(int(attributes.minimum))
+                self.editor.setMaximum(int(attributes.maximum))
+                self.editor.setSingleStep(int(attributes.singleStep))
             self.editor.valueChanged.connect(self._onChanged)
             layout.addWidget(self.editor)
         elif isinstance(initial_value, float):
             self.editor = QDoubleSpinBox(self)
-            self.editor.setMinimum(-1e9)
-            self.editor.setMaximum(1e9)
-            self.editor.setDecimals(5)
+            attributes = propertySet._attributes.get(propertyName)
+            if attributes:
+                self.editor.setMinimum(float(attributes.minimum))
+                self.editor.setMaximum(float(attributes.maximum))
+                self.editor.setSingleStep(float(attributes.singleStep))
+                self.editor.setDecimals(int(attributes.decimals))
+            else:
+                self.editor.setDecimals(5)
             self.editor.valueChanged.connect(self._onChanged)
             layout.addWidget(self.editor)
         elif isinstance(initial_value, str):
