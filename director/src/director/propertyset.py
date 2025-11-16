@@ -1,6 +1,9 @@
-from director import callbacks
 from collections import OrderedDict
+import copy
 import re
+from typing import Any, Dict
+
+from director import callbacks
 
 def cleanPropertyName(s):
     """
@@ -12,39 +15,46 @@ def cleanPropertyName(s):
 class PropertyAttributes(object):
     """Property attributes for controlling how properties are displayed/edited."""
 
+    _FIELDS = (
+        'decimals',
+        'minimum',
+        'maximum',
+        'singleStep',
+        'hidden',
+        'enumNames',
+        'readOnly',
+    )
+
     def __init__(self, **kwargs):
-        self.decimals = 5
-        self.minimum = -1e4
-        self.maximum = 1e4
-        self.singleStep = 1
-        self.hidden = False
-        self.enumNames = None
-        self.readOnly = False
-        
-        # Override with any provided kwargs
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-        
-        # Allow dict-like access for compatibility
-        self._dict = {
-            'decimals': self.decimals,
-            'minimum': self.minimum,
-            'maximum': self.maximum,
-            'singleStep': self.singleStep,
-            'hidden': self.hidden,
-            'enumNames': self.enumNames,
-            'readOnly': self.readOnly,
+        defaults = {
+            'decimals': 5,
+            'minimum': -1e4,
+            'maximum': 1e4,
+            'singleStep': 1,
+            'hidden': False,
+            'enumNames': None,
+            'readOnly': False,
         }
-    
+        defaults.update(kwargs)
+        for field in self._FIELDS:
+            setattr(self, field, defaults.get(field))
+
     def __getitem__(self, key):
         """Allow dict-like access."""
         return getattr(self, key, None)
-    
+
     def __setitem__(self, key, value):
         """Allow dict-like assignment."""
         setattr(self, key, value)
-        if key in self._dict:
-            self._dict[key] = value
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {field: copy.deepcopy(getattr(self, field)) for field in self._FIELDS}
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any] | None) -> "PropertyAttributes":
+        if not data:
+            return cls()
+        return cls(**data)
 
 
 def fromQColor(propertyName, propertyValue):
@@ -62,16 +72,6 @@ class PropertySet(object):
     PROPERTY_ADDED_SIGNAL = 'PROPERTY_ADDED_SIGNAL'
     PROPERTY_REMOVED_SIGNAL = 'PROPERTY_REMOVED_SIGNAL'
     PROPERTY_ATTRIBUTE_CHANGED_SIGNAL = 'PROPERTY_ATTRIBUTE_CHANGED_SIGNAL'
-
-    def __getstate__(self):
-        d = dict(_properties=self._properties, _attributes=self._attributes)
-        return d
-
-    def __setstate__(self, state):
-        self.__init__()
-        attrs = state['_attributes']
-        for propName, propValue in list(state['_properties'].items()):
-            self.addProperty(propName, propValue, attributes=attrs.get(propName))
 
     def __init__(self):
         self.callbacks = callbacks.CallbackRegistry([self.PROPERTY_CHANGED_SIGNAL,
@@ -132,9 +132,10 @@ class PropertySet(object):
         alternateName = cleanPropertyName(propertyName)
         if propertyName not in self._properties and alternateName in self._alternateNames:
             raise ValueError('Adding this property would conflict with a different existing property with alternate name {:s}'.format(alternateName))
-        propertyValue = fromQColor(propertyName, propertyValue)
+        attrs = self._coerce_attributes(attributes)
+        propertyValue = self._normalize_property_value(propertyName, propertyValue, existing_value=None, attributes=attrs)
         self._properties[propertyName] = propertyValue
-        self._attributes[propertyName] = attributes or PropertyAttributes()
+        self._attributes[propertyName] = attrs
         self._alternateNames[alternateName] = propertyName
         if index is not None:
             self.setPropertyIndex(propertyName, index)
@@ -151,13 +152,10 @@ class PropertySet(object):
 
     def setProperty(self, propertyName, propertyValue):
         previousValue = self._properties[propertyName]
-        propertyValue = fromQColor(propertyName, propertyValue)
+        attrs = self._attributes[propertyName]
+        propertyValue = self._normalize_property_value(propertyName, propertyValue, existing_value=previousValue, attributes=attrs)
         if propertyValue == previousValue:
           return
-
-        names = self.getPropertyAttribute(propertyName, 'enumNames')
-        if names and type(propertyValue) != int:
-            propertyValue = names.index(propertyValue)
 
         self._properties[propertyName] = propertyValue
         self.callbacks.process(self.PROPERTY_CHANGED_SIGNAL, self, propertyName)
@@ -213,3 +211,171 @@ class PropertySet(object):
             except AttributeError:
                 # _alternateNames doesn't exist yet (during __init__), just set normally
                 object.__setattr__(self, name, value)
+
+    # ------------------------------------------------------------------
+    # Serialization helpers
+    # ------------------------------------------------------------------
+
+    def get_state_dict(self) -> Dict[str, Any]:
+        """Return a JSON-serializable snapshot of properties and attributes."""
+        properties_copy = OrderedDict()
+        for name, value in self._properties.items():
+            properties_copy[name] = copy.deepcopy(value)
+
+        attributes_copy = {
+            name: attrs.to_dict()
+            for name, attrs in self._attributes.items()
+        }
+        return {'properties': properties_copy, 'attributes': attributes_copy}
+
+    def restore_from_state_dict(self, state: Dict[str, Any], merge: bool = True, verbose: bool = False):
+        """Restore properties/attributes from a state dict."""
+        properties = state.get('properties') or {}
+        attributes = state.get('attributes') or {}
+
+        if not merge:
+            if self._properties:
+                raise AssertionError("PropertySet.restore_from_state_dict(merge=False) requires an empty PropertySet.")
+            for name, value in properties.items():
+                attr_dict = attributes.get(name)
+                self.addProperty(name, value, attributes=PropertyAttributes.from_dict(attr_dict))
+            return
+
+        for name, value in properties.items():
+            attr_dict = attributes.get(name)
+            if not self.hasProperty(name):
+                self.addProperty(name, value, attributes=PropertyAttributes.from_dict(attr_dict))
+                continue
+
+            if attr_dict and verbose:
+                self._log_attribute_mismatches(name, attr_dict)
+
+            self._assert_value_compatible(name, value)
+            new_value = copy.deepcopy(value)
+            self._warn_if_out_of_bounds(name, new_value, verbose)
+            self.setProperty(name, new_value)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _coerce_attributes(self, attributes) -> PropertyAttributes:
+        if attributes is None:
+            return PropertyAttributes()
+        if isinstance(attributes, PropertyAttributes):
+            return attributes
+        if isinstance(attributes, dict):
+            return PropertyAttributes.from_dict(attributes)
+        raise TypeError(f"Unsupported attributes type: {type(attributes)}")
+
+    def _normalize_property_value(self, propertyName: str, propertyValue: Any, existing_value: Any | None, attributes: PropertyAttributes | None = None) -> Any:
+        value = fromQColor(propertyName, propertyValue)
+        if attributes and attributes.enumNames:
+            value = self._coerce_enum_value(propertyName, value, attributes.enumNames)
+        if hasattr(value, 'tolist'):
+            try:
+                value = value.tolist()
+            except Exception:
+                pass
+        if isinstance(value, (list, tuple)):
+            normalized = tuple(value)
+        else:
+            normalized = value
+
+        if existing_value is None:
+            return normalized
+        return self._cast_like_existing(propertyName, normalized, existing_value)
+
+    def _log_attribute_mismatches(self, propertyName: str, saved_attrs: Dict[str, Any]):
+        current_attrs = self._attributes[propertyName]
+        mismatches = []
+        for field in PropertyAttributes._FIELDS:
+            saved_value = saved_attrs.get(field, getattr(current_attrs, field))
+            current_value = getattr(current_attrs, field)
+            if saved_value != current_value:
+                mismatches.append(f"{field}: saved={saved_value!r} current={current_value!r}")
+        if mismatches:
+            print(f"[PropertySet] Attribute differences for '{propertyName}': " + "; ".join(mismatches))
+
+    def _assert_value_compatible(self, propertyName: str, new_value: Any):
+        existing_value = self._properties[propertyName]
+        if isinstance(existing_value, tuple):
+            if not isinstance(new_value, (list, tuple)):
+                raise ValueError(f"Property '{propertyName}' expects sequence value.")
+            if len(existing_value) != len(new_value):
+                raise ValueError(f"Property '{propertyName}' sequence length mismatch.")
+        elif isinstance(existing_value, (int, float, bool)):
+            if not isinstance(new_value, (int, float, bool)):
+                raise ValueError(f"Property '{propertyName}' numeric type mismatch.")
+        else:
+            if not isinstance(new_value, type(existing_value)):
+                raise ValueError(f"Property '{propertyName}' type mismatch.")
+
+    def _warn_if_out_of_bounds(self, propertyName: str, value: Any, verbose: bool):
+        if not verbose:
+            return
+        attrs = self._attributes[propertyName]
+        if isinstance(value, (int, float)):
+            if value < attrs.minimum or value > attrs.maximum:
+                print(f"[PropertySet] Value {value} for '{propertyName}' is outside [{attrs.minimum}, {attrs.maximum}].")
+        elif isinstance(value, (list, tuple)) and value and isinstance(value[0], (int, float)):
+            for idx, component in enumerate(value):
+                if component < attrs.minimum or component > attrs.maximum:
+                    print(f"[PropertySet] Component {idx} value {component} for '{propertyName}' is outside [{attrs.minimum}, {attrs.maximum}].")
+                    break
+
+    def _cast_like_existing(self, propertyName: str, new_value: Any, existing_value: Any):
+        if isinstance(existing_value, tuple):
+            if not isinstance(new_value, (list, tuple)):
+                raise ValueError(f"Property '{propertyName}' expects sequence value.")
+            if len(existing_value) != len(new_value):
+                raise ValueError(f"Property '{propertyName}' sequence length mismatch.")
+            return tuple(
+                self._cast_scalar(propertyName, component, existing_component)
+                for component, existing_component in zip(new_value, existing_value)
+            )
+
+        if isinstance(existing_value, (int, float)) and not isinstance(existing_value, bool):
+            if not isinstance(new_value, (int, float)):
+                raise ValueError(f"Property '{propertyName}' numeric type mismatch.")
+            return float(new_value) if isinstance(existing_value, float) else type(existing_value)(new_value)
+
+        if isinstance(existing_value, bool):
+            if not isinstance(new_value, (bool, int)):
+                raise ValueError(f"Property '{propertyName}' bool type mismatch.")
+            return bool(new_value)
+
+        if isinstance(existing_value, str):
+            if not isinstance(new_value, str):
+                raise ValueError(f"Property '{propertyName}' requires string value.")
+            return new_value
+
+        if type(new_value) is not type(existing_value):
+            raise ValueError(f"Property '{propertyName}' type mismatch.")
+        return new_value
+
+    def _cast_scalar(self, propertyName: str, value: Any, existing_component: Any):
+        if isinstance(existing_component, (int, float)) and not isinstance(existing_component, bool):
+            if not isinstance(value, (int, float)):
+                raise ValueError(f"Property '{propertyName}' sequence numeric mismatch.")
+            return float(value) if isinstance(existing_component, float) else type(existing_component)(value)
+
+        if isinstance(existing_component, bool):
+            if not isinstance(value, (bool, int)):
+                raise ValueError(f"Property '{propertyName}' sequence bool mismatch.")
+            return bool(value)
+
+        if type(value) is not type(existing_component):
+            raise ValueError(f"Property '{propertyName}' sequence type mismatch.")
+        return value
+
+    def _coerce_enum_value(self, propertyName: str, value: Any, enum_names):
+        if isinstance(value, int):
+            if not 0 <= value < len(enum_names):
+                raise ValueError(f"Property '{propertyName}' enum index out of range.")
+            return value
+        if isinstance(value, str):
+            if value not in enum_names:
+                raise ValueError(f"Property '{propertyName}' enum value '{value}' invalid.")
+            return enum_names.index(value)
+        raise ValueError(f"Property '{propertyName}' enum expects str or int value.")
