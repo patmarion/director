@@ -709,6 +709,10 @@ class PropertiesPanel(QWidget):
         self.itemToEditor.clear()
         
         self.propertySet = None
+
+    def hide_header(self, hide: bool = True):
+        """Hide or show the tree header."""
+        self.tree.header().setVisible(not hide)
     
     def connectProperties(self, propertySet):
         """Connect to a PropertySet and populate the panel."""
