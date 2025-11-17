@@ -214,6 +214,8 @@ class MainWindowAppFactory(object):
             'ViewBehaviors' : ['View'],
             'Grid': ['View', 'ObjectModel'],
             'PythonConsole' : ['Globals', 'GlobalModules'],
+            'OpenMeshDataHandler' : ['MainWindow', 'CommandLineArgs'],
+            'OutputConsole' : ['MainWindow'],
             'MainWindow' : ['View', 'ObjectModel', 'PythonConsole'],
             'SignalHandlers' : ['MainWindow'],
             'AdjustedClippingRange' : ['View'],
@@ -554,6 +556,31 @@ class MainWindowAppFactory(object):
 
         return FieldContainer()
 
+
+    def initOpenMeshDataHandler(self, fields):
+        from director import opendatahandler
+        openDataHandler = opendatahandler.OpenDataHandler(fields.app)
+
+        def loadData():
+            # flatten list of lists
+            data_files = fields.commandLineArgs.data_files
+            data_files = [item for sublist in data_files for item in sublist]
+            for filename in data_files:
+                openDataHandler.openGeometry(filename)
+            om.addChildPropertySync(openDataHandler.getRootFolder())
+            fields.view.resetCamera()
+
+        fields.app.registerStartupCallback(loadData)
+
+        return FieldContainer(openDataHandler=openDataHandler)
+
+    def initOutputConsole(self, fields):
+        from director import outputconsole
+        outputConsole = outputconsole.OutputConsole()
+        outputConsole.addToAppWindow(fields.app, visible=False)
+
+        return FieldContainer(outputConsole=outputConsole)
+    
     def initStartupRender(self, fields):
         def startupRender():
             fields.view.forceRender()
