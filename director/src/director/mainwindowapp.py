@@ -409,8 +409,18 @@ class MainWindowAppFactory(object):
         except RuntimeError:
             # Console widget creation failed
             return FieldContainer(pythonConsoleWidget=None)
+
+        def register_application_fields(fields):
+            script_context.push_variables(fields=fields)
+            if fields.pythonConsoleWidget:
+                variables = dict(fields.globalsDict)
+                variables['fields'] = fields
+                variables['view'] = fields.view
+                variables['quit'] = fields.app.quit
+                variables['exit'] = fields.app.exit
+                fields.pythonConsoleWidget.push_variables(variables)
         
-        return FieldContainer(pythonConsoleWidget=console_widget_manager)
+        return FieldContainer(pythonConsoleWidget=console_widget_manager, register_application_fields=register_application_fields)
 
     def initMainToolBar(self, fields):
 
@@ -567,7 +577,8 @@ class MainWindowAppFactory(object):
             data_files = [item for sublist in data_files for item in sublist]
             for filename in data_files:
                 openDataHandler.openGeometry(filename)
-            om.addChildPropertySync(openDataHandler.getRootFolder())
+            if data_files:
+                om.addChildPropertySync(openDataHandler.getRootFolder())
             fields.view.resetCamera()
 
         fields.app.registerStartupCallback(loadData)
@@ -667,16 +678,5 @@ def construct(**kwargs):
     MainWindowApp.applicationInstance()
 
     fields = fact.construct(**kwargs)
-
-    script_context.push_variables(fields=fields)
-
-    # Push variables to Python console if it exists
-    if fields.pythonConsoleWidget:
-        variables = dict(fields.globalsDict)
-        variables['fields'] = fields
-        variables['view'] = fields.view
-        variables['quit'] = fields.app.quit
-        variables['exit'] = fields.app.exit
-        fields.pythonConsoleWidget.push_variables(variables)
-    
+    fields.register_application_fields(fields)
     return fields

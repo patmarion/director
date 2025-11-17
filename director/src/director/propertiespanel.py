@@ -725,6 +725,7 @@ class PropertiesPanel(QWidget):
         self.tree.setSelectionMode(QTreeWidget.NoSelection)
         # Disable focus to prevent any selection-like highlighting
         self.tree.setFocusPolicy(Qt.NoFocus)
+        #self.tree.setAlternatingRowColors(True)
         layout.addWidget(self.tree)
         
         # Map property names to tree items

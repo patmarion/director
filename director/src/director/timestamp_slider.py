@@ -8,48 +8,28 @@ import qtpy.QtGui as QtGui
 import qtpy.QtWidgets as QtWidgets
 
 
-def find_timestamp_index(timestamps, query_timestamp, clamp: bool = True) -> int:
-    """
-    Return the index of the latest timestamp less than or equal to `query_timestamp`.
-    Assumes the provided timestamps are in sorted order, otherwise the result will be incorrect.
-    If `query_timestamp` is less than all values and clamp is True, return 0.
-    If out of range and clamp is False, raise ValueError.
-    Raises ValueError if `timestamps` is empty.
-    """
-    if len(timestamps) == 0:
-        raise ValueError("Timestamps array is empty.")
-
-    idx = np.searchsorted(timestamps, query_timestamp, side='right') - 1
-
-    if idx < 0:
-        if clamp:
-            return 0
-        else:
-            raise ValueError(f"timestamp {query_timestamp} is before earliest time {timestamps[0]}")
-    return idx
-
 
 class TimestampSlider:
     """Wrapper around ValueSlider for timestamp playback with absolute timestamp callbacks."""
     
-    def __init__(self, min_timestamp: float, max_timestamp: float, step_frequency: int = 100):
+    def __init__(self, min_timestamp: float = 0.0, max_timestamp: float = 1.0, step_frequency: int = 100):
         """
         Initialize timestamp slider.
         
         Args:
             min_timestamp: Minimum absolute timestamp in seconds
             max_timestamp: Maximum absolute timestamp in seconds
-            step_frequency: Resolution multiplier for slider
+            step_frequency: Determines how many ticks per second will be emitted by the slider.
         """
         self.min_timestamp = min_timestamp
         self.max_timestamp = max_timestamp
-        self.duration_s = max_timestamp - min_timestamp
+        duration_s = max_timestamp - min_timestamp
         
         # Create callback registry for on_time_changed
         self.callbacks = callbacks.CallbackRegistry(['on_time_changed'])
         
         # Create ValueSlider from 0 to duration
-        self.slider = ValueSlider(minValue=0.0, maxValue=self.duration_s, resolution=self.duration_s * step_frequency)
+        self.slider = ValueSlider(minValue=0.0, maxValue=duration_s, resolution=duration_s * step_frequency)
 
         # Connect slider value changed to convert to absolute timestamp
         def on_time_value_changed(relative_timestamp_s):
@@ -72,6 +52,21 @@ class TimestampSlider:
         # Store shortcuts for cleanup if needed
         self._shortcuts = []
     
+    def set_time_range(self, min_timestamp: float, max_timestamp: float, step_frequency: int = 100):
+        """
+        Set the time range of the slider.
+        
+        Args:
+            min_timestamp: Minimum absolute timestamp in seconds
+            max_timestamp: Maximum absolute timestamp in seconds
+            step_frequency: Determines how many ticks per second will be emitted by the slider.
+        """
+        self.min_timestamp = min_timestamp
+        self.max_timestamp = max_timestamp
+        duration_s = max_timestamp - min_timestamp
+        self.slider.setValueRange(0.0, duration_s)
+        self.slider.setResolution(duration_s * step_frequency)
+
     def _on_timer_tick(self):
         if self._skip_increment:
             current_time = self.get_time()

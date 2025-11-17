@@ -335,7 +335,6 @@ class ScreenRecorder:
         Args:
             slider: ValueSlider instance
         """
-        print("connecting callback")
         self.value_slider = slider
         self.value_changed_callback_id = slider.connectValueChanged(self.on_capture)
     
