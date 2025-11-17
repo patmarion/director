@@ -2,6 +2,10 @@
 
 import os
 import sys
+import signal
+import argparse
+import runpy
+
 from director.componentgraph import ComponentFactory
 from director import consoleapp
 from director.frame_properties import FrameProperties
@@ -11,6 +15,7 @@ from director.fieldcontainer import FieldContainer
 from director import applogic
 from director import appsettings
 from director import argutils
+from director import script_context
 from director.timercallback import TimerCallback
 
 import qtpy.QtCore as QtCore
@@ -203,17 +208,18 @@ class MainWindowAppFactory(object):
             'Globals' : [],
             'GlobalModules' : ['Globals'],
             'ObjectModel' : [],
+            'CommandLineArgs' : [],
             'ViewOptions' : ['View', 'ObjectModel'],
             'MainToolBar' : ['View', 'Grid', 'MainWindow'],
             'ViewBehaviors' : ['View'],
             'Grid': ['View', 'ObjectModel'],
             'PythonConsole' : ['Globals', 'GlobalModules'],
             'MainWindow' : ['View', 'ObjectModel', 'PythonConsole'],
-            'SignalHandlers' : ['MainWindow'],  # Setup after MainWindow is created
+            'SignalHandlers' : ['MainWindow'],
             'AdjustedClippingRange' : ['View'],
             'StartupRender' : ['View', 'MainWindow'],
-            'RunScriptFunction' : ['Globals', 'PythonConsole'],
-            'ScriptLoader' : ['MainWindow', 'RunScriptFunction'],
+            'RunScriptFunction' : ['Globals', 'PythonConsole', 'CommandLineArgs'],
+            'ScriptLoader' : ['CommandLineArgs', 'RunScriptFunction'],
             'ProfilerTool' : ['MainWindow'],
             'ScreenRecorder' : ['MainWindow', 'View'],
             'UndoRedo' : ['MainWindow'],
@@ -289,38 +295,35 @@ class MainWindowAppFactory(object):
         fields.objectModel.addToObjectModel(viewOptions, parentObj=fields.objectModel.findObjectByName('scene'))
         return FieldContainer(viewOptions=viewOptions)
 
+    def initCommandLineArgs(self, fields):
+        # Get command line args from fields if provided, otherwise parse them
+        if hasattr(fields, 'command_line_args'):
+            commandLineArgs = fields.command_line_args
+        else:
+            parser = argparse.ArgumentParser()
+            argutils.add_standard_args(parser)
+            commandLineArgs = parser.parse_known_args()[0]
+    
+        return FieldContainer(command_line_args=commandLineArgs, commandLineArgs=commandLineArgs)
+
+
     def initSignalHandlers(self, fields):
         """Setup signal handlers for graceful shutdown on Ctrl+C."""
-        import sys
-        import signal
-        from qtpy.QtCore import QTimer
         
         app = fields.app
         
         def signal_handler(signum, frame):
-            """Handle SIGINT (Ctrl+C) by quitting the Qt application."""
-            # Use QTimer.singleShot to ensure quit() is called from the Qt event loop
             print("Caught interrupt signal, quitting application...")
-            QTimer.singleShot(0, app.quit)
-        
-        # Register signal handler for SIGINT (Ctrl+C)
+            app.quit()
+
         signal.signal(signal.SIGINT, signal_handler)
-        
-        # Install custom exception hook to catch KeyboardInterrupt
-        original_excepthook = sys.excepthook
-        
-        def exception_hook(exc_type, exc_value, exc_traceback):
-            """Handle KeyboardInterrupt exceptions by quitting the application."""
-            if exc_type is KeyboardInterrupt:
-                # KeyboardInterrupt should quit the application gracefully
-                QTimer.singleShot(0, app.quit)
-            else:
-                # For other exceptions, use the original exception handler
-                original_excepthook(exc_type, exc_value, exc_traceback)
-        
-        sys.excepthook = exception_hook
-        
-        return FieldContainer()
+    
+        # The idle timer ensures that the Qt c++ event loop will periodically call into
+        # python to allow the python interpretter a chance to run and process signals.
+        idle_timer = TimerCallback(targetFps=30)
+        idle_timer.start()
+
+        return FieldContainer(idle_timer=idle_timer)
     
     def initAdjustedClippingRange(self, fields):
         '''This setting improves the near plane clipping resolution.
@@ -380,16 +383,6 @@ class MainWindowAppFactory(object):
 
         applogic.addShortcut(app.mainWindow, 'F1', toggleObjectModelDock)
 
-        # Get command line args from fields if provided, otherwise parse them
-        commandLineArgs = None
-        if hasattr(fields, 'command_line_args'):
-            commandLineArgs = fields.command_line_args
-        else:
-            import argparse
-            parser = argparse.ArgumentParser()
-            argutils.add_standard_args(parser)
-            commandLineArgs = parser.parse_known_args()[0]
-
         return FieldContainer(
           app=app,
           mainWindow=app.mainWindow,
@@ -397,7 +390,6 @@ class MainWindowAppFactory(object):
           propertiesDock=propertiesDock,
           pythonConsoleDock=app._python_console_dock,
           toggleObjectModelDock=toggleObjectModelDock,
-          commandLineArgs=commandLineArgs
           )
 
     def initPythonConsole(self, fields):
@@ -520,38 +512,46 @@ class MainWindowAppFactory(object):
 
     def initRunScriptFunction(self, fields):
 
-        globalsDict = fields.globalsDict
-
         def runScript(filename, commandLineArgs=None):
             commandLineArgs = commandLineArgs or []
             args = dict(__file__=filename,
                         _argv=[filename] + commandLineArgs,
-                        __name__='__main__',
-                        _fields=fields)
-            prev_args = {}
-            for k, v in args.items():
-                if k in globalsDict:
-                    prev_args[k] = globalsDict[k]
-                globalsDict[k] = v
+                        __name__='__main__')
             try:
                 with open(filename, 'r') as f:
                     code = compile(f.read(), filename, 'exec')
-                exec(code, globalsDict)
+                exec(code, args)
             finally:
-                for k in args.keys():
-                    del globalsDict[k]
-                for k, v in prev_args.items():
-                    globalsDict[k] = v
-                fields.pythonConsoleWidget.push_variables(globalsDict)
-        return FieldContainer(runScript=runScript)
+                del args['__name__']
+                del args['__file__']
+                del args['_argv']
+                fields.pythonConsoleWidget.push_variables(args)
 
+        def runModule(moduleName):
+            if not moduleName:
+                return
+            args = {}
+            try:
+                args = runpy.run_module(moduleName, run_name="__main__", alter_sys=True)
+            finally:
+                fields.pythonConsoleWidget.push_variables(args)
+
+        return FieldContainer(runScript=runScript, runModule=runModule)
 
     def initScriptLoader(self, fields):
         def loadScripts():
-            if hasattr(fields.commandLineArgs, 'scripts') and fields.commandLineArgs.scripts:
-                for scriptArgs in fields.commandLineArgs.scripts:
-                    fields.runScript(scriptArgs[0], scriptArgs[1:])
-        fields.app.registerStartupCallback(loadScripts)
+            args = fields.commandLineArgs
+
+            modules = getattr(args, 'modules', [])
+            for moduleName in modules:
+                fields.runModule(moduleName)
+
+            scripts = getattr(args, 'scripts', [])
+            for scriptArgs in scripts:
+                fields.runScript(scriptArgs[0], scriptArgs[1:])
+
+        consoleapp.ConsoleApp.registerStartupCallback(loadScripts)
+
         return FieldContainer()
 
     def initStartupRender(self, fields):
@@ -625,46 +625,27 @@ class MainWindowAppFactory(object):
         wait_cursor.show(1.0)
         return FieldContainer(waitCursor=wait_cursor)
 
-# MainWindowPanelFactory removed - optional panels not yet ported
-# These included:
-# - OpenDataHandler
-# - ScreenGrabberPanel
-# - CameraBookmarksPanel
-# - CameraControlPanel
-# - MeasurementPanel
-# - OutputConsole
-# - UndoRedo
-# - DrakeVisualizer
-# - TreeViewer
-# - LCMGLRenderer
-# These can be ported later as needed
 
-
-def construct(command_line_args=None, **kwargs):
+def construct(**kwargs):
     """
     Construct a MainWindowApp using the component factory.
     
     Args:
-        command_line_args: Parsed command-line arguments (from argutils)
         **kwargs: Additional fields to pass to component factory
     """
     fact = ComponentFactory()
     fact.register(MainWindowAppFactory)
-    
-    # Pass command_line_args through kwargs if provided
-    if command_line_args is not None:
-        kwargs['command_line_args'] = command_line_args
-    
+
     # Ensure QApplication exists
     MainWindowApp.applicationInstance()
 
     fields = fact.construct(**kwargs)
 
+    script_context.push_variables(fields=fields)
+
     # Push variables to Python console if it exists
-    if hasattr(fields, 'pythonConsoleWidget') and fields.pythonConsoleWidget is not None:
-        variables = dict()
-        fields.globalsDict['fields'] = fields
-        variables.update(fields.globalsDict)
+    if fields.pythonConsoleWidget:
+        variables = dict(fields.globalsDict)
         variables['fields'] = fields
         variables['view'] = fields.view
         variables['quit'] = fields.app.quit
@@ -672,32 +653,3 @@ def construct(command_line_args=None, **kwargs):
         fields.pythonConsoleWidget.push_variables(variables)
     
     return fields
-
-def main(command_line_args=None, **kwargs):
-    """
-    Main entry point for MainWindowApp.
-    
-    Args:
-        command_line_args: Parsed command-line arguments (optional, will parse if None)
-        **kwargs: Additional arguments to pass to construct()
-    """
-    # Ensure QApplication exists
-    MainWindowApp.applicationInstance()
-    
-    # Parse command line args if not provided
-    if command_line_args is None:
-        import argparse
-        parser = argparse.ArgumentParser()
-        argutils.add_standard_args(parser)
-        command_line_args = parser.parse_known_args()[0]
-    
-    fields = construct(command_line_args=command_line_args, **kwargs)
-    
-
-
-    fields.app.start()
-
-
-if __name__ == '__main__':
-    main()
-

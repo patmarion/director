@@ -22,6 +22,11 @@ def add_standard_args(parser):
                         default=[], action='append', metavar='filename',
                         help='data files to load at startup')
     
+    # Python modules to run at startup
+    parser.add_argument('-m', '--module', dest='modules', metavar='module',
+                        default=[], action='append',
+                        help='find a python module or package and run it as a script')
+    
     # Python scripts to run at startup
     parser.add_argument('--script', '--startup', type=str, nargs='+', dest='scripts',
                         default=[], action='append', metavar='filename',
@@ -85,6 +90,10 @@ def parse_args(parser=None, argv=None):
     # Flatten list-of-lists for scripts
     if args.scripts:
         args.scripts = flatten_list_of_lists(args.scripts)
+    
+    # Ensure modules is always a list
+    if not hasattr(args, 'modules') or args.modules is None:
+        args.modules = []
     
     return args
 
