@@ -41,9 +41,9 @@ class TimestampSlider:
         
         # PropertySet for keyboard shortcut increment sizes
         self.properties = PropertySet()
-        self.properties.addProperty('Arrow Key Increment (s)', 1.0)
-        self.properties.addProperty('Shift+Arrow Increment (s)', 0.1)
-        self.properties.addProperty('Ctrl+Arrow Increment (s)', 0.01)
+        self.properties.addProperty('Arrow Key Increment (s)', 0.1)
+        self.properties.addProperty('Shift+Arrow Increment (s)', 0.01)
+        self.properties.addProperty('Ctrl+Arrow Increment (s)', 1.0)
         self.properties.addProperty('Ctrl+Shift+Arrow Increment (s)', 10.0)
 
         self.timer = TimerCallback(callback=self._on_timer_tick)
