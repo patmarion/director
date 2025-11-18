@@ -646,22 +646,12 @@ class MainWindowAppFactory(object):
         return FieldContainer(screen_recorder=screen_recorder)
 
     def initWaitCursor(self, fields):
-        
-        class WaitCursorHelper:
-
-            def __init__(self):
-                self.timer = TimerCallback(callback=self.restore)
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
             
-            def show(self, timeout_seconds):
-                QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-                self.timer.singleShot(timeout_seconds)
-            
-            def restore(self):
-                QtWidgets.QApplication.restoreOverrideCursor()
+        def restore():
+            QtWidgets.QApplication.restoreOverrideCursor()
         
-        wait_cursor = WaitCursorHelper()
-        wait_cursor.show(1.0)
-        return FieldContainer(waitCursor=wait_cursor)
+        consoleapp.ConsoleApp.registerStartupCallback(restore, priority=100)
 
 
 def construct(**kwargs):
