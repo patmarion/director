@@ -60,8 +60,8 @@ class FFMpegWriter:
             self.process = subprocess.Popen(
                 cmd,
                 stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                #stdout=subprocess.PIPE,
+                #stderr=subprocess.PIPE,
                 bufsize=0  # Unbuffered for real-time streaming
             )
         except FileNotFoundError:

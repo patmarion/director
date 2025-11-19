@@ -396,29 +396,24 @@ class MainWindowAppFactory(object):
 
     def initPythonConsole(self, fields):
         """Initialize the Python console widget (dock is created by MainWindow)."""
-        from director.python_console import PythonConsoleWidget, QTCONSOLE_AVAILABLE
+        from director.python_console import PythonConsoleWidget
         
-        if not QTCONSOLE_AVAILABLE:
-            return FieldContainer(pythonConsoleWidget=None)
-        
-        # Set up minimal namespace - will be updated later with more variables
-        namespace = {}
-        
-        try:
-            console_widget_manager = PythonConsoleWidget(namespace=namespace)
-        except RuntimeError:
-            # Console widget creation failed
-            return FieldContainer(pythonConsoleWidget=None)
+        # try:
+        #     console_widget_manager = PythonConsoleWidget()
+        # except RuntimeError:
+        #     # Console widget creation failed
+        #     console_widget_manager = None
+        console_widget_manager = None
 
         def register_application_fields(fields):
             script_context.push_variables(fields=fields)
-            if fields.pythonConsoleWidget:
+            if console_widget_manager:
                 variables = dict(fields.globalsDict)
                 variables['fields'] = fields
                 variables['view'] = fields.view
                 variables['quit'] = fields.app.quit
                 variables['exit'] = fields.app.exit
-                fields.pythonConsoleWidget.push_variables(variables)
+                console_widget_manager.push_variables(variables)
         
         return FieldContainer(pythonConsoleWidget=console_widget_manager, register_application_fields=register_application_fields)
 

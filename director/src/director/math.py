@@ -22,6 +22,26 @@ def pos_quat_to_transform(pos_xyz: np.ndarray, quat_wxyz: np.ndarray) -> np.ndar
     return mat
 
 
+def pos_euler_to_transform(pos_xyz: np.ndarray, euler_rpy: np.ndarray, euler_mode: str = "XYZ") -> np.ndarray:
+    """
+    Create a 4x4 homogeneous transform from position (xyz) and Euler angles (rpy).
+
+    Args:
+        pos_xyz: array-like of shape (3,)
+        euler_rpy: array-like of shape (3,) in (roll, pitch, yaw) order (in radians)
+        euler_mode: string specifying the Euler angle convention (default: "XYZ")
+                    Common options: "XYZ", "ZYX", "ZYZ", etc.
+
+    Returns:
+        A 4x4 numpy array representing the homogeneous transformation matrix
+    """
+    rot = Rotation.from_euler(euler_mode, euler_rpy)
+    mat = np.eye(4)
+    mat[:3, :3] = rot.as_matrix()
+    mat[:3, 3] = pos_xyz
+    return mat
+
+
 def transform_points(pts: np.ndarray, transform: np.ndarray) -> np.ndarray:
     """Transform a (N, 3) array of points with a 4x4 transform."""
     pts_hom = np.hstack([pts, np.ones((pts.shape[0], 1))])

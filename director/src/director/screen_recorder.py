@@ -61,6 +61,7 @@ class ScreenRecorder:
         # Value slider connection
         self.value_slider = None
         self.original_use_real_time = None
+        self.original_timer_fps = None
         self.value_changed_callback_id = None
         
         # Create record button
@@ -70,8 +71,15 @@ class ScreenRecorder:
         self.record_button.toggled.connect(self._on_record_toggled)
         self.record_button.setToolTip('Start/Stop screen recording')
         
+        # Enable context menu on record button
+        self.record_button.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.record_button.customContextMenuRequested.connect(self._show_context_menu)
+        
         # Store filename for dialog
         self.current_filename = None
+        
+        # Initialize context menu
+        self._setup_context_menu()
     
     def _get_record_icon(self):
         """Get icon for record button (red circle)."""
@@ -85,6 +93,85 @@ class ScreenRecorder:
         painter.drawEllipse(2, 2, 12, 12)
         painter.end()
         return QtGui.QIcon(pixmap)
+    
+    def _setup_context_menu(self):
+        """Set up the right-click context menu for the record button."""
+        self.context_menu = QtWidgets.QMenu(self.record_button)
+        
+        # Framerate submenu
+        framerate_menu = self.context_menu.addMenu('Framerate')
+        framerate_group = QtGui.QActionGroup(framerate_menu)
+        framerate_group.setExclusive(True)
+        
+        # 30 fps option
+        fps30_action = QtWidgets.QAction('30 fps', framerate_menu)
+        fps30_action.setCheckable(True)
+        fps30_action.setChecked(self.framerate == 30.0)
+        fps30_action.triggered.connect(lambda: self._set_framerate(30.0))
+        framerate_group.addAction(fps30_action)
+        framerate_menu.addAction(fps30_action)
+        
+        # 60 fps option
+        fps60_action = QtWidgets.QAction('60 fps', framerate_menu)
+        fps60_action.setCheckable(True)
+        fps60_action.setChecked(self.framerate == 60.0)
+        fps60_action.triggered.connect(lambda: self._set_framerate(60.0))
+        framerate_group.addAction(fps60_action)
+        framerate_menu.addAction(fps60_action)
+        
+        # View size submenu
+        view_size_menu = self.context_menu.addMenu('View size')
+        view_size_group = QtGui.QActionGroup(view_size_menu)
+        view_size_group.setExclusive(True)
+        
+        # 1024x768 option
+        size1024_action = QtWidgets.QAction('1024 x 768', view_size_menu)
+        size1024_action.setCheckable(True)
+        size1024_action.triggered.connect(lambda: self._set_view_size(1024, 768))
+        view_size_group.addAction(size1024_action)
+        view_size_menu.addAction(size1024_action)
+        
+        # 1920x1080 option
+        size1920_action = QtWidgets.QAction('1920 x 1080', view_size_menu)
+        size1920_action.setCheckable(True)
+        size1920_action.triggered.connect(lambda: self._set_view_size(1920, 1080))
+        view_size_group.addAction(size1920_action)
+        view_size_menu.addAction(size1920_action)
+        
+        # Unconstrained option
+        unconstrained_action = QtWidgets.QAction('Unconstrained', view_size_menu)
+        unconstrained_action.setCheckable(True)
+        unconstrained_action.setChecked(True)  # Default to unconstrained
+        unconstrained_action.triggered.connect(self._set_view_size_unconstrained)
+        view_size_group.addAction(unconstrained_action)
+        view_size_menu.addAction(unconstrained_action)
+    
+    def _show_context_menu(self, position):
+        """Show the context menu at the given position."""
+        self.context_menu.exec_(self.record_button.mapToGlobal(position))
+    
+    def _set_framerate(self, fps: float):
+        """Set the recording framerate.
+        
+        Args:
+            fps: Frame rate in frames per second
+        """
+        self.framerate = fps
+
+    
+    def _set_view_size(self, width: int, height: int):
+        """Set the view to a fixed size.
+        
+        Args:
+            width: View width in pixels
+            height: View height in pixels
+        """
+        self.view.setFixedSize(width, height)
+    
+    def _set_view_size_unconstrained(self):
+        """Set the view size to unconstrained (allow resizing)."""
+        qtwidget_max_view_size = 16777215
+        self.view.setFixedSize(qtwidget_max_view_size, qtwidget_max_view_size)
     
     def _on_record_toggled(self, checked: bool):
         """Handle record button toggle."""
@@ -145,10 +232,15 @@ class ScreenRecorder:
            # self.record_button.setText('Stop Recording')
             self.record_button.setToolTip(f'Recording to: {self.current_filename}')
             
+            # Disable context menu during recording
+            self.record_button.setContextMenuPolicy(QtCore.Qt.NoContextMenu)
+            
             # Disable real-time mode on value slider if connected
             if self.value_slider is not None:
                 self.original_use_real_time = self.value_slider.useRealTime
+                self.original_timer_fps = self.value_slider.animationTimer.targetFps
                 self.value_slider.useRealTime = False
+                self.value_slider.animationTimer.targetFps = self.framerate
         except Exception as e:
             # Unlock view size on error
             self._unlock_view_size()
@@ -156,7 +248,9 @@ class ScreenRecorder:
             # Restore real-time mode on value slider if it was changed
             if self.value_slider is not None and self.original_use_real_time is not None:
                 self.value_slider.useRealTime = self.original_use_real_time
+                self.value_slider.animationTimer.targetFps = self.original_timer_fps
                 self.original_use_real_time = None
+                self.original_timer_fps = None
             
             # Show error dialog
             error_dialog = QtWidgets.QMessageBox(self.main_window)
@@ -168,6 +262,9 @@ class ScreenRecorder:
             # Reset button state
             self.record_button.setChecked(False)
             self.is_recording = False
+            
+            # Re-enable context menu on error
+            self.record_button.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
     
     def _stop_recording(self):
         """Stop the current recording."""
@@ -196,6 +293,9 @@ class ScreenRecorder:
            # self.record_button.setText('Record')
             self.record_button.setToolTip('Start/Stop screen recording')
             
+            # Re-enable context menu
+            self.record_button.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+            
             # Show completion dialog with filename
             if filename:
                 self._show_completion_dialog(filename)
@@ -206,7 +306,9 @@ class ScreenRecorder:
             # Restore real-time mode on value slider if connected
             if self.value_slider is not None and self.original_use_real_time is not None:
                 self.value_slider.useRealTime = self.original_use_real_time
+                self.value_slider.animationTimer.targetFps = self.original_timer_fps
                 self.original_use_real_time = None
+                self.original_timer_fps = None
             
             # Show error dialog
             error_dialog = QtWidgets.QMessageBox(self.main_window)
@@ -221,7 +323,12 @@ class ScreenRecorder:
             # Ensure real-time mode is restored
             if self.value_slider is not None and self.original_use_real_time is not None:
                 self.value_slider.useRealTime = self.original_use_real_time
+                self.value_slider.animationTimer.targetFps = self.original_timer_fps
                 self.original_use_real_time = None
+                self.original_timer_fps = None
+            
+            # Re-enable context menu
+            self.record_button.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
     
     def _show_completion_dialog(self, filename: str):
         """Show dialog with recording filename.

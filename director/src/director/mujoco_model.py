@@ -26,7 +26,7 @@ class MuJoCoMeshResolver:
     and builds a mapping from mesh names to absolute file paths.
     """
     
-    def __init__(self, model, xml_path: str):
+    def __init__(self):
         """
         Initialize the mesh resolver.
         
@@ -34,26 +34,91 @@ class MuJoCoMeshResolver:
             model: MuJoCo model object
             xml_path: Path to the original MJCF XML file
         """
-        self.model = model
-        self.xml_path = os.path.abspath(xml_path)
-        self.xml_dir = os.path.dirname(self.xml_path)
         self.mesh_name_to_file = {}
         self.mesh_name_to_material = {}  # Map mesh names to their material names
         self.geom_name_to_element = {}
         self.material_name_to_rgba = {}
         self.angle_unit = "radian"  # Default MuJoCo angle unit
         self.euler_seq = "xyz"  # Default MuJoCo euler sequence
-        self._parse_xml()
     
-    def _parse_xml(self):
+    def add_xml_path(self, xml_path: str):
+        for xml_path in self.find_all_xml_includes(xml_path):
+            self._parse_xml(xml_path)
+
+    def find_all_xml_includes(self, xml_path: str):
+        """
+        Find all XML files included (directly or indirectly) from the given XML file.
+        
+        Recursively parses the XML file and all included files to build a complete
+        list of all XML paths that are part of the model.
+        
+        Args:
+            xml_path: Path to the root MJCF XML file
+            
+        Returns:
+            List of all XML file paths (the root file plus all includes)
+        """
+        visited = set()
+        all_xml_paths = []
+        
+        def _find_includes_recursive(current_xml_path: str):
+            """Recursive helper to find all includes."""
+            # Normalize the path to handle absolute paths and resolve symlinks
+            current_xml_path = os.path.abspath(os.path.normpath(current_xml_path))
+            
+            # Avoid infinite loops from circular includes
+            if current_xml_path in visited:
+                return
+            
+            # Mark as visited and add to results
+            visited.add(current_xml_path)
+            all_xml_paths.append(current_xml_path)
+            
+            # Parse the XML file
+            try:
+                xml_dir = os.path.dirname(current_xml_path)
+                tree = ET.parse(current_xml_path)
+                root = tree.getroot()
+                
+                # Find all <include> elements
+                for include_elem in root.findall('.//include'):
+                    file_attr = include_elem.get('file')
+                    if not file_attr:
+                        continue
+                    
+                    # Resolve the include path
+                    if os.path.isabs(file_attr):
+                        include_path = os.path.normpath(file_attr)
+                    else:
+                        # Resolve relative to the current XML file's directory
+                        include_path = os.path.join(xml_dir, file_attr)
+                        include_path = os.path.normpath(include_path)
+                    
+                    # Recursively process the included file
+                    if os.path.exists(include_path):
+                        _find_includes_recursive(include_path)
+                    else:
+                        print(f"Warning: Include file not found: {include_path} (referenced from {current_xml_path})")
+            except ET.ParseError as e:
+                print(f"Warning: Failed to parse XML file {current_xml_path}: {e}")
+            except Exception as e:
+                print(f"Warning: Error processing XML file {current_xml_path}: {e}")
+        
+        # Start recursion from the root XML file
+        _find_includes_recursive(xml_path)
+        
+        return all_xml_paths
+
+    def _parse_xml(self, xml_path: str):
         """Parse the MJCF XML file to extract mesh definitions and geom elements."""
         try:
-            tree = ET.parse(self.xml_path)
+            xml_dir = os.path.dirname(xml_path)
+            tree = ET.parse(xml_path)
             root = tree.getroot()
             
             # Find the <compiler> tag and check for meshdir and angle attributes
             compiler = root.find('compiler')
-            meshdir = self.xml_dir  # Default to xml_dir
+            meshdir = xml_dir  # Default to xml_dir
             if compiler is not None:
                 meshdir_attr = compiler.get('meshdir')
                 if meshdir_attr:
@@ -61,7 +126,7 @@ class MuJoCoMeshResolver:
                     if os.path.isabs(meshdir_attr):
                         meshdir = meshdir_attr
                     else:
-                        meshdir = os.path.join(self.xml_dir, meshdir_attr)
+                        meshdir = os.path.join(xml_dir, meshdir_attr)
                     meshdir = os.path.normpath(meshdir)
                 
                 # Get angle unit (default is "radian")
@@ -927,7 +992,8 @@ class MujocoRobotModel:
         """
         # Create mesh resolver
         if self.mesh_resolver is None:
-            self.mesh_resolver = MuJoCoMeshResolver(self.model, self.xml_path)
+            self.mesh_resolver = MuJoCoMeshResolver()
+            self.mesh_resolver.add_xml_path(self.xml_path)
         
         # Build body to geom mapping
         if self.body_to_geom is None:

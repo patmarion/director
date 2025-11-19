@@ -1,8 +1,6 @@
 """Python console widget for Director applications."""
 
 import os
-import sys
-import vtk
 
 try:
     from qtconsole.rich_jupyter_widget import RichJupyterWidget
@@ -58,10 +56,7 @@ class PythonConsoleWidget:
         self.console_widget.set_default_style()
         
         # Set up namespace with access to application objects
-        default_namespace = {
-            'vtk': vtk,
-            'sys': sys,
-        }
+        default_namespace = { }
         
         if namespace:
             default_namespace.update(namespace)
