@@ -398,12 +398,11 @@ class MainWindowAppFactory(object):
         """Initialize the Python console widget (dock is created by MainWindow)."""
         from director.python_console import PythonConsoleWidget
         
-        # try:
-        #     console_widget_manager = PythonConsoleWidget()
-        # except RuntimeError:
-        #     # Console widget creation failed
-        #     console_widget_manager = None
-        console_widget_manager = None
+        try:
+            console_widget_manager = PythonConsoleWidget()
+        except RuntimeError:
+            # Console widget creation failed
+            console_widget_manager = None
 
         def register_application_fields(fields):
             script_context.push_variables(fields=fields)
