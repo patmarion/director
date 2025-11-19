@@ -32,12 +32,12 @@ class TimestampSlider:
         self.slider = ValueSlider(minValue=0.0, maxValue=duration_s, resolution=duration_s * step_frequency)
 
         # Connect slider value changed to convert to absolute timestamp
-        def on_time_value_changed(relative_timestamp_s):
-            """Convert relative timestamp to absolute and call callbacks."""
-            absolute_timestamp_s = relative_timestamp_s + self.min_timestamp
-            self.callbacks.process('on_time_changed', absolute_timestamp_s)
-        
-        self.slider.connectValueChanged(on_time_value_changed)
+        def on_slider_value_changed(slider_value):
+            """Convert slider relative value to absolute and call callbacks."""
+            timestamp_s = self.min_timestamp + slider_value
+            self._notify_time_changed(timestamp_s)
+
+        self.slider.connectValueChanged(on_slider_value_changed)
         
         # PropertySet for keyboard shortcut increment sizes
         self.properties = PropertySet()
@@ -74,6 +74,9 @@ class TimestampSlider:
             self.set_time(new_time)
             self._skip_increment = None
 
+    def _notify_time_changed(self, timestamps_s: float):
+        self.callbacks.process('on_time_changed', timestamps_s)
+        
     def add_to_toolbar(self, app, toolbar_name: str):
         """
         Add the slider to a toolbar.

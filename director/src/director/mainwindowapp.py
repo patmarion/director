@@ -45,8 +45,8 @@ class MainWindowApp(object):
         self.toolbarMenuManager = ViewMenuManager(self.toolbarMenu)
         
         # Python console dock widget (initialized by component factory)
-        self._python_console_dock = None
-        self._python_console_widget_manager = None
+        self.python_console_dock = None
+        self.python_console = None
 
         self.quitAction = self.fileMenu.addAction('&Quit')
         self.quitAction.setShortcut(QtGui.QKeySequence('Ctrl+Q'))
@@ -88,22 +88,22 @@ class MainWindowApp(object):
 
     def showPythonConsole(self):
         """Show Python console as a dock widget."""
-        if self._python_console_widget_manager is None:
+        if self.python_console is None:
             self.showErrorMessage("Python console not available. Please install qtconsole.")
             return
         
-        if self._python_console_dock is None:
+        if self.python_console_dock is None:
             # This shouldn't happen if component factory initialized it properly
             self.showErrorMessage("Python console dock widget not initialized.")
             return
         
         # Toggle visibility
-        if self._python_console_dock.isVisible():
-            self._python_console_dock.hide()
+        if self.python_console_dock.isVisible():
+            self.python_console_dock.hide()
         else:
-            self._python_console_dock.show()
-            self._python_console_widget_manager.console_widget.layout().currentWidget().setFocus()
-            self._python_console_dock.raise_()
+            self.python_console_dock.show()
+            self.python_console.console_widget.layout().currentWidget().setFocus()
+            self.python_console_dock.raise_()
 
     def showOnlineDocumentation(self):
         QtGui.QDesktopServices.openUrl(QtCore.QUrl('https://openhumanoids.github.io/director/'))
@@ -368,13 +368,16 @@ class MainWindowAppFactory(object):
         # Create Python console dock if console widget is available
         if fields.pythonConsoleWidget:
             pythonConsoleDock = app.addWidgetToDock(fields.pythonConsoleWidget.get_widget(), QtCore.Qt.BottomDockWidgetArea, visible=False)
-            app._python_console_dock = pythonConsoleDock
-            app._python_console_widget_manager = fields.pythonConsoleWidget
+            app.python_console_dock = pythonConsoleDock
+            app.python_console = fields.pythonConsoleWidget
 
         sceneBrowserDock = app.addWidgetToDock(fields.objectModel.getTreeWidget(),
                               QtCore.Qt.LeftDockWidgetArea, visible=True)
         propertiesDock = app.addWidgetToDock(fields.objectModel.getPropertiesPanel(),
                               QtCore.Qt.LeftDockWidgetArea, visible=True)
+
+        # Allow the left dock widget to span down to the bottom of the window
+        app.mainWindow.setCorner(QtCore.Qt.BottomLeftCorner, QtCore.Qt.LeftDockWidgetArea)
 
         app.addViewMenuSeparator()
 
@@ -390,7 +393,8 @@ class MainWindowAppFactory(object):
           mainWindow=app.mainWindow,
           sceneBrowserDock=sceneBrowserDock,
           propertiesDock=propertiesDock,
-          pythonConsoleDock=app._python_console_dock,
+          pythonConsole=app.python_console,
+          pythonConsoleDock=app.python_console_dock,
           toggleObjectModelDock=toggleObjectModelDock,
           )
 
@@ -583,6 +587,7 @@ class MainWindowAppFactory(object):
         from director import outputconsole
         outputConsole = outputconsole.OutputConsole()
         outputConsole.addToAppWindow(fields.app, visible=False)
+        applogic.addShortcut(fields.mainWindow, 'F9', outputConsole.toggleDock)
 
         return FieldContainer(outputConsole=outputConsole)
     
