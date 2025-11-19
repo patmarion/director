@@ -110,7 +110,8 @@ def test_update_polydata_with_kwargs(qapp):
     item = updatePolyData(polyData, 'update_test_color', view=widget, color=[1.0, 0.0, 0.0])
     assert item is not None
     color = item.getProperty('Color')
-    assert color == [1.0, 0.0, 0.0]
+    # PropertySet normalizes sequences to tuples
+    assert color == (1.0, 0.0, 0.0)
     
     # Update existing - kwargs should be ignored (only updates polyData)
     sphere2 = vtk.vtkSphereSource()
@@ -123,7 +124,8 @@ def test_update_polydata_with_kwargs(qapp):
     assert item2.polyData == polyData2
     # Color should remain unchanged (updatePolyData only updates polyData, not other properties)
     color = item2.getProperty('Color')
-    assert color == [1.0, 0.0, 0.0]
+    # PropertySet normalizes sequences to tuples
+    assert color == (1.0, 0.0, 0.0)
 
 
 def test_update_image_with_parent(qapp):

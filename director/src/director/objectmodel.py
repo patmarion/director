@@ -696,6 +696,10 @@ def isInitialized():
 def init(objectTree=None, propertiesPanel=None):
 
     if _t._treeWidget:
+        # If already initialized, update propertiesPanel if provided
+        if propertiesPanel is not None and _t._propertiesPanel is None:
+            _t._propertiesPanel = propertiesPanel
+            propertiesPanel.clear()
         return
 
     objectTree = objectTree or QtWidgets.QTreeWidget()

@@ -33,6 +33,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self._stored_selection_name = self._qsettings.value(
             f"{self._dialog_name}/_selected_name", None
         )
+        self._applying_stored_selection = False
         self._build_ui()
 
     # ------------------------------------------------------------------
@@ -56,9 +57,15 @@ class SettingsDialog(QtWidgets.QDialog):
         item = QtWidgets.QListWidgetItem(name)
         self.list_widget.addItem(item)
 
-        if self.list_widget.count() == 1 and self.list_widget.currentRow() == -1:
+        # Try to apply stored selection if it exists
+        if self._apply_stored_selection():
+            return  # Selection was applied, don't set default
+        
+        # Only set default selection if no stored selection exists and no row is selected
+        if (self.list_widget.count() == 1 and 
+            self.list_widget.currentRow() == -1 and 
+            not self._stored_selection_name):
             self.list_widget.setCurrentRow(0)
-        self._apply_stored_selection()
 
     def apply_current_settings(self):
         if not self._entries:
@@ -152,7 +159,9 @@ class SettingsDialog(QtWidgets.QDialog):
             return
         entry = self._entries[name]
         self.properties_panel.connectProperties(entry["properties"])
-        self._store_selected_name(name)
+        # Only store selection if we're not in the middle of applying a stored selection
+        if not self._applying_stored_selection:
+            self._store_selected_name(name)
         self._update_button_states()
 
     def _storage_key(self, settings_name: str) -> str:
@@ -205,12 +214,20 @@ class SettingsDialog(QtWidgets.QDialog):
             self._qsettings.setValue(f"{self._dialog_name}/_selected_name", current_name)
 
     def _apply_stored_selection(self):
+        """Apply stored selection if it exists in the list.
+        
+        Returns:
+            bool: True if selection was applied, False otherwise
+        """
         if not self._stored_selection_name:
-            return
+            return False
         for index in range(self.list_widget.count()):
             item = self.list_widget.item(index)
             if item.text() == self._stored_selection_name:
+                self._applying_stored_selection = True
                 self.list_widget.setCurrentItem(item)
                 self._stored_selection_name = None
-                return
+                self._applying_stored_selection = False
+                return True
+        return False
 

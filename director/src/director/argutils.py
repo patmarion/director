@@ -48,4 +48,6 @@ def add_standard_args(parser):
     parser.add_argument('--interactive', action='store_true',
                         help='enable interactive testing mode')
     
+    parser.add_argument('--auto-quit', action='store_true',
+                        help='automatically quit the application after starting, used for testing')
     return parser

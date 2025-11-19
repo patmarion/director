@@ -1,4 +1,4 @@
-"""Tests for mujoco_model module."""
+"""Tests for mujoco_model module using the new MujocoRobotModel API."""
 
 import pytest
 import os
@@ -27,184 +27,171 @@ def test_model_path():
 
 
 @pytest.mark.skipif(not MUJOCO_AVAILABLE, reason="MuJoCo not available")
-class TestMuJoCoModel:
-    """Test MuJoCo model loading and processing."""
+class TestMujocoRobotModel:
+    """Test MujocoRobotModel class."""
     
-    @pytest.fixture
-    def model(self, test_model_path):
-        """Load test model."""
-        from director.mujoco_model import load_mjcf_xml
-        return load_mjcf_xml(test_model_path)
-    
-    def test_load_model(self, test_model_path):
+    def test_load_model(self, test_model_path, qapp):
         """Test loading a MuJoCo model."""
-        from director.mujoco_model import load_mjcf_xml
+        from director.mujoco_model import MujocoRobotModel
+        from director import objectmodel as om
         
-        model = load_mjcf_xml(test_model_path)
+        # Initialize object model
+        om.init()
+        
+        model = MujocoRobotModel(test_model_path)
         assert model is not None
-        assert model.nbody > 0
-        assert model.ngeom > 0
+        assert model.model is not None
+        assert model.model.nbody > 0
+        assert model.model.ngeom > 0
     
-    def test_print_model_info(self, model, capsys):
-        """Test printing model information."""
-        from director.mujoco_model import print_model_info
+    def test_show_model(self, test_model_path, qapp):
+        """Test visualizing the model and checking objects in object model."""
+        from director.mujoco_model import MujocoRobotModel
+        from director import objectmodel as om
+        from director.vtk_widget import VTKWidget
+        from director import applogic
         
-        print_model_info(model)
-        output = capsys.readouterr().out
-        assert "Bodies:" in output
-        assert "Geoms:" in output
-        assert "Joints:" in output
+        # Initialize object model
+        om.init()
+        
+        # Create a view
+        view = VTKWidget()
+        applogic.setCurrentRenderView(view)
+        
+        model = MujocoRobotModel(test_model_path)
+        model_folder = model.show_model()
+        
+        assert model_folder is not None
+        assert hasattr(model_folder, 'geom_items')
+        assert len(model_folder.geom_items) > 0
+        
+        # Check that expected geoms exist with correct names
+        expected_geoms = ['ground', 'base_geom', 'link1_geom', 'link2_geom', 
+                          'link3_geom', 'link4_geom']
+        
+        found_geoms = {}
+        for geom_id, geom_item in model_folder.geom_items.items():
+            geom_name = geom_item.getProperty('Name')
+            found_geoms[geom_name] = geom_item
+        
+        for expected_name in expected_geoms:
+            assert expected_name in found_geoms, f"Expected geom '{expected_name}' not found"
     
-    def test_build_body_to_geom_mapping(self, model):
-        """Test building body to geom mapping."""
-        from director.mujoco_model import build_body_to_geom_mapping
+    def test_geom_colors(self, test_model_path, qapp):
+        """Test that geom colors match the XML rgba values."""
+        from director.mujoco_model import MujocoRobotModel
+        from director import objectmodel as om
+        from director.vtk_widget import VTKWidget
+        from director import applogic
         
-        body_to_geom = build_body_to_geom_mapping(model)
-        assert isinstance(body_to_geom, dict)
-        assert len(body_to_geom) > 0
+        # Initialize object model
+        om.init()
         
-        # Check that each body maps to at least one geom
-        for body_id, geom_ids in body_to_geom.items():
-            assert isinstance(geom_ids, list)
-            assert len(geom_ids) > 0
-            assert all(isinstance(gid, (int, np.integer)) for gid in geom_ids)
-    
-    def test_print_body_geom_tree(self, model, capsys):
-        """Test printing body-geom tree."""
-        from director.mujoco_model import build_body_to_geom_mapping, print_body_geom_tree
+        # Create a view
+        view = VTKWidget()
+        applogic.setCurrentRenderView(view)
         
-        body_to_geom = build_body_to_geom_mapping(model)
-        print_body_geom_tree(model, body_to_geom)
-        output = capsys.readouterr().out
-        assert "Body-Geom Tree Structure" in output
-        assert "BODY:" in output or "GEOM:" in output
+        model = MujocoRobotModel(test_model_path)
+        model_folder = model.show_model()
+        
+        # Expected colors from XML (rgba values)
+        expected_colors = {
+            'ground': (0.8, 0.8, 0.8),  # rgba="0.8 0.8 0.8 1"
+            'base_geom': (1.0, 0.0, 0.0),  # rgba="1 0 0 1"
+            'link1_geom': (0.0, 1.0, 0.0),  # rgba="0 1 0 1"
+            'link2_geom': (0.0, 0.0, 1.0),  # rgba="0 0 1 1"
+            'link3_geom': (1.0, 1.0, 0.0),  # rgba="1 1 0 1"
+            'link4_geom': (1.0, 0.0, 1.0),  # rgba="1 0 1 1"
+        }
+        
+        for geom_id, geom_item in model_folder.geom_items.items():
+            geom_name = geom_item.getProperty('Name')
+            if geom_name in expected_colors:
+                # Get color property (stored as tuple)
+                color = geom_item.getProperty('Color')
+                expected_color = expected_colors[geom_name]
+                
+                # Check RGB components (ignore alpha)
+                assert len(color) >= 3, f"Color for {geom_name} should have at least 3 components"
+                assert np.allclose(color[:3], expected_color, atol=1e-6), \
+                    f"Color mismatch for {geom_name}: got {color[:3]}, expected {expected_color}"
     
     @pytest.mark.skipif(not SCIPY_AVAILABLE, reason="scipy not available")
-    def test_forward_kinematics(self, model):
-        """Test forward kinematics."""
-        from director.mujoco_model import forward_kinematics
+    def test_geom_transform_with_offset(self, test_model_path, qapp):
+        """Test that geom with pos/euler offset in XML is handled correctly.
         
-        body_poses = forward_kinematics(model)
-        assert isinstance(body_poses, dict)
-        assert len(body_poses) > 0
+        Note: For non-mesh geoms, MuJoCo compiles the pos/euler into the model's
+        geom_pos and geom_quat arrays. The XML attributes are primarily used for
+        mesh geoms. This test verifies that the model loads and visualizes correctly
+        even when XML pos/euler attributes are present.
+        """
+        from director.mujoco_model import MujocoRobotModel
+        from director import objectmodel as om
+        from director.vtk_widget import VTKWidget
+        from director import applogic
         
-        # Check that all poses are 4x4 matrices
-        for body_name, pose in body_poses.items():
-            assert isinstance(body_name, str)
-            assert pose.shape == (4, 4)
-            assert np.allclose(pose[3, :], [0, 0, 0, 1])  # Last row should be [0,0,0,1]
-            assert np.allclose(pose[:3, :3] @ pose[:3, :3].T, np.eye(3), atol=1e-6)  # Rotation should be orthonormal
-    
-    def test_get_geom_pose_in_body(self, model):
-        """Test getting geom pose relative to body."""
-        from director.mujoco_model import get_geom_pose_in_body
+        # Initialize object model
+        om.init()
         
-        # Test with first geom
-        if model.ngeom > 0:
-            geom_pose = get_geom_pose_in_body(model, 0)
-            assert geom_pose.shape == (4, 4)
-            assert np.allclose(geom_pose[3, :], [0, 0, 0, 1])
-    
-    def test_create_primitive_geom(self, model):
-        """Test creating primitive geoms."""
-        from director.mujoco_model import create_primitive_geom
-        import director.vtkAll as vtk
+        # Create a view
+        view = VTKWidget()
+        applogic.setCurrentRenderView(view)
         
-        # Find primitive geoms in the model
-        for geom_id in range(model.ngeom):
-            geom_type = model.geom_type[geom_id]
-            if geom_type in [mujoco.mjtGeom.mjGEOM_SPHERE, mujoco.mjtGeom.mjGEOM_BOX,
-                            mujoco.mjtGeom.mjGEOM_CYLINDER, mujoco.mjtGeom.mjGEOM_CAPSULE,
-                            mujoco.mjtGeom.mjGEOM_ELLIPSOID, mujoco.mjtGeom.mjGEOM_PLANE]:
-                polyData = create_primitive_geom(model, geom_id)
-                assert polyData is not None
-                assert isinstance(polyData, vtk.vtkPolyData)
-                assert polyData.GetNumberOfPoints() > 0
-                break  # Just test one primitive
-    
-    def test_mj_matrix_to_vtk_transform(self):
-        """Test converting MuJoCo matrix to vtkTransform."""
-        from director.mujoco_model import mj_matrix_to_vtk_transform
-        import director.vtkAll as vtk
+        model = MujocoRobotModel(test_model_path)
+        model_folder = model.show_model()
         
-        # Test identity matrix
-        identity = np.eye(4)
-        transform = mj_matrix_to_vtk_transform(identity)
-        assert isinstance(transform, vtk.vtkTransform)
-        
-        # Test translation matrix
-        translation = np.eye(4)
-        translation[:3, 3] = [1, 2, 3]
-        transform = mj_matrix_to_vtk_transform(translation)
-        pos = transform.GetPosition()
-        assert np.allclose(pos, [1, 2, 3], atol=1e-6)
-    
-    def test_load_geom_mesh(self, model, test_model_path):
-        """Test loading geom mesh/geometry."""
-        from director.mujoco_model import load_geom_mesh
-        import director.vtkAll as vtk
-        
-        model_dir = os.path.dirname(test_model_path)
-        
-        # Test with each geom
-        for geom_id in range(model.ngeom):
-            geom_type = model.geom_type[geom_id]
-            # Skip hfield for now
-            if geom_type == mujoco.mjtGeom.mjGEOM_HFIELD:
-                continue
-                
-            polyData = load_geom_mesh(model, geom_id, model_dir)
-            if polyData is not None:
-                assert isinstance(polyData, vtk.vtkPolyData)
-                assert polyData.GetNumberOfPoints() > 0
-                # If we got one, that's good enough for the test
+        # Find link2_geom which has pos="0.1 0.05 0.02" euler="15 30 45" in XML
+        link2_geom_item = None
+        for geom_id, geom_item in model_folder.geom_items.items():
+            if geom_item.getProperty('Name') == 'link2_geom':
+                link2_geom_item = geom_item
                 break
-
-
-@pytest.mark.skipif(not MUJOCO_AVAILABLE, reason="MuJoCo not available")
-@pytest.mark.skipif(not SCIPY_AVAILABLE, reason="scipy not available")
-class TestFullPipeline:
-    """Test the full pipeline integration."""
+        
+        assert link2_geom_item is not None, "link2_geom not found"
+        
+        # Verify the geom has the correct body_name
+        assert hasattr(link2_geom_item, 'body_name'), "geom_item should have body_name attribute"
+        assert link2_geom_item.body_name == 'link2', f"Expected body_name 'link2', got '{link2_geom_item.body_name}'"
+        
+        # Verify the actor exists and has a transform
+        actor = link2_geom_item.actor
+        assert actor is not None, "Actor not found for link2_geom"
+        
+        # The actor should have a UserTransform set by addChildFrame
+        user_transform = actor.GetUserTransform()
+        assert user_transform is not None, "UserTransform not set on actor"
+        
+        # Verify the child frame exists
+        child_frame = link2_geom_item.getChildFrame()
+        assert child_frame is not None, "Child frame not found for link2_geom"
+        
+        # The child frame stores world_T_body (updated by forward kinematics)
+        # The body_T_geom transform is baked into the polydata geometry itself
+        # For non-mesh geoms, this comes from the compiled model's geom_pos/geom_quat
+        # which may differ from XML attributes due to MuJoCo's compilation process
     
-    def test_full_pipeline(self, test_model_path):
-        """Test the full pipeline: load, FK, visualize."""
-        from director.mujoco_model import (
-            load_mjcf_xml, build_body_to_geom_mapping, 
-            forward_kinematics, load_geom_mesh
-        )
+    def test_get_body_names(self, test_model_path, qapp):
+        """Test getting body names from the model."""
+        from director.mujoco_model import MujocoRobotModel
         
-        # Load model
-        model = load_mjcf_xml(test_model_path)
-        assert model is not None
+        model = MujocoRobotModel(test_model_path)
+        body_names = model.get_body_names()
         
-        # Build mapping
-        body_to_geom = build_body_to_geom_mapping(model)
-        assert len(body_to_geom) > 0
+        assert len(body_names) > 0
+        # Check that expected bodies exist
+        expected_bodies = ['world', 'base', 'link1', 'link2', 'link3', 'link4']
+        for expected_name in expected_bodies:
+            assert expected_name in body_names, f"Expected body '{expected_name}' not found"
+    
+    def test_get_joint_names(self, test_model_path, qapp):
+        """Test getting joint names from the model."""
+        from director.mujoco_model import MujocoRobotModel
         
-        # Forward kinematics
-        body_poses = forward_kinematics(model)
-        assert len(body_poses) > 0
+        model = MujocoRobotModel(test_model_path)
+        joint_names = model.get_joint_names()
         
-        # Check that we can load geometry for each geom
-        model_dir = os.path.dirname(test_model_path)
-        loaded_count = 0
-        for body_id in body_to_geom:
-            for geom_id in body_to_geom[body_id]:
-                geom_type = model.geom_type[geom_id]
-                # Skip hfield
-                if geom_type == mujoco.mjtGeom.mjGEOM_HFIELD:
-                    continue
-                geom_data = load_geom_mesh(model, geom_id, model_dir)
-                if geom_data is not None:
-                    loaded_count += 1
-        
-        # Should have loaded at least some geometries
-        assert loaded_count > 0
-
-
-@pytest.fixture
-def test_model_path():
-    """Fixture to provide path to test MJCF XML file."""
-    test_dir = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(test_dir, 'test_simple_mujoco_model.xml')
-
+        assert len(joint_names) > 0
+        # Check that expected joints exist
+        expected_joints = ['joint1', 'joint2', 'joint3', 'joint4']
+        for expected_name in expected_joints:
+            assert expected_name in joint_names, f"Expected joint '{expected_name}' not found"

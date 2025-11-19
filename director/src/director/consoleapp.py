@@ -12,13 +12,6 @@ from director.timercallback import TimerCallback
 
 import qtpy.QtCore as QtCore
 import qtpy.QtWidgets as QtWidgets
-import qtpy.QtGui as QtGui
-
-
-def _consoleAppExceptionHook(exc_type, exc_value, exc_traceback):
-    msg =  ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
-    sys.stderr.write(msg)
-    ConsoleApp.exit(1)
 
 
 class ConsoleApp(object):
@@ -35,22 +28,10 @@ class ConsoleApp(object):
         self.pythonConsoleWindow = None
 
     @staticmethod
-    def start(enableAutomaticQuit=True):
-        '''
-        In testing mode, the application will quit automatically after starting
-        unless enableAutomaticQuit is set to False.  Tests that need to perform
-        work after the QApplication has started can set this flag to False and
-        call quit or exit themselves.
-
-        In testing mode, this function will register an exception hook so that
-        tests will return on error code if an unhandled exception is raised.
-        '''
-        if enableAutomaticQuit:
-            ConsoleApp.startTestingModeQuitTimer()
-
-        if ConsoleApp.getTestingEnabled() and not ConsoleApp.getTestingInteractiveEnabled():
-            sys.excepthook = _consoleAppExceptionHook
-
+    def start():
+        if getattr(ConsoleApp.getTestingArgs(), "auto_quit"):
+            ConsoleApp.startQuitTimer(0.1)
+    
         def onStartup():
             callbacks = []
             for priority in sorted(ConsoleApp._startupCallbacks.keys()):
@@ -58,7 +39,7 @@ class ConsoleApp(object):
             for func in callbacks:
                 try:
                     func()
-                except:
+                except Exception:
                     if ConsoleApp.getTestingEnabled():
                         raise
                     else:
@@ -67,19 +48,7 @@ class ConsoleApp(object):
         startTimer = TimerCallback(callback=onStartup)
         startTimer.singleShot(0)
 
-        result = ConsoleApp.applicationInstance().exec_()
-
-        if ConsoleApp.getTestingEnabled() and not ConsoleApp.getTestingInteractiveEnabled():
-            print('TESTING PROGRAM RETURNING EXIT CODE:', result)
-            sys.exit(result)
-
-        return result
-
-
-    @staticmethod
-    def startTestingModeQuitTimer(timeoutInSeconds=0.1):
-        if ConsoleApp.getTestingEnabled() and not ConsoleApp.getTestingInteractiveEnabled():
-            ConsoleApp.startQuitTimer(timeoutInSeconds)
+        return ConsoleApp.applicationInstance().exec_()
 
     @staticmethod
     def startQuitTimer(timeoutInSeconds):
@@ -249,7 +218,7 @@ class ConsoleApp(object):
 
     @staticmethod
     def getTestingEnabled():
-        return ConsoleApp.getTestingArgs().testing
+        return "PYTEST_CURRENT_TEST" in os.environ
 
 
 

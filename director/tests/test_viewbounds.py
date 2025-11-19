@@ -32,7 +32,7 @@ def test_compute_view_bounds_no_grid(qapp):
     """Test computing view bounds without grid."""
     widget = VTKWidget()
     
-    # Add an actor
+    # Add an actor (not the grid)
     sphere_source = vtk.vtkSphereSource()
     sphere_source.SetRadius(1.0)
     mapper = vtk.vtkPolyDataMapper()
@@ -41,12 +41,14 @@ def test_compute_view_bounds_no_grid(qapp):
     actor.SetMapper(mapper)
     widget.renderer().AddActor(actor)
     
-    # Create a dummy grid object
+    # Create a dummy grid object with a different actor
+    # (grid should be excluded from bounds calculation)
+    grid_actor = vtk.vtkActor()
     class DummyGrid:
         def __init__(self, actor):
             self.actor = actor
     
-    gridObj = DummyGrid(actor)
+    gridObj = DummyGrid(grid_actor)
     
     bounds = computeViewBoundsNoGrid(widget, gridObj)
     

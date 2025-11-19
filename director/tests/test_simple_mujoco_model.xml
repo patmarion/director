@@ -22,7 +22,7 @@
         <!-- Link 2 with a cylinder -->
         <body name="link2" pos="0.4 0 0">
           <joint name="joint2" type="hinge" axis="0 0 1" range="-180 180"/>
-          <geom name="link2_geom" type="cylinder" size="0.1 0.2" rgba="0 0 1 1"/>
+          <geom name="link2_geom" type="cylinder" size="0.1 0.2" rgba="0 0 1 1" pos="0.1 0.05 0.02" euler="15 30 45"/>
           
           <!-- Link 3 with a capsule -->
           <body name="link3" pos="0.3 0 0">
