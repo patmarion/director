@@ -5,6 +5,7 @@ kinematics, and visualize the model geometry in Director using PolyDataItem obje
 """
 
 import os
+from typing import Any
 import xml.etree.ElementTree as ET
 import numpy as np
 import mujoco
@@ -675,7 +676,7 @@ def load_geom_mesh(model, geom_id, mesh_resolver):
     return None
 
 
-def visualize_mujoco_model(model, body_to_geom, mesh_resolver):
+def visualize_mujoco_model(model_folder, model, body_to_geom, mesh_resolver):
     """
     Visualize MuJoCo model geoms using PolyDataItem objects, organized by group in folders.
     
@@ -686,9 +687,7 @@ def visualize_mujoco_model(model, body_to_geom, mesh_resolver):
         
     Returns:
         ObjectModelItem: Folder containing the model, robot, and body frames
-    """
-    model_folder = om.getOrCreateContainer('mujoco_model')
-    
+    """    
     geom_items = {}
     # Dictionary to cache group folders
     group_folders = {}
@@ -869,22 +868,36 @@ def get_body_name(model, body_id):
 class KinematicsUpdater:
     def __init__(self, model):
         self.model = model
+        self.dof_names = model.get_1dof_joint_names()
+        self.pending_q_dict = {}
+        self.pending_world_T_base = None
+        self.body_poses = {}
         self.reset()
 
     def reset(self):
-        self.q_dict = {}
-        self.world_T_base = None
+        self.pending_q_dict = {}
+        self.pending_world_T_base = None
+        self.q_dict = dict[Any, Any](zip(self.dof_names, np.zeros(len(self.dof_names))))
+        self.world_T_base = np.eye(4)
+        self.body_poses = {
+            body_name: np.eye(4) for body_name in self.model.get_body_names()
+        }
 
     def push_q_dict(self, q_dict: dict[str, float]):
-        self.q_dict.update(q_dict)
+        self.pending_q_dict.update(q_dict)
 
     def push_world_T_base(self, world_T_base: np.ndarray):
-        self.world_T_base = world_T_base
+        self.pending_world_T_base = world_T_base
 
-    def commit(self):
-        if self.q_dict or self.world_T_base is not None:
-            self.model.show_forward_kinematics(self.q_dict, self.world_T_base)
-            self.reset()
+    def commit(self, name_or_folder=None):
+        if self.pending_q_dict or self.pending_world_T_base is not None:
+            self.q_dict.update(self.pending_q_dict)
+            if self.pending_world_T_base is not None:
+                self.world_T_base = self.pending_world_T_base
+            self.pending_q_dict = {}
+            self.pending_world_T_base = None
+            body_poses =self.model.show_forward_kinematics(self.q_dict, self.world_T_base, name_or_folder)
+            self.body_poses = body_poses
 
 
 class MujocoRobotModel:
@@ -895,7 +908,7 @@ class MujocoRobotModel:
     update its pose using forward kinematics.
     """
     
-    def __init__(self, xml_path: str):
+    def __init__(self, xml_path: str, default_folder_name: str = "mujoco_model"):
         """
         Initialize the MuJoCo robot model.
         
@@ -906,17 +919,21 @@ class MujocoRobotModel:
             raise FileNotFoundError(f"MJCF XML file not found: {xml_path}")
         
         self.xml_path = os.path.abspath(xml_path)
+        self.default_folder_name = default_folder_name
         self.model = mujoco.MjModel.from_xml_path(xml_path)
         self.data = mujoco.MjData(self.model)
-        self.mesh_resolver = None
-        self.body_to_geom = None
-        self.body_poses = {}
-        # Initialize previous q to default qpos0
-        self.prev_q = self.model.qpos0.copy()
-        # Initialize world_T_base to identity
-        self.prev_world_T_base = np.eye(4)
-        self.model_folder = None
-        self.kinematics_updater = KinematicsUpdater(self)
+        self.kin_cache = {}
+        self.mesh_resolver = MuJoCoMeshResolver()
+        self.mesh_resolver.add_xml_path(self.xml_path)
+        self.body_to_geom = build_body_to_geom_mapping(self.model)
+        self._create_joint_properties_item()
+
+    def get_kinematics_cache(self, name):
+        cache = self.kin_cache.get(name)
+        if not cache:
+            cache = KinematicsUpdater(self)
+            self.kin_cache[name] = cache
+        return cache
     
     def get_body_names(self) -> list[str]:
         """
@@ -983,37 +1000,33 @@ class MujocoRobotModel:
                     ranges[joint_name] = (float(range_min), float(range_max))
         return ranges
     
-    def show_model(self):
-        """
-        Visualize the model with default joint positions (qpos0).
-        
-        This method creates the mesh resolver, loads meshes, shows them with
-        showPolyData, and applies forward kinematics with the default qpos0.
-        """
-        # Create mesh resolver
-        if self.mesh_resolver is None:
-            self.mesh_resolver = MuJoCoMeshResolver()
-            self.mesh_resolver.add_xml_path(self.xml_path)
-        
-        # Build body to geom mapping
-        if self.body_to_geom is None:
-            self.body_to_geom = build_body_to_geom_mapping(self.model)
-        
-        # Visualize
-        self.model_folder = visualize_mujoco_model(
+    def get_model_folder(self, name_or_folder=None):
+        if name_or_folder is None:
+            name_or_folder = self.default_folder_name
+        if isinstance(name_or_folder, str):
+            folder = om.getOrCreateContainer(name_or_folder)
+        elif isinstance(name_or_folder, om.ObjectModelItem):
+            folder = name_or_folder
+        else:
+            raise ValueError(f"Invalid type for name_or_folder: {type(name_or_folder)}")
+        if not folder.children():
+            self._populate_model_folder(folder)
+        folder.robot_model = self
+        return folder
+
+    def _populate_model_folder(self, model_folder):
+        visualize_mujoco_model(model_folder,
             self.model, self.body_to_geom, 
             self.mesh_resolver
         )
 
-        # Perform forward kinematics with default qpos
-        self.body_poses = forward_kinematics(self.model, self.data, self.model.qpos0)
-        self._update_body_frames(self.body_poses, self.model_folder)
-        
-        # Create ObjectModelItem with joint properties
-        self._create_joint_properties_item()
-        return self.model_folder
+    def show_model(self, name_or_folder=None):
+        """
+        Visualize the model with the default zero pose.
+        """
+        return self.show_forward_kinematics({}, name_or_folder=name_or_folder)
     
-    def show_forward_kinematics(self, q_dict: dict[str, float], world_T_base: np.ndarray | None = None):
+    def show_forward_kinematics(self, q_dict: dict[str, float], world_T_base: np.ndarray | None = None, name_or_folder=None):
         """
         Update the model pose using forward kinematics with specified joint positions.
         
@@ -1023,9 +1036,10 @@ class MujocoRobotModel:
             world_T_base: Optional 4x4 numpy array representing world_T_base transform.
                         If None, uses identity matrix. If not provided, uses previous value.
         """
-        # Start with previous q values
-        q = self.prev_q.copy()
+        model_folder = self.get_model_folder(name_or_folder)
         
+        q = np.zeros(self.model.nq)
+
         # Fill in specified joint positions
         for joint_name, joint_value in q_dict.items():
             joint_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
@@ -1056,7 +1070,7 @@ class MujocoRobotModel:
         
         # Handle world_T_base transform
         if world_T_base is None:
-            world_T_base = self.prev_world_T_base
+            world_T_base = np.eye(4)
         else:
             # Validate shape
             if world_T_base.shape != (4, 4):
@@ -1066,17 +1080,14 @@ class MujocoRobotModel:
         base_T_body_poses = forward_kinematics(self.model, self.data, q)
         
         # Transform base_T_body to world_T_body by multiplying with world_T_base
-        self.body_poses = {}
+        body_poses = {}
         for body_name, base_T_body in base_T_body_poses.items():
             world_T_body = world_T_base @ base_T_body
-            self.body_poses[body_name] = world_T_body
+            body_poses[body_name] = world_T_body
         
         # Apply body poses to geom items
-        self._update_body_frames(self.body_poses, self.model_folder)
-
-        # Update prev_q for next call
-        self.prev_q = q.copy()
-        self.prev_world_T_base = world_T_base.copy()
+        self._update_body_frames(body_poses, model_folder)
+        return body_poses
 
 
     def _update_body_frames(self, body_poses, model_folder):
