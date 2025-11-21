@@ -1102,7 +1102,7 @@ def addChildFrame(obj, initialTransform=None):
     return frame
 
 
-def showFrame(frame, name, view=None, parent='data', scale=0.35, visible=True, alpha=1.0):
+def showFrame(frame, name, view=None, parent='data', scale=0.35, visible=True, alpha=1.0, line_width=1):
     """Show a coordinate frame (vtkTransform) in the view."""
     if view is None:
         try:
@@ -1117,6 +1117,7 @@ def showFrame(frame, name, view=None, parent='data', scale=0.35, visible=True, a
     item.setProperty('Visible', visible)
     item.setProperty('Alpha', alpha)
     item.setProperty('Scale', scale)
+    item.setProperty('Line Width', line_width)
     return item
 
 

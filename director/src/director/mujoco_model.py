@@ -4,7 +4,10 @@ This module provides utilities to load MuJoCo MJCF XML files, perform forward
 kinematics, and visualize the model geometry in Director using PolyDataItem objects.
 """
 
+import math
 import os
+import copy
+from dataclasses import dataclass, field
 from typing import Any
 import xml.etree.ElementTree as ET
 import numpy as np
@@ -675,8 +678,21 @@ def load_geom_mesh(model, geom_id, mesh_resolver):
     
     return None
 
+@dataclass
+class ShowOptions:
+    """Options for controlling how MuJoCo models are visualized."""
+    
+    ignore_group_ids: list[int] = field(default_factory=list)
+    max_group_id: float = math.inf
+    ignore_mocap_bodies: bool = False
+    scene_body_names: list[str] = field(default_factory=list)
+    ignore_scene_bodies: bool = False
+    ignore_body_names: list[str] = field(default_factory=list)
+    ignore_geom_names: list[str] = field(default_factory=list)
+    finalize_callback = None
 
-def visualize_mujoco_model(model_folder, model, body_to_geom, mesh_resolver):
+
+def visualize_mujoco_model(model_folder, model, body_to_geom, mesh_resolver, show_options: ShowOptions = None):
     """
     Visualize MuJoCo model geoms using PolyDataItem objects, organized by group in folders.
     
@@ -696,34 +712,46 @@ def visualize_mujoco_model(model_folder, model, body_to_geom, mesh_resolver):
 
     body_frame_folder = om.getOrCreateContainer('Body Frames', parentObj=model_folder)
     
+    if not show_options:
+        show_options = ShowOptions()
+
     # Helper function to check if a body should go in the Scene folder
-    def is_scene_body(body_id):
+    def get_is_scene_body(body_id):
         """Check if body should be in Scene folder (floor geom, plane type, or named 'table')."""
         body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
-        if body_name and body_name.lower() == 'table':
+        if body_name and body_name in show_options.scene_body_names:
             return True
         if body_id not in body_to_geom:
             return False
         for geom_id in body_to_geom[body_id]:
             geom_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
-            if geom_name and geom_name.lower() == 'floor':
+            if geom_name and geom_name in show_options.scene_body_names:
                 return True
-            if model.geom_type[geom_id] == mujoco.mjtGeom.mjGEOM_PLANE:
-                return True
+            #if model.geom_type[geom_id] == mujoco.mjtGeom.mjGEOM_PLANE:
+            #   return True
         return False
     
     # Helper function to check if a body is a mocap body
-    def is_mocap_body(body_id):
+    def get_is_mocap_body(body_id):
         """Check if body is a mocap body."""
         body_info = model.body(body_id)
         return body_info.mocapid.size > 0 and body_info.mocapid[0] >= 0
     
     for body_id in range(model.nbody):
+        is_scene_body = get_is_scene_body(body_id)
+        is_mocap_body = get_is_mocap_body(body_id)
         body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
         if not body_name:
             body_name = f"body_{body_id}"
-        
-        frame_obj =vis.showFrame(vtk.vtkTransform(), body_name, parent=body_frame_folder)
+
+        if is_scene_body and show_options.ignore_scene_bodies:
+            continue
+        if is_mocap_body and show_options.ignore_mocap_bodies:
+            continue
+        if body_name in show_options.ignore_body_names:
+            continue
+
+        frame_obj = vis.showFrame(vtk.vtkTransform(), body_name, parent=body_frame_folder)
         frame_obj.properties.scale = 0.1
         frame_obj.setPropertyAttribute('Edit', "readOnly", True)
 
@@ -731,22 +759,26 @@ def visualize_mujoco_model(model_folder, model, body_to_geom, mesh_resolver):
         if body_id in body_to_geom:
             for geom_id in body_to_geom[body_id]:
                 geom_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
+                if geom_name and geom_name in show_options.ignore_geom_names:
+                    continue
+                geom_group = int(model.geom_group[geom_id])
+                if geom_group in show_options.ignore_group_ids or geom_group > show_options.max_group_id:
+                    continue
                 if not geom_name:
                     geom_name = f"geom_{geom_id}"
                 
                 # Determine folder based on special rules, then fall back to geom group
                 group_folder = None
-                if is_scene_body(body_id):
+                if is_scene_body:
                     folder_name = "Scene"
                     group_key = folder_name
                     parent_for_folder = model_folder
-                elif is_mocap_body(body_id):
+                elif is_mocap_body:
                     folder_name = "mocap"
                     group_key = folder_name
                     parent_for_folder = model_folder
                 else:
                     # Get geom group (MuJoCo geom groups are integers, typically 0-5)
-                    geom_group = int(model.geom_group[geom_id])
                     folder_name = f"Group {geom_group}"
                     group_key = f"group_{geom_group}"
                     parent_for_folder = robot_folder
@@ -859,6 +891,8 @@ def visualize_mujoco_model(model_folder, model, body_to_geom, mesh_resolver):
 
     body_frame_folder.properties.visible = False
     model_folder.geom_items = geom_items
+    if show_options.finalize_callback:
+        show_options.finalize_callback(model_folder)
     return model_folder
 
 
@@ -931,6 +965,10 @@ class MujocoRobotModel:
         self.body_to_geom = build_body_to_geom_mapping(self.model)
         self._create_joint_properties_item()
 
+        self.default_show_options = ShowOptions()
+        self.default_show_options.scene_body_names.extend(["table", "floor"])
+        self.named_show_options = {}
+
     def get_kinematics_cache(self, name):
         cache = self.kin_cache.get(name)
         if not cache:
@@ -938,6 +976,12 @@ class MujocoRobotModel:
             self.kin_cache[name] = cache
         return cache
     
+    def get_default_show_options(self) -> ShowOptions:
+        return copy.deepcopy(self.default_show_options)
+
+    def set_show_options(self, name: str, show_options: ShowOptions):
+        self.named_show_options[name] = show_options
+
     def get_body_names(self) -> list[str]:
         """
         Get a list of all body names in the model.
@@ -1003,24 +1047,28 @@ class MujocoRobotModel:
                     ranges[joint_name] = (float(range_min), float(range_max))
         return ranges
     
-    def get_model_folder(self, name_or_folder=None):
+    def get_model_folder(self, name_or_folder=None, show_options: ShowOptions = None):
         if name_or_folder is None:
             name_or_folder = self.default_folder_name
         if isinstance(name_or_folder, str):
             folder = om.getOrCreateContainer(name_or_folder)
+            if not show_options:
+                show_options = self.named_show_options.get(name_or_folder)
         elif isinstance(name_or_folder, om.ObjectModelItem):
             folder = name_or_folder
         else:
             raise ValueError(f"Invalid type for name_or_folder: {type(name_or_folder)}")
         if not folder.children():
-            self._populate_model_folder(folder)
+            self._populate_model_folder(folder, show_options)
         folder.robot_model = self
         return folder
 
-    def _populate_model_folder(self, model_folder):
+    def _populate_model_folder(self, model_folder, show_options: ShowOptions = None):
+        show_options = show_options or self.get_default_show_options()
         visualize_mujoco_model(model_folder,
             self.model, self.body_to_geom, 
-            self.mesh_resolver
+            self.mesh_resolver, 
+            show_options
         )
 
     def show_model(self, name_or_folder=None):
@@ -1105,7 +1153,8 @@ class MujocoRobotModel:
         body_frame_folder = model_folder.findChild('Body Frames')
         for body_name, world_T_body in vtk_frames.items():
             frame_obj = body_frame_folder.findChild(body_name)
-            frame_obj.copyFrame(world_T_body)
+            if frame_obj:
+                frame_obj.copyFrame(world_T_body)
 
 
     def _create_joint_properties_item(self):
