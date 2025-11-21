@@ -922,9 +922,11 @@ class KinematicsUpdater:
 
     def push_q_dict(self, q_dict: dict[str, float]):
         self.pending_q_dict.update(q_dict)
+        return self
 
     def push_world_T_base(self, world_T_base: np.ndarray):
         self.pending_world_T_base = world_T_base
+        return self
 
     def commit(self, name_or_folder=None):
         if self.pending_q_dict or self.pending_world_T_base is not None:

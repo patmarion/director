@@ -146,14 +146,7 @@ class TimestampSlider:
             Relative timestamp in seconds from the start (min_timestamp)
         """
         return self.slider.getValue()
-    
-    def _toggle_play_pause(self):
-        """Toggle play/pause state."""
-        if self.slider.animationTimer.isActive():
-            self.slider.pause()
-        else:
-            self.slider.play()
-    
+        
     def _skip_forward(self, increment_s: float):
         """Skip time forward by the specified increment."""
         current_time = self.get_time()
@@ -175,7 +168,7 @@ class TimestampSlider:
         """
         # Space bar: toggle play/pause
         space_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Space'), main_window)
-        space_shortcut.activated.connect(self._toggle_play_pause)
+        space_shortcut.activated.connect(self.slider.togglePlayPause)
 
         def on_skip(increment_s: float):
             # schedule the skip with a single shot timer to prevent keyboard events

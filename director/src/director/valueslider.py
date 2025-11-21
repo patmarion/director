@@ -40,7 +40,7 @@ class ValueSlider(object):
         self.setResolution(resolution)
         self.slider.valueChanged.connect(self._onSliderValueChanged)
         self.spinbox.valueChanged.connect(self._onSpinboxValueChanged)
-        self.playButton.clicked.connect(self._onPlayClicked)
+        self.playButton.clicked.connect(self.togglePlayPause)
         self.speedComboBox.currentTextChanged.connect(self._onSpeedComboBoxChanged)
         self.widget = QtWidgets.QWidget()
         layout = QtWidgets.QHBoxLayout(self.widget)
@@ -104,7 +104,7 @@ class ValueSlider(object):
         self._updatePlayButtonIcon(is_playing=False)
         self.animationTimer.stop()
 
-    def _onPlayClicked(self):
+    def togglePlayPause(self):
         """Handle play/pause button click."""
         if self.animationTimer.isActive():
             self.pause()
