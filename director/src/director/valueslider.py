@@ -28,7 +28,12 @@ class ValueSlider(object):
         self.spinbox = QtWidgets.QDoubleSpinBox()
         self.spinbox.setSuffix('s')
         self.slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.playButton = QtWidgets.QPushButton('Play')
+        self.playButton = QtWidgets.QPushButton()
+        self.playButton.setFlat(True)
+        style = QtWidgets.QApplication.style()
+        self._play_icon = style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_MediaPlay)
+        self._pause_icon = style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_MediaPause)
+        self._updatePlayButtonIcon(is_playing=False)
         self.speedComboBox = QtWidgets.QComboBox()
         self._setupSpeedComboBox()
         self.setValueRange(minValue, maxValue)
@@ -73,7 +78,7 @@ class ValueSlider(object):
         value = self.getValue() + valueChange
         if value > self.maxValue:
             self.setValue(self.maxValue)
-            self.playButton.setText('Play')
+            self.pause()
             return False
         self.setValue(value)
         return True
@@ -90,13 +95,13 @@ class ValueSlider(object):
 
     def play(self):
         """Start animation playback."""
-        self.playButton.setText('Pause')
+        self._updatePlayButtonIcon(is_playing=True)
         self.animationPrevTime = time.time()
         self.animationTimer.start()
 
     def pause(self):
         """Pause animation playback."""
-        self.playButton.setText('Play')
+        self._updatePlayButtonIcon(is_playing=False)
         self.animationTimer.stop()
 
     def _onPlayClicked(self):
@@ -104,6 +109,8 @@ class ValueSlider(object):
         if self.animationTimer.isActive():
             self.pause()
         else:
+            if self.slider.value() >= self.slider.maximum():
+                self.setValue(self.minValue)
             self.play()
 
     def setResolution(self, resolution):
@@ -239,6 +246,13 @@ class ValueSlider(object):
             except ValueError:
                 # If parsing fails, default to 1x
                 self.setAnimationRate(1.0)
+
+    def _updatePlayButtonIcon(self, is_playing: bool):
+        """Update play button to show play/pause icon."""
+        icon = self._pause_icon if is_playing else self._play_icon
+        tooltip = 'Pause' if is_playing else 'Play'
+        self.playButton.setIcon(icon)
+        self.playButton.setToolTip(tooltip)
 
 
 class SliderEventFilter(QtCore.QObject):

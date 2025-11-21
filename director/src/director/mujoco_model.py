@@ -792,6 +792,9 @@ def visualize_mujoco_model(model_folder, model, body_to_geom, mesh_resolver):
                 # First: Check if geom has a material attribute
                 if geom_elem is not None:
                     material_name = geom_elem.get('material')
+
+                    if material_name == 'groundplane':
+                        material_name = None  # Todo, add a handler for this builtin material
                     if material_name:
                         # Look up material rgba from mesh_resolver
                         geom_rgba = mesh_resolver.get_material_rgba(material_name)
@@ -1108,7 +1111,7 @@ class MujocoRobotModel:
     def _create_joint_properties_item(self):
         """Create an ObjectModelItem with properties for each 1 DOF joint."""
         # Create the item
-        self.joint_properties_item = om.ObjectModelItem('MuJoCo Joints', om.Icons.Robot)
+        self.joint_properties_item = om.ObjectModelItem('MuJoCo Joints')
         
         # Get 1 DOF joint names and ranges
         joint_names = self.get_1dof_joint_names()

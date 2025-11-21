@@ -1,117 +1,12 @@
 import os
 import re
 from collections import defaultdict
-from qtpy import QtCore, QtGui, QtWidgets
+from qtpy import QtCore, QtWidgets
 from qtpy.QtCore import QObject
 from director.propertyset import PropertySet, PropertyAttributes
 from director import callbacks
-import functools
+from director.icons import Icons
 
-class Icons(object):
-
-  Directory = QtWidgets.QStyle.StandardPixmap.SP_DirIcon
-  # Use file system paths instead of Qt resource paths
-  _icon_base_path = None
-  
-  @classmethod
-  def _get_icon_path(cls, filename):
-      """Get the file system path for an icon file."""
-      if cls._icon_base_path is None:
-          # Try to find the images directory relative to the source tree
-          # This file is in director/src/director/, so go up to src/app/images/
-          current_dir = os.path.dirname(os.path.abspath(__file__))
-          # director/src/director -> director/src -> director/src/app/images
-          possible_paths = [
-              os.path.join(current_dir, '..', '..', 'app', 'images', filename),
-              os.path.join(current_dir, '..', '..', '..', 'src', 'app', 'images', filename),
-              os.path.join(os.path.dirname(current_dir), '..', 'src', 'app', 'images', filename),
-          ]
-          for path in possible_paths:
-              abs_path = os.path.abspath(path)
-              if os.path.exists(abs_path):
-                  cls._icon_base_path = os.path.dirname(abs_path)
-                  break
-          if cls._icon_base_path is None:
-              cls._icon_base_path = ''  # Fallback: icons won't load from files
-      
-      if cls._icon_base_path:
-          return os.path.join(cls._icon_base_path, filename)
-      return None
-
-  @classmethod
-  def _create_simple_icon(cls, shape='circle', color='black'):
-      """Create a simple icon programmatically as fallback."""
-      from qtpy.QtGui import QPixmap, QPainter, QColor
-      pixmap = QPixmap(16, 16)
-      pixmap.fill(QtCore.Qt.transparent)
-      painter = QPainter(pixmap)
-      painter.setRenderHint(QPainter.Antialiasing)
-      
-      if color == 'gray':
-          qcolor = QColor(128, 128, 128)
-      else:
-          qcolor = QColor(0, 0, 0)
-      
-      painter.setBrush(qcolor)
-      painter.setPen(qcolor)
-      
-      if shape == 'circle':
-          painter.drawEllipse(2, 2, 12, 12)
-      elif shape == 'eye':
-          # Simple eye shape
-          painter.drawEllipse(4, 4, 8, 8)
-          painter.setBrush(QtCore.Qt.white)
-          painter.drawEllipse(6, 6, 4, 4)
-      
-      painter.end()
-      return QtGui.QIcon(pixmap)
-
-  Axes = 'axes_icon.png'
-  Eye = 'eye_icon.png'
-  EyeOff = 'eye_icon_gray.png'
-  Matlab = 'matlab_logo.png'
-  Robot = 'robot_icon.png'
-  Hammer = 'hammer_icon.png'
-  Laser = 'laser_icon.jpg'
-  Feet = 'feet.png'
-  Hand = 'claw.png'
-  Octomap = 'octomap.jpg'
-  Collections = 'rubix_cube.jpg'
-
-  @staticmethod
-  @functools.lru_cache(maxsize=None)
-  def getIcon(iconId):
-      '''
-      Return a QIcon given an icon id as a string (filename) or StandardPixmap enum.
-      '''
-      # Handle StandardPixmap enum
-      if isinstance(iconId, QtWidgets.QStyle.StandardPixmap):
-          return QtWidgets.QApplication.instance().style().standardIcon(iconId)
-      elif isinstance(iconId, int):
-          # Legacy support: convert int to enum
-          try:
-              enum_value = QtWidgets.QStyle.StandardPixmap(iconId)
-              return QtWidgets.QApplication.instance().style().standardIcon(enum_value)
-          except (ValueError, TypeError):
-              pass
-      
-      # Handle string (icon filename)
-      if isinstance(iconId, str):
-          icon_path = Icons._get_icon_path(iconId)
-          if icon_path and os.path.exists(icon_path):
-              return QtGui.QIcon(icon_path)
-          else:
-              # Fallback: create simple icon based on filename
-              if 'eye' in iconId.lower():
-                  if 'gray' in iconId.lower():
-                      return Icons._create_simple_icon('eye', 'gray')
-                  else:
-                      return Icons._create_simple_icon('eye', 'black')
-              # Default fallback
-              return QtGui.QIcon()
-      
-      # Unknown type
-      return QtGui.QIcon()
 
 class ObjectModelItem(object):
 
@@ -127,7 +22,7 @@ class ObjectModelItem(object):
         self._tree = None
         self.properties = state['properties']
 
-    def __init__(self, name, icon=Icons.Robot, properties=None):
+    def __init__(self, name, properties=None, icon=None):
 
         #print 'init called on:', self
         self._tree = None
@@ -138,7 +33,7 @@ class ObjectModelItem(object):
         self.properties.connectPropertyAdded(self._onPropertyAdded)
         self.properties.connectPropertyAttributeChanged(self._onPropertyAttributeChanged)
 
-        self.addProperty('Icon', icon, attributes=PropertyAttributes(hidden=True))
+        self.addProperty('Icon', icon or Icons.Empty, attributes=PropertyAttributes(hidden=True))
         self.addProperty('Deletable', True, attributes=PropertyAttributes(hidden=True))
         self.addProperty('Name', name, attributes=PropertyAttributes(hidden=True))
 
@@ -255,7 +150,7 @@ class ObjectModelItem(object):
 class ContainerItem(ObjectModelItem):
 
     def __init__(self, name):
-        ObjectModelItem.__init__(self, name, Icons.Directory)
+        ObjectModelItem.__init__(self, name, icon=Icons.Directory)
         self.addProperty('Visible', True)
 
     def _onPropertyChanged(self, propertySet, propertyName):

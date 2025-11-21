@@ -11,6 +11,7 @@ from director import consoleapp
 from director.frame_properties import FrameProperties
 import director.objectmodel as om
 import director.visualization as vis
+from director.icons import Icons
 from director.fieldcontainer import FieldContainer
 from director import applogic
 from director import appsettings
@@ -161,11 +162,7 @@ class MainWindowApp(object):
 
     def addToolBarAction(self, toolBar, text, icon=None, callback=None):
         if isinstance(icon, str):
-            # Try to load icon, but handle gracefully if resource doesn't exist
-            try:
-                icon = QtGui.QIcon(icon)
-            except:
-                icon = None  # Use no icon if resource unavailable
+            icon = Icons.getIcon(icon)
         
         if icon:
             action = toolBar.addAction(icon, text)
@@ -223,7 +220,7 @@ class MainWindowAppFactory(object):
             'RunScriptFunction' : ['Globals', 'PythonConsole', 'CommandLineArgs'],
             'ScriptLoader' : ['CommandLineArgs', 'RunScriptFunction'],
             'ProfilerTool' : ['MainWindow'],
-            'ScreenRecorder' : ['MainWindow', 'View'],
+            'ScreenRecorder' : ['MainWindow', 'View', 'MainToolBar'],
             'UndoRedo' : ['MainWindow'],
             'WaitCursor' : ['MainWindow'],
             'ApplicationSettings': ['Grid', 'ViewOptions', 'MainWindow'],
@@ -337,10 +334,10 @@ class MainWindowAppFactory(object):
 
     def initMainWindow(self, fields):
 
-        organizationName = 'RobotLocomotion'
-        applicationName = 'DirectorMainWindow'
+        organizationName = 'Director'
+        applicationName = 'Director'
         windowTitle = 'Director'
-        windowIcon = None  # Icon resources not yet set up
+        windowIcon = None
 
         if hasattr(fields, 'organizationName'):
             organizationName = fields.organizationName
@@ -360,10 +357,7 @@ class MainWindowAppFactory(object):
         app.mainWindow.setCentralWidget(fields.view)
         app.mainWindow.setWindowTitle(windowTitle)
         if windowIcon:
-            try:
-                app.mainWindow.setWindowIcon(QtGui.QIcon(windowIcon))
-            except:
-                pass  # Ignore if icon resource unavailable
+            app.mainWindow.setWindowIcon(QtGui.QIcon(windowIcon))
 
         # Create Python console dock if console widget is available
         if fields.pythonConsoleWidget:
@@ -429,15 +423,15 @@ class MainWindowAppFactory(object):
         toolBar = app.addToolBar('Main Toolbar')
         
         # Icon resources not yet set up - use text-only for now
-        app.addToolBarAction(toolBar, 'Python Console', None, callback=app.showPythonConsole)
+        app.addToolBarAction(toolBar, 'Python Console', Icons.Python, callback=app.showPythonConsole)
         toolBar.addSeparator()
 
-        terrainModeAction = app.addToolBarAction(toolBar, 'Camera Free Rotate', None)
+        terrainModeAction = app.addToolBarAction(toolBar, 'Camera Free Rotate', Icons.CameraRotate)
 
         # lightAction = app.addToolBarAction(toolBar, 'Background Light', None)
         # viewBackgroundLightHandler not yet implemented
 
-        app.addToolBarAction(toolBar, 'Reset Camera', None, 
+        app.addToolBarAction(toolBar, 'Reset Camera', Icons.ResetCamera, 
                            callback=lambda: applogic.resetCamera(view=fields.view))
 
         def getFreeCameraMode():
@@ -639,7 +633,8 @@ class MainWindowAppFactory(object):
         )
         
         # Add to toolbar
-        toolbar = fields.app.addToolBar('Recording')
+        toolbar = fields.mainToolbar
+        toolbar.addSeparator()
         toolbar.addWidget(screen_recorder.get_widget())
         
         return FieldContainer(screen_recorder=screen_recorder)

@@ -13,20 +13,19 @@ class TimerCallback(object):
         frequency for the ticks() callback method.
         '''
         self.targetFps = targetFps
+        self.callback = callback
         self.timer = QtCore.QTimer()
-        self.enableScheduledTimer()
-
+        self.timer.timeout.connect(self._timerEvent)
         self.singleShotTimer = QtCore.QTimer()
         self.singleShotTimer.setSingleShot(True)
-        self.callback = callback
+        self.singleShotTimer.timeout.connect(self._singleShotTimerEvent)
+        self.enableScheduledTimer()
+
 
     def start(self):
         '''
         Start the timer.
         '''
-        if not self.timer.isActive():
-            self.timer.timeout.connect(self._timerEvent)
-
         self.startTime = time.time()
         self.lastTickTime = self.startTime
 
@@ -40,20 +39,7 @@ class TimerCallback(object):
         Stop the timer.
         '''
         self.timer.stop()
-        try:
-            self.timer.timeout.disconnect(self._timerEvent)
-        except (TypeError, RuntimeError):
-            pass  # Already disconnected or signal not connected
-        
-        # Only try to disconnect singleShotTimer if it's active
-        if self.singleShotTimer.isActive():
-            self.singleShotTimer.stop()
-            try:
-                self.singleShotTimer.timeout.disconnect(self._singleShotTimerEvent)
-            except (TypeError, RuntimeError):
-                pass  # Already disconnected or signal not connected
-        else:
-            self.singleShotTimer.stop()
+        self.singleShotTimer.stop()
 
     def tick(self):
         '''
@@ -80,17 +66,11 @@ class TimerCallback(object):
 
     def singleShot(self, timeoutInSeconds):
         """Schedule a single-shot timer event."""
-        if not self.singleShotTimer.isActive():
-            self.singleShotTimer.timeout.connect(self._singleShotTimerEvent)
         self.singleShotTimer.start(int(timeoutInSeconds * 1000))
 
     def _singleShotTimerEvent(self):
         """Handle single-shot timer event."""
         self.tick()
-        try:
-            self.singleShotTimer.timeout.disconnect(self._singleShotTimerEvent)
-        except (TypeError, RuntimeError):
-            pass  # Already disconnected or signal not connected
 
     def _schedule(self, elapsedTimeInSeconds):
         '''

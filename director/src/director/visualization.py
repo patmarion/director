@@ -151,7 +151,7 @@ class PolyDataItem(om.ObjectModelItem):
 
     def __init__(self, name, polyData, view):
 
-        om.ObjectModelItem.__init__(self, name, om.Icons.Robot)
+        om.ObjectModelItem.__init__(self, name)
 
         self.views = []
         self.polyData = polyData
@@ -562,7 +562,7 @@ class Image2DItem(om.ObjectModelItem):
             image: vtkImageData instance
             view: VTKWidget view instance
         """
-        om.ObjectModelItem.__init__(self, name, om.Icons.Robot)
+        om.ObjectModelItem.__init__(self, name)
         
         self.views = []
         self.image = image
