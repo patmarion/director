@@ -1,6 +1,6 @@
 
-import pyqtgraph as pg
-import qtpy.QtCore as QtCore
+import pyqtgraph as pg  # type: ignore[import]
+import qtpy.QtCore as QtCore  # type: ignore[import]
 import numpy as np
 from typing import Iterable, Callable
 
@@ -17,16 +17,21 @@ class PlotInteractionViewBox(pg.ViewBox):
         self._right_drag_start = None
         self._right_last_pos = None
 
-    def mouseClickEvent(self, ev):
+    def mousePressEvent(self, ev):
         if (
             ev.button() == QtCore.Qt.MouseButton.LeftButton
             and ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier
         ):
             if self.ctrl_jump_callback:
                 self.ctrl_jump_callback(self, self.mapSceneToView(ev.scenePos()))
+            # After jump, fall through to allow the default pan/drag behavior
             ev.accept()
+            super().mousePressEvent(ev)
             return
 
+        super().mousePressEvent(ev)
+
+    def mouseClickEvent(self, ev):
         if ev.button() == QtCore.Qt.MouseButton.LeftButton and ev.double():
             # Mimic standard double-click autorange behavior.
             self.enableAutoRange(pg.ViewBox.XYAxes, True)
@@ -82,6 +87,7 @@ class PlotInteractionViewBox(pg.ViewBox):
             self._right_drag_mode = None
             self._right_drag_start = pos
             self._right_last_pos = pos
+            self._right_start_center = self.mapSceneToView(ev.scenePos())
             return
 
         if self._right_drag_mode is None:
@@ -104,6 +110,7 @@ class PlotInteractionViewBox(pg.ViewBox):
             self._right_drag_mode = None
             self._right_drag_start = None
             self._right_last_pos = None
+            self._right_start_center = None
 
     def _scale_axis(self, delta_pixels, axis: str, scene_pos):
         if delta_pixels == 0:
@@ -112,7 +119,7 @@ class PlotInteractionViewBox(pg.ViewBox):
         # Use an exponential scale factor for smooth zooming similar to ViewBox defaults.
         scale_factor = 1 - (delta_pixels * 0.01)
         scale_factor = max(0.1, min(10.0, scale_factor))
-        center = self.mapSceneToView(scene_pos)
+        center = self._right_start_center or self.mapSceneToView(scene_pos)
 
         if axis == "x":
             self.scaleBy((scale_factor, 1.0), center=center)
