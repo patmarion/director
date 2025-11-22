@@ -354,7 +354,22 @@ class MainWindowAppFactory(object):
 
         app = MainWindowApp()
 
-        app.mainWindow.setCentralWidget(fields.view)
+
+        tab_widget = QtWidgets.QTabWidget()
+        tab_widget.setDocumentMode(True)
+        tab_widget.tabBar().setAutoHide(True)
+        #tab_widget.tabBar().setTabsClosable(True)
+        #tab_widget.tabBar().setTabButton(0, QtWidgets.QTabBar.RightSide, None)
+
+        splitter = QtWidgets.QSplitter()
+        tab_widget.addTab(splitter, 'View')
+        splitter.addWidget(fields.view)
+        #splitter.setChildrenCollapsible(False)
+
+        app.tab_widget = tab_widget
+        app.splitter = splitter
+
+        app.mainWindow.setCentralWidget(tab_widget)
         app.mainWindow.setWindowTitle(windowTitle)
         if windowIcon:
             app.mainWindow.setWindowIcon(QtGui.QIcon(windowIcon))
@@ -554,7 +569,8 @@ class MainWindowAppFactory(object):
             for scriptArgs in scripts:
                 fields.runScript(scriptArgs[0], scriptArgs[1:])
 
-        consoleapp.ConsoleApp.registerStartupCallback(loadScripts)
+        # Use a later priority so that scripts run after other startup callbacks have completed
+        consoleapp.ConsoleApp.registerStartupCallback(loadScripts, priority=10)
 
         return FieldContainer()
 

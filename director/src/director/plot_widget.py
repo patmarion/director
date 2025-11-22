@@ -1,0 +1,260 @@
+
+import pyqtgraph as pg
+import qtpy.QtCore as QtCore
+import numpy as np
+from typing import Iterable, Callable
+
+
+class PlotInteractionViewBox(pg.ViewBox):
+    """Custom ViewBox implementing tailored interaction modes."""
+
+    def __init__(self, ctrl_jump_callback: Callable[[pg.ViewBox, QtCore.QPointF], None] | None = None):
+        super().__init__(enableMenu=False)
+        self.ctrl_jump_callback = ctrl_jump_callback
+        self.setMouseMode(self.PanMode)
+        self._previous_mouse_mode = None
+        self._right_drag_mode = None
+        self._right_drag_start = None
+        self._right_last_pos = None
+
+    def mouseClickEvent(self, ev):
+        if (
+            ev.button() == QtCore.Qt.MouseButton.LeftButton
+            and ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier
+        ):
+            if self.ctrl_jump_callback:
+                self.ctrl_jump_callback(self, self.mapSceneToView(ev.scenePos()))
+            ev.accept()
+            return
+
+        if ev.button() == QtCore.Qt.MouseButton.LeftButton and ev.double():
+            # Mimic standard double-click autorange behavior.
+            self.enableAutoRange(pg.ViewBox.XYAxes, True)
+            self.autoRange()
+            ev.accept()
+            return
+
+        super().mouseClickEvent(ev)
+
+    def mouseDragEvent(self, ev, axis=None):
+        button = ev.button()
+        modifiers = ev.modifiers()
+
+        if button == QtCore.Qt.MouseButton.LeftButton:
+            if modifiers & QtCore.Qt.KeyboardModifier.ControlModifier:
+                ev.ignore()
+                return
+
+            if modifiers & QtCore.Qt.KeyboardModifier.ShiftModifier:
+                self._handle_rect_zoom_drag(ev, axis)
+                return
+
+            self.setMouseMode(self.PanMode)
+            super().mouseDragEvent(ev, axis)
+            return
+
+        if button == QtCore.Qt.MouseButton.MiddleButton:
+            super().mouseDragEvent(ev, axis)
+            return
+
+        if button == QtCore.Qt.MouseButton.RightButton:
+            self._handle_axis_scale_drag(ev)
+            return
+
+        super().mouseDragEvent(ev, axis)
+
+    def _handle_rect_zoom_drag(self, ev, axis):
+        if ev.isStart():
+            self._previous_mouse_mode = self.state["mouseMode"]
+            self.setMouseMode(self.RectMode)
+
+        super().mouseDragEvent(ev, axis)
+
+        if ev.isFinish() and self._previous_mouse_mode is not None:
+            self.setMouseMode(self._previous_mouse_mode)
+            self._previous_mouse_mode = None
+
+    def _handle_axis_scale_drag(self, ev):
+        ev.accept()
+        pos = ev.pos()
+
+        if ev.isStart():
+            self._right_drag_mode = None
+            self._right_drag_start = pos
+            self._right_last_pos = pos
+            return
+
+        if self._right_drag_mode is None:
+            delta = pos - self._right_drag_start
+            if abs(delta.x()) > 3 or abs(delta.y()) > 3:
+                self._right_drag_mode = "x" if abs(delta.x()) >= abs(delta.y()) else "y"
+
+        if self._right_drag_mode is None:
+            return
+
+        delta = pos - self._right_last_pos
+        self._right_last_pos = pos
+
+        if self._right_drag_mode == "x":
+            self._scale_axis(delta.x(), axis="x", scene_pos=ev.scenePos())
+        else:
+            self._scale_axis(-delta.y(), axis="y", scene_pos=ev.scenePos())
+
+        if ev.isFinish():
+            self._right_drag_mode = None
+            self._right_drag_start = None
+            self._right_last_pos = None
+
+    def _scale_axis(self, delta_pixels, axis: str, scene_pos):
+        if delta_pixels == 0:
+            return
+
+        # Use an exponential scale factor for smooth zooming similar to ViewBox defaults.
+        scale_factor = 1 - (delta_pixels * 0.01)
+        scale_factor = max(0.1, min(10.0, scale_factor))
+        center = self.mapSceneToView(scene_pos)
+
+        if axis == "x":
+            self.scaleBy((scale_factor, 1.0), center=center)
+        else:
+            self.scaleBy((1.0, scale_factor), center=center)
+
+
+class PlotWidget:
+    """Utility for creating synchronized plots from log channels."""
+
+    def __init__(self, time_slider, start_time_s: float | None = None):
+        self.time_slider = time_slider
+        self.plot_widget = pg.GraphicsLayoutWidget()
+        self.plot_widget.setWindowTitle("Plot Widget")
+
+        self.plot_widget.setBackground((240, 240, 240))
+
+        self._plots = []
+        self._x_link_source = None
+        self.auto_scroll = True
+        self.start_time_s = (
+            start_time_s if start_time_s is not None else time_slider.min_timestamp
+        )
+        self._suspend_auto_scroll = False
+
+        self.time_slider.connect_on_time_changed(self._on_time_slider_changed)
+
+    def add_plot(
+        self,
+        timestamps_s: np.ndarray,
+        series_list: Iterable[tuple[str, np.ndarray]],
+        title: str,
+        y_label: str,
+        y_units: str,
+        horizontal_lines: Iterable[float] | None = None,
+    ):
+        """Add a plot for the given channel/fields."""
+        timestamps_s = np.array(timestamps_s)
+        series = list(series_list)
+        if timestamps_s.size == 0 or not series:
+            print("plot_widget: timestamps and series data are required.")
+            return
+
+        time_offsets_s = timestamps_s - self.start_time_s
+
+        if self._plots:
+            self.plot_widget.nextRow()
+        view_box = PlotInteractionViewBox(self._handle_ctrl_jump)
+        plot_item = self.plot_widget.addPlot(title=title, viewBox=view_box)
+
+        if self._x_link_source is None:
+            self._x_link_source = plot_item
+        else:
+            plot_item.setXLink(self._x_link_source)
+
+        plot_item.setLabel("left", y_label, units=y_units)
+        plot_item.setLabel("bottom", "Time", units="seconds")
+        legend = plot_item.addLegend(offset=(-10, 10))
+        legend.anchor((1, 0), (1, 0))
+
+        color_index = 0
+
+        for label, values in series:
+            values = np.asarray(values)
+            if values.ndim == 1:
+                values = values[:, None]
+
+            for column in range(values.shape[1]):
+                column_name = label if values.shape[1] == 1 else f"{label}[{column}]"
+                pen = self._pen_for_index(color_index)
+                color_index += 1
+                plot_item.plot(time_offsets_s, values[:, column], name=column_name, pen=pen)
+
+        vline = pg.InfiniteLine(angle=90, movable=True)
+        plot_item.addItem(vline, ignoreBounds=True)
+        vline.sigDragged.connect(self._make_drag_handler(vline))
+
+        if horizontal_lines:
+            for value in horizontal_lines:
+                hline = pg.InfiniteLine(
+                    angle=0,
+                    movable=False,
+                    pen=pg.mkPen(color="black", style=QtCore.Qt.PenStyle.DashLine),
+                )
+                plot_item.addItem(hline, ignoreBounds=True)
+                hline.setPos(value)
+
+        self._plots.append({"plot_item": plot_item, "vline": vline})
+
+    @staticmethod
+    def _pen_for_index(index):
+        return pg.mkPen(pg.intColor(index), width=2)
+
+    def _make_drag_handler(self, vline):
+        def handler():
+            time_offset_s = vline.pos()[0]
+            timestamp_s = time_offset_s + self.start_time_s
+            self._suspend_auto_scroll = True
+            self.time_slider.set_time(timestamp_s)
+
+        return handler
+
+    def _handle_ctrl_jump(self, view_box: pg.ViewBox, view_point: QtCore.QPointF):
+        timestamp_s = view_point.x() + self.start_time_s
+        self._suspend_auto_scroll = True
+        self.time_slider.set_time(timestamp_s)
+
+    def _on_time_slider_changed(self, timestamp_s):
+        pre_positions = {}
+        if self.auto_scroll and not self._suspend_auto_scroll:
+            for entry in self._plots:
+                plot_item = entry["plot_item"]
+                view_box = plot_item.getViewBox()
+                x_min, x_max = view_box.viewRange()[0]
+                width = x_max - x_min
+                if width <= 0:
+                    continue
+                relative = entry["vline"].pos()[0]
+                fraction = (relative - x_min) / width
+                pre_positions[plot_item] = (fraction, width)
+
+        for entry in self._plots:
+            offset = timestamp_s - self.start_time_s
+            entry["vline"].setPos(offset)
+            if self.auto_scroll and not self._suspend_auto_scroll:
+                plot_item = entry["plot_item"]
+                if plot_item in pre_positions:
+                    fraction, width = pre_positions[plot_item]
+                    self._scroll_to_timestamp(plot_item, offset, fraction, width)
+        self._suspend_auto_scroll = False
+
+    @staticmethod
+    def _scroll_to_timestamp(plot_item, relative_time, fraction=None, width=None):
+        view_box = plot_item.getViewBox()
+        current_range = view_box.viewRange()
+        x_min, x_max = current_range[0]
+        if width is None:
+            width = x_max - x_min
+        if width <= 0:
+            return
+        if fraction is None:
+            fraction = (relative_time - x_min) / width
+            fraction = max(0.0, min(1.0, fraction))
+        new_x_min = relative_time - fraction * width
+        view_box.setXRange(new_x_min, new_x_min + width, padding=0)
