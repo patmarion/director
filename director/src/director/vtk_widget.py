@@ -353,6 +353,41 @@ class VTKWidget(QWidget):
         if enabled:
             self._light_kit.AddLightsToRenderer(self._renderer)
     
+    def computeDisplayToWorldRay(self, display_xy):
+        """
+        Compute a world ray from a display point.
+        Args:
+            display_xy: Display point [x, y] in pixel coordinates, (0, 0) is the top left corner of the view
+        Returns:
+            world_pt1: World point 1 [x, y, z], lies at the camera origin
+            world_pt2: World point 2 [x, y, z], lies on the view plane 1m from the camera origin
+        """
+        world_pt1 = [0.0, 0.0, 0.0, 0.0]
+        world_pt2 = [0.0, 0.0, 0.0, 0.0]
+        renderer = self.renderer()
+        # flip y coordinate from orgin at top-left to vtk's origin at bottom-left.
+        display_xy = (display_xy[0], self.height() - display_xy[1])
+        vtk.vtkInteractorObserver.ComputeDisplayToWorld(renderer, display_xy[0], display_xy[1], 0, world_pt1)
+        vtk.vtkInteractorObserver.ComputeDisplayToWorld(renderer, display_xy[0], display_xy[1], 1, world_pt2)
+        return world_pt1[:3], world_pt2[:3]
+
+    def computeWorldToDisplay(self, world_xyz):
+        """
+        Compute a display point from a world point.
+        Args:
+            world_xyz: World point [x, y, z]
+        Returns:
+            display_xy: Display point [x, y] in pixel coordinates, (0, 0) is the top left corner of the view
+        """
+        display_point = [0.0, 0.0, 0.0]
+        vtk.vtkInteractorObserver.ComputeWorldToDisplay(
+            self.renderer(),
+            *world_xyz,
+            display_point)
+        # flip y coordinate to origin at top-left from vtk's origin at bottom-left.
+        display_point = (display_point[0], self.height() - display_point[1])
+        return display_point[:2]
+
     def _setup_orientation_marker(self):
         """Setup the orientation marker widget."""
         # Disable interactor temporarily
