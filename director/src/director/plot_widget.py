@@ -1,15 +1,232 @@
 
+from dataclasses import dataclass, field
+from typing import Callable, Iterable
+
+import numpy as np
 import pyqtgraph as pg  # type: ignore[import]
 import qtpy.QtCore as QtCore  # type: ignore[import]
-import numpy as np
-from typing import Iterable, Callable
+
+
+@dataclass
+class PlotEntry:
+    plot_item: pg.PlotItem
+    line_series: list[pg.PlotDataItem] = field(default_factory=list)
+    vline: pg.InfiniteLine | None = None
+    horizontal_lines: list[pg.InfiniteLine] = field(default_factory=list)
+    legend: pg.LegendItem | None = None
+
+class PlotWidget:
+    """Utility for creating synchronized plots from log channels."""
+
+    def __init__(self):
+        self.time_slider = None
+        self.plot_widget = pg.GraphicsLayoutWidget()
+        self.plot_widget.setWindowTitle("Plot Widget")
+
+        self.plot_widget.setBackground((240, 240, 240))
+
+        self._plots: list[pg.PlotItem] = []
+        self._plot_entries: dict[pg.PlotItem, PlotEntry] = {}
+        self._x_link_source = None
+        self.auto_scroll = True
+        self.start_time_s = 0.0
+        self._suspend_auto_scroll = False
+
+    def connect_time_slider(self, time_slider):
+        assert self.time_slider is None
+        self.time_slider = time_slider
+        self.start_time_s = time_slider.get_time_range()[0]
+        self.time_slider.connect_on_time_changed(self._on_time_slider_changed)
+
+    def add_plot_with_data(
+        self,
+        timestamps_s: np.ndarray,
+        series_list: Iterable[tuple[str, np.ndarray]],
+        title: str,
+        y_label: str,
+        y_units: str,
+        horizontal_lines: Iterable[float] | None = None,
+    ):
+        """Add a plot for the given channel/fields."""
+        timestamps_s = np.array(timestamps_s)
+        series = list(series_list)
+        if timestamps_s.size == 0 or not series:
+            print("plot_widget: timestamps and series data are required.")
+            return
+
+        plot_item = self.add_plot(title, y_label, y_units)
+        self.add_data_to_plot(plot_item, timestamps_s, series)
+        self.add_horizontal_lines(plot_item, horizontal_lines)
+
+    def add_plot(self, title: str, y_label: str=None, y_units: str=None) -> pg.PlotItem:
+        if self._plots:
+            self.plot_widget.nextRow()
+
+        view_box = PlotInteractionViewBox(self._handle_ctrl_jump)
+        plot_item = self.plot_widget.addPlot(title=title, viewBox=view_box)
+
+        if self._x_link_source is None:
+            self._x_link_source = plot_item
+        else:
+            plot_item.setXLink(self._x_link_source)
+
+        plot_item.setLabel("left", y_label, units=y_units)
+        plot_item.setLabel("bottom", "Time", units="seconds")
+        legend = plot_item.addLegend(offset=(-10, 10))
+        legend.anchor((1, 0), (1, 0))
+
+        vline = self._attach_vline(plot_item)
+        self._plots.append(plot_item)
+        self._plot_entries[plot_item] = PlotEntry(plot_item=plot_item, vline=vline, legend=legend)
+        return plot_item
+
+    def get_plots(self) -> list[pg.PlotItem]:
+        return list(self._plots)
+
+    def remove_last_plot(self):
+        if not self._plots:
+            return
+
+        plot_item = self._plots.pop()
+        if plot_item in self._plot_entries:
+            del self._plot_entries[plot_item]
+
+        self.plot_widget.removeItem(plot_item)
+
+        if self._x_link_source == plot_item:
+            self._x_link_source = self._plots[0] if self._plots else None
+            # Update links
+            if self._x_link_source:
+                for p in self._plots:
+                    p.setXLink(self._x_link_source)
+
+    def _attach_vline(self, plot_item: pg.PlotItem) -> pg.InfiniteLine:
+        vline = pg.InfiniteLine(angle=90, movable=True)
+        plot_item.addItem(vline, ignoreBounds=True)
+        vline.sigDragged.connect(self._make_drag_handler(vline))
+        return vline
+
+    def add_data_to_plot(
+        self,
+        plot_item: pg.PlotItem,
+        timestamps_s: np.ndarray,
+        series_list: Iterable[tuple[str, np.ndarray]],
+    ) -> None:
+        entry = self._plot_entries[plot_item]
+        color_index = len(entry.line_series)
+
+        time_offsets_s = timestamps_s - self.start_time_s
+
+        for label, values in series_list:
+            values = np.asarray(values)
+            if values.ndim == 1:
+                values = values[:, None]
+
+            for column in range(values.shape[1]):
+                column_name = label if values.shape[1] == 1 else f"{label}[{column}]"
+                pen = self._pen_for_index(color_index)
+                color_index += 1
+                line_series = plot_item.plot(time_offsets_s, values[:, column], name=column_name, pen=pen)
+                entry.line_series.append(line_series)
+
+    def add_horizontal_lines(
+        self,
+        plot_item: pg.PlotItem,
+        horizontal_lines: Iterable[float] | None,
+    ) -> None:
+        if not horizontal_lines:
+            return
+
+        entry = self._plot_entries[plot_item]
+        for value in horizontal_lines:
+            hline = pg.InfiniteLine(
+                angle=0,
+                movable=False,
+                pen=pg.mkPen(color="black", style=QtCore.Qt.PenStyle.DashLine),
+            )
+            plot_item.addItem(hline, ignoreBounds=True)
+            hline.setPos(value)
+            entry.horizontal_lines.append(hline)
+
+    @staticmethod
+    def _pen_for_index(index):
+        return pg.mkPen(pg.intColor(index), width=2)
+
+    def _make_click_handler(self, line_series):
+        def handler():
+            print(f"Clicked on {line_series.name()}")
+        return handler
+
+    def _make_drag_handler(self, vline):
+        def handler():
+            time_offset_s = vline.pos()[0]
+            timestamp_s = time_offset_s + self.start_time_s
+            self._suspend_auto_scroll = True
+            if self.time_slider:
+                self.time_slider.set_time(timestamp_s)
+
+        return handler
+
+    def _handle_ctrl_jump(self, view_box: pg.ViewBox, view_point: QtCore.QPointF):
+        relative_time_s = view_point.x()
+        self._suspend_auto_scroll = True
+        if self.time_slider:
+            timestamp_s = self.start_time_s + relative_time_s
+            self.time_slider.set_time(timestamp_s)
+        else:
+            self._update_vlines(relative_time_s)
+
+    def _on_time_slider_changed(self, timestamp_s):
+        time_offset_s = timestamp_s - self.start_time_s
+        self._update_vlines(time_offset_s)
+
+    def _update_vlines(self, time_offset_s):
+        pre_positions = {}
+        if self.auto_scroll and not self._suspend_auto_scroll:
+            for plot_item in self._plots:
+                entry = self._plot_entries.get(plot_item)
+                if entry is None or entry.vline is None:
+                    continue
+                view_box = plot_item.getViewBox()
+                x_min, x_max = view_box.viewRange()[0]
+                width = x_max - x_min
+                if width <= 0:
+                    continue
+                relative = entry.vline.pos()[0]
+                fraction = (relative - x_min) / width
+                pre_positions[plot_item] = (fraction, width)
+
+        for plot_item in self._plots:
+            entry = self._plot_entries.get(plot_item)
+            if entry is None or entry.vline is None:
+                continue
+            entry.vline.setPos(time_offset_s)
+            if self.auto_scroll and not self._suspend_auto_scroll and plot_item in pre_positions:
+                fraction, width = pre_positions[plot_item]
+                self._scroll_to_timestamp(plot_item, time_offset_s, fraction, width)
+        self._suspend_auto_scroll = False
+
+    @staticmethod
+    def _scroll_to_timestamp(plot_item, relative_time, fraction=None, width=None):
+        view_box = plot_item.getViewBox()
+        current_range = view_box.viewRange()
+        x_min, x_max = current_range[0]
+        if width is None:
+            width = x_max - x_min
+        if width <= 0:
+            return
+        if fraction is None:
+            fraction = (relative_time - x_min) / width
+            fraction = max(0.0, min(1.0, fraction))
+        new_x_min = relative_time - fraction * width
+        view_box.setXRange(new_x_min, new_x_min + width, padding=0)
 
 
 class PlotInteractionViewBox(pg.ViewBox):
     """Custom ViewBox implementing tailored interaction modes."""
 
     def __init__(self, ctrl_jump_callback: Callable[[pg.ViewBox, QtCore.QPointF], None] | None = None):
-        super().__init__(enableMenu=False)
+        super().__init__(enableMenu=True)
         self.ctrl_jump_callback = ctrl_jump_callback
         self.setMouseMode(self.PanMode)
         self._previous_mouse_mode = None
@@ -33,9 +250,19 @@ class PlotInteractionViewBox(pg.ViewBox):
 
     def mouseClickEvent(self, ev):
         if ev.button() == QtCore.Qt.MouseButton.LeftButton and ev.double():
-            # Mimic standard double-click autorange behavior.
-            self.enableAutoRange(pg.ViewBox.XYAxes, True)
-            self.autoRange()
+            if ev.modifiers() & QtCore.Qt.KeyboardModifier.ShiftModifier:
+                # Manually compute Y range from children bounds
+                bounds = self.childrenBounds()
+                if bounds is not None:
+                    y_bounds = bounds[1]
+                    if y_bounds is not None and y_bounds[0] is not None and y_bounds[1] is not None:
+                        self.setYRange(y_bounds[0], y_bounds[1], padding=0.05)
+
+                self.enableAutoRange(pg.ViewBox.YAxis, True)
+                self.enableAutoRange(pg.ViewBox.XAxis, False)
+            else:
+                self.enableAutoRange(pg.ViewBox.XYAxes, True)
+                self.autoRange()
             ev.accept()
             return
 
@@ -125,143 +352,3 @@ class PlotInteractionViewBox(pg.ViewBox):
             self.scaleBy((scale_factor, 1.0), center=center)
         else:
             self.scaleBy((1.0, scale_factor), center=center)
-
-
-class PlotWidget:
-    """Utility for creating synchronized plots from log channels."""
-
-    def __init__(self, time_slider, start_time_s: float | None = None):
-        self.time_slider = time_slider
-        self.plot_widget = pg.GraphicsLayoutWidget()
-        self.plot_widget.setWindowTitle("Plot Widget")
-
-        self.plot_widget.setBackground((240, 240, 240))
-
-        self._plots = []
-        self._x_link_source = None
-        self.auto_scroll = True
-        self.start_time_s = (
-            start_time_s if start_time_s is not None else time_slider.min_timestamp
-        )
-        self._suspend_auto_scroll = False
-
-        self.time_slider.connect_on_time_changed(self._on_time_slider_changed)
-
-    def add_plot(
-        self,
-        timestamps_s: np.ndarray,
-        series_list: Iterable[tuple[str, np.ndarray]],
-        title: str,
-        y_label: str,
-        y_units: str,
-        horizontal_lines: Iterable[float] | None = None,
-    ):
-        """Add a plot for the given channel/fields."""
-        timestamps_s = np.array(timestamps_s)
-        series = list(series_list)
-        if timestamps_s.size == 0 or not series:
-            print("plot_widget: timestamps and series data are required.")
-            return
-
-        time_offsets_s = timestamps_s - self.start_time_s
-
-        if self._plots:
-            self.plot_widget.nextRow()
-        view_box = PlotInteractionViewBox(self._handle_ctrl_jump)
-        plot_item = self.plot_widget.addPlot(title=title, viewBox=view_box)
-
-        if self._x_link_source is None:
-            self._x_link_source = plot_item
-        else:
-            plot_item.setXLink(self._x_link_source)
-
-        plot_item.setLabel("left", y_label, units=y_units)
-        plot_item.setLabel("bottom", "Time", units="seconds")
-        legend = plot_item.addLegend(offset=(-10, 10))
-        legend.anchor((1, 0), (1, 0))
-
-        color_index = 0
-
-        for label, values in series:
-            values = np.asarray(values)
-            if values.ndim == 1:
-                values = values[:, None]
-
-            for column in range(values.shape[1]):
-                column_name = label if values.shape[1] == 1 else f"{label}[{column}]"
-                pen = self._pen_for_index(color_index)
-                color_index += 1
-                plot_item.plot(time_offsets_s, values[:, column], name=column_name, pen=pen)
-
-        vline = pg.InfiniteLine(angle=90, movable=True)
-        plot_item.addItem(vline, ignoreBounds=True)
-        vline.sigDragged.connect(self._make_drag_handler(vline))
-
-        if horizontal_lines:
-            for value in horizontal_lines:
-                hline = pg.InfiniteLine(
-                    angle=0,
-                    movable=False,
-                    pen=pg.mkPen(color="black", style=QtCore.Qt.PenStyle.DashLine),
-                )
-                plot_item.addItem(hline, ignoreBounds=True)
-                hline.setPos(value)
-
-        self._plots.append({"plot_item": plot_item, "vline": vline})
-
-    @staticmethod
-    def _pen_for_index(index):
-        return pg.mkPen(pg.intColor(index), width=2)
-
-    def _make_drag_handler(self, vline):
-        def handler():
-            time_offset_s = vline.pos()[0]
-            timestamp_s = time_offset_s + self.start_time_s
-            self._suspend_auto_scroll = True
-            self.time_slider.set_time(timestamp_s)
-
-        return handler
-
-    def _handle_ctrl_jump(self, view_box: pg.ViewBox, view_point: QtCore.QPointF):
-        timestamp_s = view_point.x() + self.start_time_s
-        self._suspend_auto_scroll = True
-        self.time_slider.set_time(timestamp_s)
-
-    def _on_time_slider_changed(self, timestamp_s):
-        pre_positions = {}
-        if self.auto_scroll and not self._suspend_auto_scroll:
-            for entry in self._plots:
-                plot_item = entry["plot_item"]
-                view_box = plot_item.getViewBox()
-                x_min, x_max = view_box.viewRange()[0]
-                width = x_max - x_min
-                if width <= 0:
-                    continue
-                relative = entry["vline"].pos()[0]
-                fraction = (relative - x_min) / width
-                pre_positions[plot_item] = (fraction, width)
-
-        for entry in self._plots:
-            offset = timestamp_s - self.start_time_s
-            entry["vline"].setPos(offset)
-            if self.auto_scroll and not self._suspend_auto_scroll:
-                plot_item = entry["plot_item"]
-                if plot_item in pre_positions:
-                    fraction, width = pre_positions[plot_item]
-                    self._scroll_to_timestamp(plot_item, offset, fraction, width)
-        self._suspend_auto_scroll = False
-
-    @staticmethod
-    def _scroll_to_timestamp(plot_item, relative_time, fraction=None, width=None):
-        view_box = plot_item.getViewBox()
-        current_range = view_box.viewRange()
-        x_min, x_max = current_range[0]
-        if width is None:
-            width = x_max - x_min
-        if width <= 0:
-            return
-        if fraction is None:
-            fraction = (relative_time - x_min) / width
-            fraction = max(0.0, min(1.0, fraction))
-        new_x_min = relative_time - fraction * width
-        view_box.setXRange(new_x_min, new_x_min + width, padding=0)

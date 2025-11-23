@@ -129,6 +129,15 @@ class TimestampSlider:
         relative_timestamp_s = absolute_timestamp_s - self.min_timestamp
         self.slider.setValue(relative_timestamp_s)
 
+    def get_time_range(self) -> tuple[float, float]:
+        """
+        Get the time range of the slider.
+        
+        Returns:
+            Tuple of (minimum timestamp, maximum timestamp) in seconds
+        """
+        return self.min_timestamp, self.max_timestamp
+
     def set_time_from_start(self, relative_timestamp_s: float):
         """
         Set the slider position using a relative timestamp (seconds since start).

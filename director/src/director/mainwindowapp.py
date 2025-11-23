@@ -167,7 +167,8 @@ class MainWindowApp(object):
                 ("Left Drag", "Pan View"),
                 ("Shift + Left Drag", "Rectangular Zoom"),
                 ("Right Drag", "Axis Zoom (Horizontal/Vertical)"),
-                ("Double Click", "Reset View / Auto Range"),
+                ("Double Click", "Reset axes range to show all data"),
+                ("Shift + Double Click", "Reset range Y axis only"),
                 ("Ctrl + Left Click", "Jump Timeline to Cursor"),
             ],
             "Screen Recorder": [
