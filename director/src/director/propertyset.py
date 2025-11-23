@@ -95,6 +95,12 @@ class PropertySet(object):
     def disconnectPropertyChanged(self, callbackId):
         self.callbacks.disconnect(callbackId)
 
+    def connectPropertyValueChanged(self, propertyName, func):
+        def onPropertyChanged(propertySet, changedPropertyName):
+            if changedPropertyName == propertyName:
+                func(propertySet.getProperty(propertyName))
+        return self.connectPropertyChanged(onPropertyChanged)
+
     def connectPropertyAdded(self, func):
         return self.callbacks.connect(self.PROPERTY_ADDED_SIGNAL, func)
 
