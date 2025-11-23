@@ -33,6 +33,8 @@ class MainWindowApp(object):
         self.mainWindow = QtWidgets.QMainWindow()
         self.mainWindow.resize(int(768 * (16/9.0)), 768)
         self.settings = QtCore.QSettings()
+        self.about_dict = {}
+        self.shortcuts_dialog = None
 
         self.fileMenu = self.mainWindow.menuBar().addMenu('&File')
         self.editMenu = self.mainWindow.menuBar().addMenu('&Edit')
@@ -59,12 +61,12 @@ class MainWindowApp(object):
         self.pythonConsoleAction.triggered.connect(self.showPythonConsole)
         self.toolsMenu.addSeparator()
 
-        helpAction = self.helpMenu.addAction('Online Documentation')
-        helpAction.triggered.connect(self.showOnlineDocumentation)
+        helpAction = self.helpMenu.addAction('About...')
+        helpAction.triggered.connect(self.showAboutDialog)
         self.helpMenu.addSeparator()
 
         helpKeyboardShortcutsAction = self.helpMenu.addAction('Keyboard Shortcuts')
-        helpKeyboardShortcutsAction.triggered.connect(self.showOnlineKeyboardShortcuts)
+        helpKeyboardShortcutsAction.triggered.connect(self.showKeyboardShortcutsDialog)
         self.helpMenu.addSeparator()
 
     def quit(self):
@@ -106,11 +108,116 @@ class MainWindowApp(object):
             self.python_console.console_widget.layout().currentWidget().setFocus()
             self.python_console_dock.raise_()
 
-    def showOnlineDocumentation(self):
-        QtGui.QDesktopServices.openUrl(QtCore.QUrl('https://openhumanoids.github.io/director/'))
+    def showAboutDialog(self):
+        app = MainWindowApp.applicationInstance()
+        appName = app.applicationName()
+        orgName = app.organizationName()
 
-    def showOnlineKeyboardShortcuts(self):
-        QtGui.QDesktopServices.openUrl(QtCore.QUrl('https://openhumanoids.github.io/director/user_guide/keyboard_shortcuts.html#director'))
+        text = f"<h3>{appName}</h3>"
+        text += f"<p><b>Organization:</b> {orgName}</p>"
+
+        if self.about_dict:
+            text += "<hr>"
+            text += "<table>"
+            for key, value in sorted(self.about_dict.items()):
+                text += f"<tr><td><b>{key}:</b></td><td>&nbsp;&nbsp;{value}</td></tr>"
+            text += "</table>"
+
+        QtWidgets.QMessageBox.about(self.mainWindow, f"About {appName}", text)
+
+    def showKeyboardShortcutsDialog(self):
+        if self.shortcuts_dialog is not None:
+            self.shortcuts_dialog.show()
+            self.shortcuts_dialog.raise_()
+            self.shortcuts_dialog.activateWindow()
+            return
+
+        shortcuts = {
+            "Application": [
+                ("F1", "Toggle Scene Browser and Properties Panel"),
+                ("F8", "Toggle Python Console"),
+                ("F9", "Toggle Text Output Console"),
+                ("Ctrl + Q", "Quit Application"),
+                ("Ctrl + Z", "Undo"),
+                ("Ctrl + Shift + Z", "Redo"),
+            ],
+            "3D View Camera": [
+                ("Left Drag", "Rotate Camera (Orbit)"),
+                ("Shift + Left Drag", "Pan Camera"),
+                ("Right Drag / Scroll", "Zoom Camera"),
+                ("Right Click", "Show context menu for clicked object"),
+                ("R", "Reset Camera to View All"),
+                ("F", "Fly camera to object at mouse cursor"),
+            ],
+            "Frame Widget": [
+                ("Left Drag (Axis)", "Translate along axis"),
+                ("Right Drag (Axis)", "Rotate about axis"),
+                ("Left Drag (Ring)", "Translate in plane"),
+                ("Right Drag (Ring)", "Rotate about plane normal"),
+                ("Double Click", "Toggle edit mode"),
+            ],
+            "Playback Time Slider": [
+                ("Space", "Toggle Play/Pause"),
+                ("Left/Right Arrow", "Step Frame (0.1s)"),
+                ("Shift + Left/Right", "Step Frame Fine (0.01s)"),
+                ("Ctrl + Left/Right", "Step Frame Coarse (1.0s)"),
+                ("Ctrl + Shift + Left/Right", "Step Frame Very Coarse (10.0s)"),
+            ],
+            "Plot Widget": [
+                ("Left Drag", "Pan View"),
+                ("Shift + Left Drag", "Rectangular Zoom"),
+                ("Right Drag", "Axis Zoom (Horizontal/Vertical)"),
+                ("Double Click", "Reset View / Auto Range"),
+                ("Ctrl + Left Click", "Jump Timeline to Cursor"),
+            ],
+            "Screen Recorder": [
+                ("Left Click", "Toggle recording"),
+                ("Right Click", "Show context menu"),
+            ]
+        }
+
+        dialog = QtWidgets.QDialog(self.mainWindow)
+        dialog.setWindowTitle("Keyboard Shortcuts")
+        dialog.resize(600, 700)
+        dialog.setWindowFlags(dialog.windowFlags() | QtCore.Qt.WindowStaysOnTopHint)
+        
+        layout = QtWidgets.QVBoxLayout(dialog)
+        tree = QtWidgets.QTreeWidget()
+        tree.setColumnCount(2)
+        tree.setHeaderLabels(["Shortcut", "Description"])
+        tree.setAlternatingRowColors(True)
+        tree.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        
+        # Make columns resize nicely
+        tree.header().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
+
+        for category, items in shortcuts.items():
+            category_item = QtWidgets.QTreeWidgetItem(tree)
+            category_item.setText(0, category)
+            # Span the category across both columns to look like a header
+            category_item.setFirstColumnSpanned(True) 
+            # Style the category item (bold)
+            font = category_item.font(0)
+            font.setBold(True)
+            category_item.setFont(0, font)
+            
+            for shortcut, description in items:
+                item = QtWidgets.QTreeWidgetItem(category_item)
+                item.setText(0, shortcut)
+                item.setText(1, description)
+            
+            category_item.setExpanded(True)
+
+        layout.addWidget(tree)
+        
+        close_button = QtWidgets.QPushButton("Close")
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(close_button)
+        
+        self.shortcuts_dialog = dialog
+        dialog.finished.connect(lambda: setattr(self, 'shortcuts_dialog', None))
+        dialog.show()
 
     def showErrorMessage(self, message, title='Error'):
         QtWidgets.QMessageBox.warning(self.mainWindow, title, message)
