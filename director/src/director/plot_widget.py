@@ -5,6 +5,7 @@ from typing import Callable, Iterable
 import numpy as np
 import pyqtgraph as pg  # type: ignore[import]
 import qtpy.QtCore as QtCore  # type: ignore[import]
+from qtpy import QtWidgets  # type: ignore[import]
 
 
 @dataclass
@@ -32,6 +33,21 @@ class PlotWidget:
         self.start_time_s = 0.0
         self._suspend_auto_scroll = False
 
+    def add_horizontal_line_dialog(self, plot_item: pg.PlotItem):
+        value, ok = QtWidgets.QInputDialog.getDouble(
+            self.plot_widget, "Add Horizontal Line", "Y Value:", 0.0, decimals=4
+        )
+        if ok:
+            self.add_horizontal_lines(plot_item, [value])
+
+    def clear_horizontal_lines(self, plot_item: pg.PlotItem):
+        entry = self._plot_entries.get(plot_item)
+        if not entry:
+            return
+        for line in entry.horizontal_lines:
+            plot_item.removeItem(line)
+        entry.horizontal_lines.clear()
+
     def connect_time_slider(self, time_slider):
         assert self.time_slider is None
         self.time_slider = time_slider
@@ -58,12 +74,26 @@ class PlotWidget:
         self.add_data_to_plot(plot_item, timestamps_s, series)
         self.add_horizontal_lines(plot_item, horizontal_lines)
 
-    def add_plot(self, title: str, y_label: str=None, y_units: str=None) -> pg.PlotItem:
+    def add_plot(self, title: str=None, y_label: str=None, y_units: str=None) -> pg.PlotItem:
         if self._plots:
             self.plot_widget.nextRow()
 
-        view_box = PlotInteractionViewBox(self._handle_ctrl_jump)
+        # Wrap callbacks to include self for context
+        def on_add_hline(plot_item):
+            self.add_horizontal_line_dialog(plot_item)
+            
+        def on_clear_hlines(plot_item):
+            self.clear_horizontal_lines(plot_item)
+
+        view_box = PlotInteractionViewBox(
+            ctrl_jump_callback=self._handle_ctrl_jump,
+            add_hline_callback=on_add_hline,
+            clear_hlines_callback=on_clear_hlines
+        )
         plot_item = self.plot_widget.addPlot(title=title, viewBox=view_box)
+        
+        # Link the plot item to the view box so it can access it for the menu
+        view_box.setPlotItem(plot_item)
 
         if self._x_link_source is None:
             self._x_link_source = plot_item
@@ -82,6 +112,24 @@ class PlotWidget:
 
     def get_plots(self) -> list[pg.PlotItem]:
         return list(self._plots)
+
+    def get_series_names(self, plot_item: pg.PlotItem) -> list[str]:
+        entry = self._plot_entries.get(plot_item)
+        if not entry:
+            return []
+        return [item.name() for item in entry.line_series]
+
+    def remove_series(self, plot_item: pg.PlotItem, series_name: str):
+        entry = self._plot_entries.get(plot_item)
+        if not entry:
+            return
+
+        # Find series to remove
+        to_remove = [item for item in entry.line_series if item.name() == series_name]
+        
+        for item in to_remove:
+            plot_item.removeItem(item)
+            entry.line_series.remove(item)
 
     def remove_last_plot(self):
         if not self._plots:
@@ -177,8 +225,13 @@ class PlotWidget:
             self._update_vlines(relative_time_s)
 
     def _on_time_slider_changed(self, timestamp_s):
-        time_offset_s = timestamp_s - self.start_time_s
-        self._update_vlines(time_offset_s)
+        # Disable updates to prevent excessive repainting
+        self.plot_widget.setUpdatesEnabled(False)
+        try:
+            time_offset_s = timestamp_s - self.start_time_s
+            self._update_vlines(time_offset_s)
+        finally:
+            self.plot_widget.setUpdatesEnabled(True)
 
     def _update_vlines(self, time_offset_s):
         pre_positions = {}
@@ -225,14 +278,97 @@ class PlotWidget:
 class PlotInteractionViewBox(pg.ViewBox):
     """Custom ViewBox implementing tailored interaction modes."""
 
-    def __init__(self, ctrl_jump_callback: Callable[[pg.ViewBox, QtCore.QPointF], None] | None = None):
+    def __init__(
+        self, 
+        ctrl_jump_callback: Callable[[pg.ViewBox, QtCore.QPointF], None] | None = None,
+        add_hline_callback: Callable[[pg.PlotItem], None] | None = None,
+        clear_hlines_callback: Callable[[pg.PlotItem], None] | None = None
+    ):
         super().__init__(enableMenu=True)
         self.ctrl_jump_callback = ctrl_jump_callback
+        self.add_hline_callback = add_hline_callback
+        self.clear_hlines_callback = clear_hlines_callback
+        self._plot_item = None
+        
         self.setMouseMode(self.PanMode)
         self._previous_mouse_mode = None
         self._right_drag_mode = None
         self._right_drag_start = None
         self._right_last_pos = None
+
+    def setPlotItem(self, plot_item):
+        self._plot_item = plot_item
+
+    def raiseContextMenu(self, ev):
+        if not self.menuEnabled():
+            return
+
+        menu = self._plot_item.getMenu()        
+        if menu:
+            # Customize the menu
+            self._customize_context_menu(menu)
+            menu.popup(ev.screenPos().toPoint())
+
+    def _customize_context_menu(self, menu):
+        # Disable/Hide unwanted actions
+        # Typically this menu is the PlotItem.ctrlMenu
+        
+        # Actions to keep: Grid
+        # Actions to hide: Transforms, Downsample, Average, Alpha, Points
+        
+        # Note: The menu structure depends on pyqtgraph version.
+        # PlotItem menu usually has submenus or actions.
+        
+        # Helper to recursively find and hide
+        for action in menu.actions():
+            text = action.text()
+            if text in ["Transforms", "Downsample", "Average", "Alpha", "Points", "Export..."]:
+                action.setVisible(False)
+        
+        # Legend Toggle
+        legend_action_text = "Show Legend"
+        legend_action = None
+        for action in menu.actions():
+            if action.text() == legend_action_text:
+                legend_action = action
+                break
+        
+        if not legend_action:
+            menu.addSeparator()
+            legend_action = menu.addAction(legend_action_text)
+            legend_action.setCheckable(True)
+            legend_action.setChecked(True) # Assume visible by default or check actual state
+            if self._plot_item and self._plot_item.legend:
+                legend_action.setChecked(self._plot_item.legend.isVisible())
+            legend_action.triggered.connect(self._toggle_legend)
+
+        # Horizontal Lines
+        add_hline_text = "Add Horizontal Line..."
+        if not self._find_action(menu, add_hline_text):
+            menu.addSeparator()
+            menu.addAction(add_hline_text, self._on_add_hline)
+            
+        clear_hline_text = "Clear Horizontal Lines"
+        if not self._find_action(menu, clear_hline_text):
+            menu.addAction(clear_hline_text, self._on_clear_hlines)
+
+    def _find_action(self, menu, text):
+        for action in menu.actions():
+            if action.text() == text:
+                return action
+        return None
+
+    def _toggle_legend(self, checked):
+        if self._plot_item and self._plot_item.legend:
+            self._plot_item.legend.setVisible(checked)
+
+    def _on_add_hline(self):
+        if self.add_hline_callback and self._plot_item:
+            self.add_hline_callback(self._plot_item)
+
+    def _on_clear_hlines(self):
+        if self.clear_hlines_callback and self._plot_item:
+            self.clear_hlines_callback(self._plot_item)
 
     def mousePressEvent(self, ev):
         if (
