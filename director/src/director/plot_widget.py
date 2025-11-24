@@ -3,9 +3,9 @@ from dataclasses import dataclass, field
 from typing import Callable, Iterable
 
 import numpy as np
-import pyqtgraph as pg  # type: ignore[import]
-import qtpy.QtCore as QtCore  # type: ignore[import]
-from qtpy import QtWidgets  # type: ignore[import]
+import pyqtgraph as pg 
+import qtpy.QtCore as QtCore
+from qtpy import QtWidgets
 
 
 @dataclass
@@ -78,21 +78,8 @@ class PlotWidget:
         if self._plots:
             self.plot_widget.nextRow()
 
-        # Wrap callbacks to include self for context
-        def on_add_hline(plot_item):
-            self.add_horizontal_line_dialog(plot_item)
-            
-        def on_clear_hlines(plot_item):
-            self.clear_horizontal_lines(plot_item)
-
-        view_box = PlotInteractionViewBox(
-            ctrl_jump_callback=self._handle_ctrl_jump,
-            add_hline_callback=on_add_hline,
-            clear_hlines_callback=on_clear_hlines
-        )
-        plot_item = self.plot_widget.addPlot(title=title, viewBox=view_box)
-        
-        # Link the plot item to the view box so it can access it for the menu
+        view_box = PlotInteractionViewBox(plot_widget=self)
+        plot_item = self.plot_widget.addPlot(title=title, viewBox=view_box)        
         view_box.setPlotItem(plot_item)
 
         if self._x_link_source is None:
@@ -105,6 +92,7 @@ class PlotWidget:
         legend = plot_item.addLegend(offset=(-10, 10))
         legend.anchor((1, 0), (1, 0))
 
+        plot_item.showGrid(x=True, y=True, alpha=0.25)
         vline = self._attach_vline(plot_item)
         self._plots.append(plot_item)
         self._plot_entries[plot_item] = PlotEntry(plot_item=plot_item, vline=vline, legend=legend)
@@ -136,14 +124,16 @@ class PlotWidget:
             return
 
         plot_item = self._plots.pop()
-        if plot_item in self._plot_entries:
-            del self._plot_entries[plot_item]
-
+        del self._plot_entries[plot_item]
         self.plot_widget.removeItem(plot_item)
+        
+        # If the last plot is removed and call clear to reset the layout cursor.
+        if not self._plots:
+            self.plot_widget.clear()
+            self._x_link_source = None
 
         if self._x_link_source == plot_item:
             self._x_link_source = self._plots[0] if self._plots else None
-            # Update links
             if self._x_link_source:
                 for p in self._plots:
                     p.setXLink(self._x_link_source)
@@ -280,15 +270,11 @@ class PlotInteractionViewBox(pg.ViewBox):
 
     def __init__(
         self, 
-        ctrl_jump_callback: Callable[[pg.ViewBox, QtCore.QPointF], None] | None = None,
-        add_hline_callback: Callable[[pg.PlotItem], None] | None = None,
-        clear_hlines_callback: Callable[[pg.PlotItem], None] | None = None
+        plot_widget: "PlotWidget",
     ):
         super().__init__(enableMenu=True)
-        self.ctrl_jump_callback = ctrl_jump_callback
-        self.add_hline_callback = add_hline_callback
-        self.clear_hlines_callback = clear_hlines_callback
-        self._plot_item = None
+        self._plot_widget = plot_widget
+        self._plot_item: pg.PlotItem | None = None
         
         self.setMouseMode(self.PanMode)
         self._previous_mouse_mode = None
@@ -298,27 +284,12 @@ class PlotInteractionViewBox(pg.ViewBox):
 
     def setPlotItem(self, plot_item):
         self._plot_item = plot_item
+        self._customize_context_menu(plot_item.getMenu())
 
     def raiseContextMenu(self, ev):
-        if not self.menuEnabled():
-            return
+        self._plot_item.getMenu().popup(ev.screenPos().toPoint())
 
-        menu = self._plot_item.getMenu()        
-        if menu:
-            # Customize the menu
-            self._customize_context_menu(menu)
-            menu.popup(ev.screenPos().toPoint())
-
-    def _customize_context_menu(self, menu):
-        # Disable/Hide unwanted actions
-        # Typically this menu is the PlotItem.ctrlMenu
-        
-        # Actions to keep: Grid
-        # Actions to hide: Transforms, Downsample, Average, Alpha, Points
-        
-        # Note: The menu structure depends on pyqtgraph version.
-        # PlotItem menu usually has submenus or actions.
-        
+    def _customize_context_menu(self, menu):        
         # Helper to recursively find and hide
         for action in menu.actions():
             text = action.text()
@@ -344,39 +315,59 @@ class PlotInteractionViewBox(pg.ViewBox):
 
         # Horizontal Lines
         add_hline_text = "Add Horizontal Line..."
-        if not self._find_action(menu, add_hline_text):
-            menu.addSeparator()
-            menu.addAction(add_hline_text, self._on_add_hline)
+        menu.addSeparator()
+        menu.addAction(add_hline_text, self._on_add_hline)
             
         clear_hline_text = "Clear Horizontal Lines"
-        if not self._find_action(menu, clear_hline_text):
-            menu.addAction(clear_hline_text, self._on_clear_hlines)
+        menu.addAction(clear_hline_text, self._on_clear_hlines)
 
-    def _find_action(self, menu, text):
-        for action in menu.actions():
-            if action.text() == text:
-                return action
-        return None
+        menu.addSeparator()
+        menu.addAction("Set Title...", self._on_set_title)
+        menu.addAction("Set Y Label...", self._on_set_ylabel)
+        menu.addAction("Set Y Units...", self._on_set_yunits)
+
+    def _on_set_title(self):
+        if self._plot_item:
+            text, ok = QtWidgets.QInputDialog.getText(
+                None, "Set Plot Title", "Title:", text=self._plot_item.titleLabel.text
+            )
+            if ok:
+                self._plot_item.setTitle(text)
+
+    def _on_set_ylabel(self):
+        if self._plot_item:
+            axis = self._plot_item.getAxis("left")
+            text, ok = QtWidgets.QInputDialog.getText(
+                None, "Set Y Label", "Label:", text=axis.labelText
+            )
+            if ok:
+                axis.setLabel(text=text, units=axis.labelUnits)
+
+    def _on_set_yunits(self):
+        if self._plot_item:
+            axis = self._plot_item.getAxis("left")
+            text, ok = QtWidgets.QInputDialog.getText(
+                None, "Set Y Units", "Units:", text=axis.labelUnits
+            )
+            if ok:
+                axis.setLabel(text=axis.labelText, units=text)
 
     def _toggle_legend(self, checked):
-        if self._plot_item and self._plot_item.legend:
+        if self._plot_item.legend:
             self._plot_item.legend.setVisible(checked)
 
     def _on_add_hline(self):
-        if self.add_hline_callback and self._plot_item:
-            self.add_hline_callback(self._plot_item)
+        self._plot_widget.add_horizontal_line_dialog(self._plot_item)
 
     def _on_clear_hlines(self):
-        if self.clear_hlines_callback and self._plot_item:
-            self.clear_hlines_callback(self._plot_item)
+        self._plot_widget.clear_horizontal_lines(self._plot_item)
 
     def mousePressEvent(self, ev):
         if (
             ev.button() == QtCore.Qt.MouseButton.LeftButton
             and ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier
         ):
-            if self.ctrl_jump_callback:
-                self.ctrl_jump_callback(self, self.mapSceneToView(ev.scenePos()))
+            self._plot_widget._handle_ctrl_jump(self, self.mapSceneToView(ev.scenePos()))
             # After jump, fall through to allow the default pan/drag behavior
             ev.accept()
             super().mousePressEvent(ev)
