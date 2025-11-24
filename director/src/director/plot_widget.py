@@ -197,7 +197,7 @@ class PlotWidget:
 
     def _make_drag_handler(self, vline):
         def handler():
-            time_offset_s = vline.pos()[0]
+            time_offset_s = vline.pos().x()
             timestamp_s = time_offset_s + self.start_time_s
             self._suspend_auto_scroll = True
             if self.time_slider:
@@ -233,7 +233,7 @@ class PlotWidget:
         min_time, max_time = self.time_slider.get_time_range()
         min_time -= self.start_time_s
         max_time -= self.start_time_s
-        current_vline_pos = self._plot_entries[self._x_link_source].vline.pos()[0]
+        current_vline_pos = self._plot_entries[self._x_link_source].vline.pos().x()
         direction = np.sign(time_offset_s - current_vline_pos)
         view_box = self._x_link_source.getViewBox()
         x_min, x_max = view_box.viewRange()[0]
@@ -275,7 +275,7 @@ class PlotWidget:
                 width = x_max - x_min
                 if width <= 0:
                     continue
-                relative = entry.vline.pos()[0]
+                relative = entry.vline.pos().x()
                 fraction = (relative - x_min) / width
                 pre_positions[plot_item] = (fraction, width)
 
