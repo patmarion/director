@@ -224,7 +224,47 @@ class PlotWidget:
             self.plot_widget.setUpdatesEnabled(True)
 
     def _update_vlines(self, time_offset_s):
+        if not self._plots:
+            return
+    
+        # This logic examines the axis x range and the total x extent of the data.
+        # We implement some fancy auto scrolling logic to keep the playhead in a reasonable
+        # location and auto scroll the plots when necessary.
+        min_time, max_time = self.time_slider.get_time_range()
+        min_time -= self.start_time_s
+        max_time -= self.start_time_s
+        current_vline_pos = self._plot_entries[self._x_link_source].vline.pos()[0]
+        direction = np.sign(time_offset_s - current_vline_pos)
+        view_box = self._x_link_source.getViewBox()
+        x_min, x_max = view_box.viewRange()[0]
+        width = x_max - x_min
+        fraction = (current_vline_pos - x_min) / width
+
+        if direction > 0:
+            if x_max >= max_time:
+                self.auto_scroll = False
+            else:
+                if x_min <= min_time and fraction < 0.5:
+                    self.auto_scroll = False
+                else:
+                    self.auto_scroll = True
+        else:
+            if x_min <= min_time:
+                self.auto_scroll = False
+            else:
+                if x_max >= max_time and fraction > 0.5:
+                    self.auto_scroll = False
+                else:
+                    self.auto_scroll = True
+
+        if not self._suspend_auto_scroll and (time_offset_s < x_min or time_offset_s > x_max):
+            self._x_link_source.setXRange(time_offset_s - width/2, time_offset_s + width/2, padding=0)
+
+
         pre_positions = {}
+
+        # Note, the rest of the logic here computes info and updates each plot item.
+        # But the plot items have linked X axes so it really only needs to be done for one.
         if self.auto_scroll and not self._suspend_auto_scroll:
             for plot_item in self._plots:
                 entry = self._plot_entries.get(plot_item)
