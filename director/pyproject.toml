@@ -29,11 +29,11 @@ dev = [
     "flake8>=5.0.0",
 ]
 
-[tool.setuptools]
-packages = ["director"]
+[tool.setuptools.packages.find]
+where = ["src"]
 
-[tool.setuptools.package-dir]
-director = "src/director"
+[tool.setuptools.package-data]
+director = ["assets/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
