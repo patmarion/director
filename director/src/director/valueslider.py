@@ -277,6 +277,8 @@ class SliderEventFilter(QtCore.QObject):
         Returns:
             True if event was handled, False otherwise
         """
+        if not obj.isEnabled():
+            return False
         if event.type() == QtCore.QEvent.Type.MouseButtonPress:
             if event.button() == QtCore.Qt.MouseButton.LeftButton:
                 # Get mouse position

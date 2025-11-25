@@ -30,6 +30,7 @@ class TimestampSlider:
         
         # Create ValueSlider from 0 to duration
         self.slider = ValueSlider(minValue=0.0, maxValue=duration_s, resolution=duration_s * step_frequency)
+        self.toolbar = None
 
         # Connect slider value changed to convert to absolute timestamp
         def on_slider_value_changed(slider_value):
@@ -84,8 +85,8 @@ class TimestampSlider:
         Args:
             toolbar_name: Name of the toolbar
         """
-        toolBar = app.addToolBar(toolbar_name)
-        toolBar.addWidget(self.slider.widget)
+        self.toolbar = app.addToolBar(toolbar_name)
+        self.toolbar.addWidget(self.slider.widget)
     
     def connect_on_time_changed(self, callback):
         """
