@@ -132,16 +132,22 @@ class MainWindowApp(object):
         appsettings.saveState(self.settings, self.mainWindow, key)
         self.settings.sync()
 
-    def _saveCustomWindowState(self):
+    def saveCustomWindowState(self):
         self._saveWindowState('MainWindowCustom')
 
     def restoreDefaultWindowState(self):
         self._restoreWindowState('MainWindowDefault')
 
+    def restoreCustomWindowState(self):
+        self._restoreWindowState('MainWindowCustom')
+
     def initWindowSettings(self):
         self._saveWindowState('MainWindowDefault')
         self._restoreWindowState('MainWindowCustom')
-        self.applicationInstance().connect('aboutToQuit()', self._saveCustomWindowState)
+        self.applicationInstance().connect('aboutToQuit()', self.saveCustomWindowState)
+
+    def disableWindowStateSaving(self):
+        self.applicationInstance().disconnect('aboutToQuit()', self.saveCustomWindowState)
 
 
 class MainWindowAppFactory(object):
