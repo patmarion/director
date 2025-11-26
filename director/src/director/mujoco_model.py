@@ -1148,15 +1148,20 @@ class MujocoRobotModel:
         vtk_frames = {body_name: mj_matrix_to_vtk_transform(body_pose) for body_name, body_pose in body_poses.items()}
         # update geom frames
         for geom_item in model_folder.geom_items.values():
+            # if the item has been removed then skip it
+            # todo, don't store these items in a dict, look them up as needed
+            if not geom_item._tree:
+                continue
             world_T_body = vtk_frames[geom_item.body_name]
             geom_item.getChildFrame().copyFrame(world_T_body)
 
         # update body frames
         body_frame_folder = model_folder.findChild('Body Frames')
-        for body_name, world_T_body in vtk_frames.items():
-            frame_obj = body_frame_folder.findChild(body_name)
-            if frame_obj:
-                frame_obj.copyFrame(world_T_body)
+        if body_frame_folder:
+            for body_name, world_T_body in vtk_frames.items():
+                frame_obj = body_frame_folder.findChild(body_name)
+                if frame_obj:
+                    frame_obj.copyFrame(world_T_body)
 
 
     def _create_joint_properties_item(self):

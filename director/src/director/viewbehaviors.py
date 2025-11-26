@@ -153,7 +153,17 @@ def toggleFrameWidget(displayPoint, view):
     
     parent = obj.parent()
     if getChildFrame(parent) == obj and not isinstance(parent, vis.GridItem):
-        parent.setProperty('Alpha', 0.5 if edit else 1.0)
+        if edit:
+            # Enabling edit widget
+            current_alpha = parent.getProperty('Alpha')
+            if current_alpha > 0.5:
+                obj._alpha_before_toggle = current_alpha
+                parent.setProperty('Alpha', 0.5)
+        else:
+            # Disabling edit widget
+            if hasattr(obj, '_alpha_before_toggle'):
+                parent.setProperty('Alpha', obj._alpha_before_toggle)
+                del obj._alpha_before_toggle
     
     return True
 

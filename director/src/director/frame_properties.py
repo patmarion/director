@@ -94,6 +94,9 @@ class FrameProperties:
             self._on_property_changed
         )
 
+    def set_undo_stack(self, undo_stack: QtGui.QUndoStack):
+        self._undo_stack = undo_stack
+
     def _ensure_property(self, name, value, attributes):
         if self._properties.hasProperty(name):
             self._properties.setProperty(name, value)

@@ -583,14 +583,16 @@ class Image2DItem(om.ObjectModelItem):
         self.actors = [actors.GetItemAsObject(i) for i in range(actors.GetNumberOfItems())]
         
         self.addProperty('Visible', True)
-        self.addProperty('Anchor', 1,
-                         attributes=om.PropertyAttributes(enumNames=['Top Left', 'Top Right', 'Bottom Left', 'Bottom Right']))
         self.addProperty('Width', defaultWidth,
                          attributes=om.PropertyAttributes(minimum=0, maximum=9999, singleStep=50))
         self.addProperty('Height', defaultHeight,
                          attributes=om.PropertyAttributes(minimum=0, maximum=9999, singleStep=50))
         self.addProperty('Keep Aspect Ratio', True,
                          attributes=om.PropertyAttributes(hidden=True))
+        self.addProperty('Anchor', 1,
+                         attributes=om.PropertyAttributes(enumNames=['Top Left', 'Top Right', 'Bottom Left', 'Bottom Right']))
+        self.addProperty('Offset', [0, 0],
+                         attributes=om.PropertyAttributes(minimum=-9999, maximum=9999, singleStep=1))
         self.addProperty('Alpha', 1.0,
                          attributes=om.PropertyAttributes(decimals=2, minimum=0, maximum=1.0, singleStep=0.1))
         
@@ -695,36 +697,37 @@ class Image2DItem(om.ObjectModelItem):
         """
         width = self.getProperty('Width')
         height = self.getProperty('Height')
-        
+        offset_xy = self.getProperty('Offset')
+        print(f"offset_xy: {offset_xy}")
         # Get renderer
         renderer = view.renderer()
         
         pc0 = vtk.vtkCoordinate()
         pc1 = self.actor.GetPositionCoordinate()
         pc2 = self.actor.GetPosition2Coordinate()
-        
+
         for pc in [pc0, pc1, pc2]:
             pc.SetViewport(renderer)
-        
+
         pc0.SetReferenceCoordinate(None)
         pc0.SetCoordinateSystemToNormalizedDisplay()
         pc1.SetReferenceCoordinate(pc0)
         pc1.SetCoordinateSystemToDisplay()
-        
+
         anchor = self.properties.getPropertyEnumValue('Anchor')
         if anchor == 'Top Left':
             pc0.SetValue(0.0, 1.0)
-            pc1.SetValue(0.0, -height)
+            pc1.SetValue(0.0 + offset_xy[0], -height - offset_xy[1])
         elif anchor == 'Top Right':
             pc0.SetValue(1.0, 1.0)
-            pc1.SetValue(-width, -height)
+            pc1.SetValue(-width + offset_xy[0], -height - offset_xy[1])
         elif anchor == 'Bottom Left':
             pc0.SetValue(0.0, 0.0)
-            pc1.SetValue(0.0, 0.0)
+            pc1.SetValue(0.0 + offset_xy[0], 0.0 - offset_xy[1])
         elif anchor == 'Bottom Right':
             pc0.SetValue(1.0, 0.0)
-            pc1.SetValue(-width, 0.0)
-        
+            pc1.SetValue(-width + offset_xy[0], 0.0 - offset_xy[1])
+
         pc2.SetCoordinateSystemToDisplay()
         pc2.SetReferenceCoordinate(pc1)
         pc2.SetValue(width, height)
@@ -740,7 +743,7 @@ class Image2DItem(om.ObjectModelItem):
         
         # Skip aspect ratio sync if we're already syncing (prevents recursive updates)
         if self._syncing_aspect_ratio:
-            if propertyName in ('Width', 'Height', 'Keep Aspect Ratio'):
+            if propertyName in ('Width', 'Height', 'Keep Aspect Ratio', 'Offset'):
                 if self.views:
                     self._updatePositionCoordinates(self.views[0])
                 self._renderAllViews()
@@ -773,6 +776,9 @@ class Image2DItem(om.ObjectModelItem):
             if self.views:
                 self._updatePositionCoordinates(self.views[0])
         elif propertyName == 'Anchor':
+            if self.views:
+                self._updatePositionCoordinates(self.views[0])
+        elif propertyName == 'Offset':
             if self.views:
                 self._updatePositionCoordinates(self.views[0])
         self._renderAllViews()
@@ -1005,7 +1011,16 @@ class FrameItem(PolyDataItem):
                 # Disable widget but don't destroy it (keep it for toggling)
                 self.frameWidget.setEnabled(False)
                 self.frameWidget.view.render()
-    
+
+    def hasDataSet(self, dataSet):
+        return dataSet == self.transform
+
+    def hasActor(self, actor):
+        has_actor = False
+        if self.frameWidget:
+            has_actor = actor in self.frameWidget.getActors()
+        return has_actor or PolyDataItem.hasActor(self, actor)
+
     def addToView(self, view):
         """Add frame item to a view."""
         PolyDataItem.addToView(self, view)

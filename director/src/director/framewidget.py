@@ -257,7 +257,10 @@ class FrameWidget(ViewEventFilter):
         
         # Highlight state
         self.highlightedActor = None
-        
+
+    def getActors(self):
+        return self.axisActors + self.ringActors
+
     def _buildActors(self):
         """Build the actors for axes and rings."""
         handleRadius = 0.015 * self.scale

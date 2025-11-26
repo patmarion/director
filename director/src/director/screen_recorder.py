@@ -297,8 +297,7 @@ class ScreenRecorder:
             self.record_button.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
             
             # Show completion dialog with filename
-            if filename:
-                self._show_completion_dialog(filename)
+            self._show_completion_dialog()
         except Exception as e:
             # Unlock view size even on error
             self._unlock_view_size()
@@ -330,7 +329,7 @@ class ScreenRecorder:
             # Re-enable context menu
             self.record_button.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
     
-    def _show_completion_dialog(self, filename: str):
+    def _show_completion_dialog(self):
         """Show dialog with recording filename.
         
         Args:
@@ -346,11 +345,10 @@ class ScreenRecorder:
         label = QtWidgets.QLabel('Recording saved to:')
         layout.addWidget(label)
         
-        # Text edit with selectable filename
-        text_edit = QtWidgets.QLineEdit(filename)
-        text_edit.setReadOnly(True)
-        text_edit.selectAll()  # Select all text for easy copying
-        layout.addWidget(text_edit)
+        # Label with selectable filename
+        filename_label = QtWidgets.QLabel(self.current_filename)
+        filename_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        layout.addWidget(filename_label)
         
         # Buttons
         button_layout = QtWidgets.QHBoxLayout()
@@ -360,9 +358,14 @@ class ScreenRecorder:
         open_folder_btn.clicked.connect(lambda: self._open_folder())
         button_layout.addWidget(open_folder_btn)
         
+        # Copy path button
+        copy_btn = QtWidgets.QPushButton('Copy Path')
+        copy_btn.clicked.connect(lambda: QtWidgets.QApplication.clipboard().setText(self.current_filename))
+        button_layout.addWidget(copy_btn)
+        
         # Rename button
         rename_btn = QtWidgets.QPushButton('Rename')
-        rename_btn.clicked.connect(lambda: self._rename_file(dialog, text_edit, filename))
+        rename_btn.clicked.connect(lambda: self._rename_file(dialog, filename_label, self.current_filename))
         button_layout.addWidget(rename_btn)
         
         button_layout.addStretch()
@@ -377,7 +380,7 @@ class ScreenRecorder:
         
         dialog.exec()
     
-    def _rename_file(self, dialog, text_edit, current_filename: str):
+    def _rename_file(self, dialog, label, current_filename: str):
         """Rename the video file to a new location/name.
         
         Args:
@@ -407,9 +410,8 @@ class ScreenRecorder:
             import shutil
             shutil.move(current_filename, new_filename)
             
-            # Update the text edit to show new filename
-            text_edit.setText(new_filename)
-            text_edit.selectAll()
+            # Update the label to show new filename
+            label.setText(new_filename)
             
             # Update stored filename for potential future use
             self.current_filename = new_filename
@@ -453,7 +455,7 @@ class ScreenRecorder:
         try:
             # Capture screenshot
             frame = capture_screenshot(self.view)
-            
+
             # Write frame
             self.write_frame(frame)
         except Exception as e:
