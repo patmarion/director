@@ -35,6 +35,8 @@ def pos_euler_to_transform(pos_xyz: np.ndarray, euler_rpy: np.ndarray, euler_mod
     Returns:
         A 4x4 numpy array representing the homogeneous transformation matrix
     """
+    assert len(pos_xyz) == 3
+    assert len(euler_rpy) == 3
     rot = Rotation.from_euler(euler_mode, euler_rpy)
     mat = np.eye(4)
     mat[:3, :3] = rot.as_matrix()

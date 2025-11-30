@@ -698,8 +698,6 @@ class Image2DItem(om.ObjectModelItem):
         width = self.getProperty('Width')
         height = self.getProperty('Height')
         offset_xy = self.getProperty('Offset')
-        print(f"offset_xy: {offset_xy}")
-        # Get renderer
         renderer = view.renderer()
         
         pc0 = vtk.vtkCoordinate()

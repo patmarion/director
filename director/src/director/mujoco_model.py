@@ -916,9 +916,7 @@ class KinematicsUpdater:
         self.pending_world_T_base = None
         self.q_dict = dict[Any, Any](zip(self.dof_names, np.zeros(len(self.dof_names))))
         self.world_T_base = np.eye(4)
-        self.body_poses = {
-            body_name: np.eye(4) for body_name in self.model.get_body_names()
-        }
+        self.body_poses = {}
 
     def push_q_dict(self, q_dict: dict[str, float]):
         self.pending_q_dict.update(q_dict)
