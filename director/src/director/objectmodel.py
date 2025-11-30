@@ -234,6 +234,14 @@ class ObjectModelTree(QObject):
     def _getObjectForItem(self, item):
         return self._itemToObject[item]
 
+    def getObjectPath(self, obj):
+        items = [self._getItemForObject(obj)]
+        parent = items[0].parent()
+        while parent:
+            items.append(parent)
+            parent = parent.parent()
+        return tuple(self._itemToName[item] for item in reversed(items))
+        
     def findObjectByName(self, name, parent=None):
         if parent:
             return self.findChildByName(parent, name)
@@ -552,6 +560,9 @@ def getObjects():
 
 def getTopLevelObjects():
     return _t.getTopLevelObjects()
+
+def getObjectPath(obj):
+    return _t.getObjectPath(obj)
 
 def findObjectByName(name, parent=None):
     return _t.findObjectByName(name, parent)
