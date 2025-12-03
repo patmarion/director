@@ -4,6 +4,8 @@ from typing import Callable, Iterable
 
 import numpy as np
 import pyqtgraph as pg 
+from pyqtgraph.dockarea import DockArea, Dock
+from pyqtgraph.dockarea.Dock import DockLabel
 import qtpy.QtCore as QtCore
 from qtpy import QtWidgets
 
@@ -21,17 +23,18 @@ class PlotWidget:
 
     def __init__(self):
         self.time_slider = None
-        self.plot_widget = pg.GraphicsLayoutWidget()
-        self.plot_widget.setWindowTitle("Plot Widget")
-
-        self.plot_widget.setBackground((240, 240, 240))
-
+        self.plot_widget = DockArea()
         self._plots: list[pg.PlotItem] = []
         self._plot_entries: dict[pg.PlotItem, PlotEntry] = {}
+        self._plot_docks: dict[pg.PlotItem, Dock] = {}
         self._x_link_source = None
         self.auto_scroll = True
         self.start_time_s = 0.0
         self._suspend_auto_scroll = False
+        self._selected_plot: pg.PlotItem | None = None
+
+        # Apply custom styling patch
+        DockLabel.updateStyle = updateStylePatched
 
     def add_horizontal_line_dialog(self, plot_item: pg.PlotItem):
         value, ok = QtWidgets.QInputDialog.getDouble(
@@ -75,12 +78,25 @@ class PlotWidget:
         self.add_horizontal_lines(plot_item, horizontal_lines)
 
     def add_plot(self, title: str=None, y_label: str=None, y_units: str=None) -> pg.PlotItem:
-        if self._plots:
-            self.plot_widget.nextRow()
-
+        dock_name = title if title else " "
+        dock = Dock(dock_name, size=(500, 300), closable=True)
+        
         view_box = PlotInteractionViewBox(plot_widget=self)
-        plot_item = self.plot_widget.addPlot(title=title, viewBox=view_box)        
+        plot_widget = pg.PlotWidget(viewBox=view_box)
+        plot_widget.setBackground((240, 240, 240))
+        dock.addWidget(plot_widget)
+
+        dock.sigClosed.connect(self._on_plot_closed)
+
+        if not self._plots:
+            self.plot_widget.addDock(dock, 'top')
+        else:
+            self.plot_widget.addDock(dock, 'bottom')
+
+        plot_item = plot_widget.getPlotItem()
         view_box.setPlotItem(plot_item)
+
+        dock.label.sigClicked.connect(lambda label, ev: self._on_plot_clicked(plot_item))
 
         if self._x_link_source is None:
             self._x_link_source = plot_item
@@ -96,7 +112,22 @@ class PlotWidget:
         vline = self._attach_vline(plot_item)
         self._plots.append(plot_item)
         self._plot_entries[plot_item] = PlotEntry(plot_item=plot_item, vline=vline, legend=legend)
+        self._plot_docks[plot_item] = dock
+        self._on_plot_clicked(plot_item)
+             
         return plot_item
+
+    def get_selected_plot(self) -> pg.PlotItem | None:
+        return self._selected_plot
+
+    def get_title(self, plot_item: pg.PlotItem) -> str:
+        return self._plot_docks[plot_item].title()
+
+    def _on_plot_clicked(self, plot_item: pg.PlotItem):
+        self._selected_plot = plot_item
+        for p, d in self._plot_docks.items():
+            if d.label:
+                 d.label.setDim(p != plot_item)
 
     def get_plots(self) -> list[pg.PlotItem]:
         return list(self._plots)
@@ -122,15 +153,25 @@ class PlotWidget:
     def remove_last_plot(self):
         if not self._plots:
             return
+        plot_item = self._plots[-1]
+        self._plot_docks[plot_item].close()
 
-        plot_item = self._plots.pop()
+    def _on_plot_closed(self, dock):
+        # Find the plot item associated with this dock
+        for plot_item, d in self._plot_docks.items():
+            if d == dock:
+                break
+        else:
+            return
+
+        # Perform cleanup
+        self._plots.remove(plot_item)
         del self._plot_entries[plot_item]
-        self.plot_widget.removeItem(plot_item)
-        
-        # If the last plot is removed and call clear to reset the layout cursor.
+        del self._plot_docks[plot_item]
+
+        # Handle X-Link
         if not self._plots:
-            self.plot_widget.clear()
-            self._x_link_source = None
+             self._x_link_source = None
 
         if self._x_link_source == plot_item:
             self._x_link_source = self._plots[0] if self._plots else None
@@ -372,7 +413,9 @@ class PlotInteractionViewBox(pg.ViewBox):
                 None, "Set Plot Title", "Title:", text=self._plot_item.titleLabel.text
             )
             if ok:
-                self._plot_item.setTitle(text)
+                #self._plot_item.setTitle(text)
+                # avoid setting empty string because it will hide the dock title bar
+                self._plot_widget._plot_docks[self._plot_item].setTitle(text or " ")
 
     def _on_set_ylabel(self):
         if self._plot_item:
@@ -519,3 +562,46 @@ class PlotInteractionViewBox(pg.ViewBox):
             self.scaleBy((scale_factor, 1.0), center=center)
         else:
             self.scaleBy((1.0, scale_factor), center=center)
+
+
+def updateStylePatched(self):
+    r = '3px'
+    if self.dim:
+        fg = '#404040'
+        bg = '#d0d0d0'
+        border = '#d0d0d0'
+    else:
+        fg = '#fff'
+        bg = '#808080'
+        border = '#808080'
+
+    if self.orientation == 'vertical':
+        self.vStyle = """DockLabel {
+            background-color : %s;
+            color : %s;
+            border-top-right-radius: 0px;
+            border-top-left-radius: %s;
+            border-bottom-right-radius: 0px;
+            border-bottom-left-radius: %s;
+            border-width: 0px;
+            border-right: 2px solid %s;
+            padding-top: 3px;
+            padding-bottom: 3px;
+            font-size: 14px;
+        }""" % (bg, fg, r, r, border)
+        self.setStyleSheet(self.vStyle)
+    else:
+        self.hStyle = """DockLabel {
+            background-color : %s;
+            color : %s;
+            border-top-right-radius: %s;
+            border-top-left-radius: %s;
+            border-bottom-right-radius: 0px;
+            border-bottom-left-radius: 0px;
+            border-width: 0px;
+            border-bottom: 2px solid %s;
+            padding-left: 13px;
+            padding-right: 13px;
+            font-size: 14px
+        }""" % (bg, fg, r, r, border)
+        self.setStyleSheet(self.hStyle)

@@ -871,7 +871,7 @@ def visualize_mujoco_model(model_folder, model, body_to_geom, mesh_resolver, sho
                 )
 
                 obj.body_name = get_body_name(model, body_id)
-
+                obj.geom_id = geom_id
                 prop = obj.actor.GetProperty()
                 prop.SetSpecular(0.4)
                 prop.SetSpecularPower(40)
