@@ -12,10 +12,9 @@ class OpenDataHandler(object):
         self.app = mainWindowApp
         self.rootFolderName = 'mesh data'
 
-        self.openAction = QtWidgets.QAction('&Open Mesh File...', self.app.fileMenu)
+        self.openAction = QtWidgets.QAction('Open mesh file...', self.app.fileMenu)
         self.app.fileMenu.insertAction(self.app.quitAction, self.openAction)
         self.app.fileMenu.insertSeparator(self.app.quitAction)
-        self.openAction.setShortcut(QtGui.QKeySequence('Ctrl+O'))
         self.openAction.triggered.connect(self.onOpenDataFile)
 
 

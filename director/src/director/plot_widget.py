@@ -150,10 +150,9 @@ class PlotWidget:
             plot_item.removeItem(item)
             entry.line_series.remove(item)
 
-    def remove_last_plot(self):
-        if not self._plots:
+    def remove_plot(self, plot_item: pg.PlotItem):
+        if plot_item not in self._plots:
             return
-        plot_item = self._plots[-1]
         self._plot_docks[plot_item].close()
 
     def _on_plot_closed(self, dock):
@@ -163,6 +162,20 @@ class PlotWidget:
                 break
         else:
             return
+
+        # Handle Selection before removal
+        if self._selected_plot == plot_item:
+            # try to select previous plot
+            idx = self._plots.index(plot_item)
+            if idx > 0:
+                new_selection = self._plots[idx - 1]
+                self._on_plot_clicked(new_selection)
+            elif len(self._plots) > 1:
+                # If it was the first one, select the next one (which will become the first)
+                new_selection = self._plots[idx + 1]
+                self._on_plot_clicked(new_selection)
+            else:
+                self._selected_plot = None
 
         # Perform cleanup
         self._plots.remove(plot_item)
