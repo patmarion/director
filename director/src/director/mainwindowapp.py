@@ -86,7 +86,7 @@ class MainWindowApp(object):
     def applicationInstance():
         app = QtWidgets.QApplication.instance()
         if app is None:
-            app = QtWidgets.QApplication([])
+            app = QtWidgets.QApplication(sys.argv[:1] + ["-name", "Director_MainWindowApp"])
         return app
 
     def showPythonConsole(self):
