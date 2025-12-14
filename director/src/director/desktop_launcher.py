@@ -105,6 +105,7 @@ def install_desktop_launcher_from_window(
     main_window: QtWidgets.QMainWindow,
     launcher_name: str,
     icon_name: str,
+    executable: str = "",
     comment: str = "",
     categories: str = "Utility;",
     startup_wm_class: str = "Director_MainWindowApp",
@@ -113,15 +114,16 @@ def install_desktop_launcher_from_window(
     """
     Install a desktop launcher by extracting info from a QMainWindow.
 
-    Convenience wrapper that extracts the application name from the window title,
-    the icon from the window icon, and the executable from sys.argv[0].
+    Convenience wrapper that extracts the application name from the window title
+    and the icon from the window icon.
     If files already exist and overwrite is False, returns the existing paths.
 
     Args:
         main_window: QMainWindow to extract app name and icon from
         launcher_name: Base name for the .desktop file (without extension)
         icon_name: Base name for the icon file (without extension)
-        comment: Description shown in application menus (defaults to app name if empty)
+        executable: Path to the executable (defaults to sys.argv[0] if empty)
+        comment: Description shown in application menus
         categories: Semicolon-separated category list (default: "Utility;")
         startup_wm_class: WM_CLASS for window matching
         overwrite: If False, skip if files already exist (default: False)
@@ -135,10 +137,9 @@ def install_desktop_launcher_from_window(
     """
     app_name = main_window.windowTitle()
     icon = main_window.windowIcon()
-    executable = sys.argv[0]
 
-    if not comment:
-        comment = app_name
+    if not executable:
+        executable = sys.argv[0]
 
     icon_path = install_icon(
         icon=icon,
