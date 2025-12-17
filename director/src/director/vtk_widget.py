@@ -341,7 +341,7 @@ class VTKWidget(QWidget):
         else:
             self._renderer.ResetCamera()
         
-        self._renderer.ResetCameraClippingRange()
+        self.render()
     
     def getAverageFramesPerSecond(self):
         """Get the average frames per second."""
