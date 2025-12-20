@@ -7,7 +7,7 @@ name = "director"
 version = "2.0.0"
 description = "Director 2.0 - A modern Python visualization library using VTK and Qt"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10.19"
 dependencies = [
     "vtk>=9.0",
     "qtpy>=2.0.0",
