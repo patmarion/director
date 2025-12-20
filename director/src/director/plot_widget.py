@@ -22,6 +22,35 @@ class PlotEntry:
     series_items: "dict[pg.PlotDataItem, PlotSeriesItem]" = field(default_factory=dict)
 
 
+class DirectorPlotWidget(pg.PlotWidget):
+    sigDropped = QtCore.Signal(object, list)
+
+    def __init__(self, parent=None, background='default', plotItem=None, **kargs):
+        super().__init__(parent, background, plotItem, **kargs)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, ev):
+        if ev.mimeData().hasFormat("application/x-director-fields"):
+            ev.accept()
+        else:
+            ev.ignore()
+
+    def dragMoveEvent(self, ev):
+        if ev.mimeData().hasFormat("application/x-director-fields"):
+            ev.accept()
+        else:
+            ev.ignore()
+
+    def dropEvent(self, ev):
+        data = ev.mimeData().data("application/x-director-fields")
+        import json
+        try:
+            fields = json.loads(data.data().decode('utf-8'))
+            self.sigDropped.emit(self.getPlotItem(), fields)
+        except Exception:
+            pass
+
+
 class PlotObjItem(om.ObjectModelItem):
     def __init__(self, plot_widget, plot_item, title):
         om.ObjectModelItem.__init__(self, title or "Plot", icon=om.Icons.Chart)
@@ -124,10 +153,13 @@ class PlotSeriesItem(om.ObjectModelItem):
 
 
 
-class PlotWidget:
+class PlotWidget(QtCore.QObject):
     """Utility for creating synchronized plots from log channels."""
+    
+    sigPlotsDropped = QtCore.Signal(object, list)
 
     def __init__(self):
+        super().__init__()
         self.time_slider = None
         self.plot_widget = DockArea()
         self._plots: list[pg.PlotItem] = []
@@ -197,7 +229,8 @@ class PlotWidget:
         dock = Dock(dock_name, size=(500, 300), closable=True)
         
         view_box = PlotInteractionViewBox(plot_widget=self)
-        plot_widget = pg.PlotWidget(viewBox=view_box)
+        plot_widget = DirectorPlotWidget(viewBox=view_box)
+        plot_widget.sigDropped.connect(self.sigPlotsDropped)
         plot_widget.setBackground((240, 240, 240))
         dock.addWidget(plot_widget)
 
@@ -231,11 +264,12 @@ class PlotWidget:
         self._on_plot_clicked(plot_item)
              
         if self.object_model:
+            plots_folder = self.object_model.getOrCreateContainer("Plots")
             obj_item = PlotObjItem(self, plot_item, title)
             self._plot_entries[plot_item].object_item = obj_item
             if y_label: obj_item.setProperty("Y Label", y_label)
             if y_units: obj_item.setProperty("Y Units", y_units)
-            self.object_model.addToObjectModel(obj_item)
+            self.object_model.addToObjectModel(obj_item, parentObj=plots_folder)
 
         return plot_item
 
