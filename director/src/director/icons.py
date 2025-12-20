@@ -11,6 +11,7 @@ class Icons(object):
   Python = 'python_logo.png'
   ResetCamera = 'reset_camera.png'
   CameraRotate = 'camera_mode.png'
+  Chart = 'chart.png'
   Empty = ''
 
   @staticmethod

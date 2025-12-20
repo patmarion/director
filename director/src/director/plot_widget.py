@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 from typing import Callable, Iterable
 
+import director.objectmodel as om
 import numpy as np
 import pyqtgraph as pg 
 from pyqtgraph.dockarea import DockArea, Dock
@@ -17,6 +18,111 @@ class PlotEntry:
     vline: pg.InfiniteLine | None = None
     horizontal_lines: list[pg.InfiniteLine] = field(default_factory=list)
     legend: pg.LegendItem | None = None
+    object_item: "PlotObjItem | None" = None
+    series_items: "dict[pg.PlotDataItem, PlotSeriesItem]" = field(default_factory=dict)
+
+
+class PlotObjItem(om.ObjectModelItem):
+    def __init__(self, plot_widget, plot_item, title):
+        om.ObjectModelItem.__init__(self, title or "Plot", icon=om.Icons.Chart)
+        self.plot_widget = plot_widget
+        self.plot_item = plot_item
+        
+        self.addProperty("Title", title or " ")
+        self.addProperty("X Label", "Time")
+        self.addProperty("Y Label", "")
+        self.addProperty("Y Units", "")
+        self.addProperty("Visible", True)
+        
+    def _onPropertyChanged(self, propertySet, propertyName):
+        om.ObjectModelItem._onPropertyChanged(self, propertySet, propertyName)
+        if propertyName == "Title":
+            self.plot_widget.set_plot_title(self.plot_item, self.getProperty(propertyName))
+        elif propertyName == "X Label":
+            self.plot_item.setLabel("bottom", text=self.getProperty(propertyName))
+        elif propertyName == "Y Label":
+            self.plot_item.setLabel("left", text=self.getProperty(propertyName))
+        elif propertyName == "Y Units":
+            self.plot_item.setLabel("left", units=self.getProperty(propertyName))
+        elif propertyName == "Visible":
+            dock = self.plot_widget._plot_docks.get(self.plot_item)
+            if dock:
+                dock.setVisible(self.getProperty(propertyName))
+
+    def onRemoveFromObjectModel(self):
+        om.ObjectModelItem.onRemoveFromObjectModel(self)
+        self.plot_widget.remove_plot(self.plot_item, from_om=True)
+
+
+class PlotSeriesItem(om.ObjectModelItem):
+    def __init__(self, plot_widget, plot_item, series, name):
+        om.ObjectModelItem.__init__(self, name)
+        self.plot_widget = plot_widget
+        self.plot_item = plot_item
+        self.series = series
+        
+        self.addProperty("Visible", True)
+        self.addProperty("Color", [1.0, 1.0, 1.0])
+        self.addProperty("Style", 0, attributes=om.PropertyAttributes(enumNames=["Line", "Points", "Line + Points"]))
+        self.addProperty("Line Width", 2, attributes=om.PropertyAttributes(minimum=1, maximum=10))
+        self.addProperty("Point Size", 5, attributes=om.PropertyAttributes(minimum=1, maximum=20))
+        
+        color = self._get_color_from_series()
+        if color:
+             self.setProperty("Color", color)
+
+    def _get_color_from_series(self):
+        opts = self.series.opts
+        pen = opts.get('pen')
+        if pen is None:
+             pen = opts.get('symbolPen')
+        
+        if pen is not None:
+             c = pg.mkPen(pen).color()
+             return [c.redF(), c.greenF(), c.blueF()]
+        return [1.0, 1.0, 1.0]
+
+    def _onPropertyChanged(self, propertySet, propertyName):
+        om.ObjectModelItem._onPropertyChanged(self, propertySet, propertyName)
+        if propertyName == "Visible":
+            self.series.setVisible(self.getProperty(propertyName))
+        elif propertyName == "Name":
+            # OM handles name change, we might want to update series name if possible
+            pass 
+        elif propertyName in ["Color", "Style", "Line Width", "Point Size"]:
+            self._update_style()
+
+    def _update_style(self):
+        style_idx = self.getProperty("Style")
+        color_list = self.getProperty("Color")
+        line_width = self.getProperty("Line Width")
+        point_size = self.getProperty("Point Size")
+        
+        color = pg.mkColor(int(color_list[0]*255), int(color_list[1]*255), int(color_list[2]*255))
+        pen = pg.mkPen(color, width=line_width)
+        brush = pg.mkBrush(color)
+        
+        if style_idx == 0: # Line
+            self.series.setPen(pen)
+            self.series.setSymbol(None)
+        elif style_idx == 1: # Points
+            self.series.setPen(None)
+            self.series.setSymbol("o")
+            self.series.setSymbolPen(pen)
+            self.series.setSymbolBrush(brush)
+            self.series.setSymbolSize(point_size)
+        elif style_idx == 2: # Both
+            self.series.setPen(pen)
+            self.series.setSymbol("o")
+            self.series.setSymbolPen(pen)
+            self.series.setSymbolBrush(brush)
+            self.series.setSymbolSize(point_size)
+
+    def onRemoveFromObjectModel(self):
+        om.ObjectModelItem.onRemoveFromObjectModel(self)
+        self.plot_widget.remove_series(self.plot_item, self.series, from_om=True)
+
+
 
 class PlotWidget:
     """Utility for creating synchronized plots from log channels."""
@@ -32,9 +138,18 @@ class PlotWidget:
         self.start_time_s = 0.0
         self._suspend_auto_scroll = False
         self._selected_plot: pg.PlotItem | None = None
+        self.object_model = None
+        self._plots_removing_from_om = set()
 
         # Apply custom styling patch
         DockLabel.updateStyle = updateStylePatched
+
+    def set_object_model(self, object_model):
+        self.object_model = object_model
+
+    def set_plot_title(self, plot_item: pg.PlotItem, title: str):
+        if plot_item in self._plot_docks:
+            self._plot_docks[plot_item].setTitle(title or " ")
 
     def add_horizontal_line_dialog(self, plot_item: pg.PlotItem):
         value, ok = QtWidgets.QInputDialog.getDouble(
@@ -115,6 +230,13 @@ class PlotWidget:
         self._plot_docks[plot_item] = dock
         self._on_plot_clicked(plot_item)
              
+        if self.object_model:
+            obj_item = PlotObjItem(self, plot_item, title)
+            self._plot_entries[plot_item].object_item = obj_item
+            if y_label: obj_item.setProperty("Y Label", y_label)
+            if y_units: obj_item.setProperty("Y Units", y_units)
+            self.object_model.addToObjectModel(obj_item)
+
         return plot_item
 
     def get_selected_plot(self) -> pg.PlotItem | None:
@@ -128,6 +250,11 @@ class PlotWidget:
         for p, d in self._plot_docks.items():
             if d.label:
                  d.label.setDim(p != plot_item)
+        
+        if self.object_model:
+             entry = self._plot_entries.get(plot_item)
+             if entry and entry.object_item:
+                 self.object_model.setActiveObject(entry.object_item)
 
     def get_plots(self) -> list[pg.PlotItem]:
         return list(self._plots)
@@ -138,22 +265,38 @@ class PlotWidget:
             return []
         return [item.name() for item in entry.line_series]
 
-    def remove_series(self, plot_item: pg.PlotItem, series_name: str):
+    def remove_series(self, plot_item: pg.PlotItem, series: str | pg.PlotDataItem, from_om=False):
         entry = self._plot_entries.get(plot_item)
         if not entry:
             return
 
-        # Find series to remove
-        to_remove = [item for item in entry.line_series if item.name() == series_name]
+        to_remove = []
+        if isinstance(series, str):
+             to_remove = [item for item in entry.line_series if item.name() == series]
+        else:
+             if series in entry.line_series:
+                  to_remove = [series]
         
         for item in to_remove:
             plot_item.removeItem(item)
             entry.line_series.remove(item)
+            
+            if item in entry.series_items:
+                 series_item = entry.series_items.pop(item)
+                 if not from_om and self.object_model and series_item.getObjectTree():
+                      self.object_model.removeFromObjectModel(series_item)
 
-    def remove_plot(self, plot_item: pg.PlotItem):
+    def remove_plot(self, plot_item: pg.PlotItem, from_om=False):
         if plot_item not in self._plots:
             return
+            
+        if from_om:
+             self._plots_removing_from_om.add(plot_item)
+             
         self._plot_docks[plot_item].close()
+        
+        if from_om:
+             self._plots_removing_from_om.discard(plot_item)
 
     def _on_plot_closed(self, dock):
         # Find the plot item associated with this dock
@@ -178,6 +321,11 @@ class PlotWidget:
                 self._selected_plot = None
 
         # Perform cleanup
+        if self.object_model and plot_item not in self._plots_removing_from_om:
+             entry = self._plot_entries.get(plot_item)
+             if entry and entry.object_item and entry.object_item.getObjectTree():
+                  self.object_model.removeFromObjectModel(entry.object_item)
+
         self._plots.remove(plot_item)
         del self._plot_entries[plot_item]
         del self._plot_docks[plot_item]
@@ -220,6 +368,11 @@ class PlotWidget:
                 color_index += 1
                 line_series = plot_item.plot(time_offsets_s, values[:, column], name=column_name, pen=pen)
                 entry.line_series.append(line_series)
+
+                if self.object_model and entry.object_item:
+                    series_item = PlotSeriesItem(self, plot_item, line_series, column_name)
+                    entry.series_items[line_series] = series_item
+                    self.object_model.addToObjectModel(series_item, parentObj=entry.object_item)
 
     def add_horizontal_lines(
         self,
@@ -381,7 +534,91 @@ class PlotInteractionViewBox(pg.ViewBox):
         self._customize_context_menu(plot_item.getMenu())
 
     def raiseContextMenu(self, ev):
-        self._plot_item.getMenu().popup(ev.screenPos().toPoint())
+        menu = self._plot_item.getMenu()
+        
+        # Clean up previous series actions
+        if hasattr(self, '_context_menu_series_actions'):
+            for action in self._context_menu_series_actions:
+                menu.removeAction(action)
+        self._context_menu_series_actions = []
+
+        # Identify clicked series
+        series = self._get_clicked_series(ev)
+        if series:
+            # Add separator
+            sep = menu.addSeparator()
+            self._context_menu_series_actions.append(sep)
+
+            # Series Name Label (disabled action)
+            name = series.name() or "Unnamed Series"
+            label_action = menu.addAction(f"Series: {name}")
+            label_action.setEnabled(False)
+            self._context_menu_series_actions.append(label_action)
+
+            # Style Submenu
+            style_menu = menu.addMenu("Display Style")
+            self._context_menu_series_actions.append(style_menu.menuAction())
+
+            # Style Options
+            def set_style(s, mode):
+                self._set_series_style(s, mode)
+
+            a_line = style_menu.addAction("Line")
+            a_line.triggered.connect(lambda: set_style(series, "line"))
+
+            a_points = style_menu.addAction("Points")
+            a_points.triggered.connect(lambda: set_style(series, "points"))
+
+            a_both = style_menu.addAction("Line + Points")
+            a_both.triggered.connect(lambda: set_style(series, "both"))
+
+        menu.popup(ev.screenPos().toPoint())
+
+    def _get_clicked_series(self, ev) -> pg.PlotDataItem | None:
+        pos = ev.scenePos()
+        if self.scene() is None:
+            return None
+        
+        for item in self.scene().items(pos):
+            if isinstance(item, pg.PlotDataItem):
+                return item
+            # Handle cases where we hit the curve or scatter item directly
+            if isinstance(item, (pg.PlotCurveItem, pg.ScatterPlotItem)):
+                parent = item.parentItem()
+                if isinstance(parent, pg.PlotDataItem):
+                    return parent
+        return None
+
+    def _set_series_style(self, series: pg.PlotDataItem, style: str):
+        # Attempt to recover the base color from current settings
+        # Preference: current pen -> current symbol pen -> default blue
+        color = "b"
+        current_pen = series.opts.get("pen")
+        if current_pen is not None:
+             color = current_pen.color() if hasattr(current_pen, "color") else pg.mkPen(current_pen).color()
+        else:
+            current_symbol_pen = series.opts.get("symbolPen")
+            if current_symbol_pen is not None:
+                color = current_symbol_pen.color() if hasattr(current_symbol_pen, "color") else pg.mkPen(current_symbol_pen).color()
+
+        pen = pg.mkPen(color, width=2)
+        brush = pg.mkBrush(color)
+
+        if style == "line":
+            series.setPen(pen)
+            series.setSymbol(None)
+        elif style == "points":
+            series.setPen(None)
+            series.setSymbol("o")
+            series.setSymbolPen(pen)
+            series.setSymbolBrush(brush)
+            series.setSymbolSize(2)
+        elif style == "both":
+            series.setPen(pen)
+            series.setSymbol("o")
+            series.setSymbolPen(pen)
+            series.setSymbolBrush(brush)
+            series.setSymbolSize(4)
 
     def _customize_context_menu(self, menu):        
         # Helper to recursively find and hide
@@ -472,7 +709,7 @@ class PlotInteractionViewBox(pg.ViewBox):
         super().mousePressEvent(ev)
 
     def mouseClickEvent(self, ev):
-        if ev.button() == QtCore.Qt.MouseButton.LeftButton and ev.double():
+        if ev.button() == QtCore.Qt.MouseButton.LeftButton:
             if ev.modifiers() & QtCore.Qt.KeyboardModifier.ShiftModifier:
                 # Manually compute Y range from children bounds
                 bounds = self.childrenBounds()
@@ -483,12 +720,29 @@ class PlotInteractionViewBox(pg.ViewBox):
 
                 self.enableAutoRange(pg.ViewBox.YAxis, True)
                 self.enableAutoRange(pg.ViewBox.XAxis, False)
-            else:
+            elif ev.double():
                 self.enableAutoRange(pg.ViewBox.XYAxes, True)
                 self.autoRange()
+            else:
+                 # Single click logic
+                 series = self._get_clicked_series(ev)
+                 if series and self._plot_widget.object_model:
+                     # Find series item
+                     entry = self._plot_widget._plot_entries.get(self._plot_item)
+                     if entry and series in entry.series_items:
+                         self._plot_widget.object_model.setActiveObject(entry.series_items[series])
+                         ev.accept()
+                         return
+
+                 # If not series or not found, delegate to default (which might select plot)
+                 # But _on_plot_clicked is not automatically called by pg.ViewBox click.
+                 # We should call it manually if we want clicking plot bg to select plot.
+                 if self._plot_item:
+                      self._plot_widget._on_plot_clicked(self._plot_item)
+
             ev.accept()
             return
-
+        
         super().mouseClickEvent(ev)
 
     def mouseDragEvent(self, ev, axis=None):
