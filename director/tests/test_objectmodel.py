@@ -51,9 +51,7 @@ def test_object_model_tree_show(qapp):
     tree.init(tree_widget, properties_panel)
     layout.addWidget(tree_widget)
     
-    widget.show()
-    qapp.processEvents()
-    
+    widget.show()    
     assert widget.isVisible()
     widget.close()
 
@@ -84,7 +82,6 @@ def test_object_model_add_and_show(qapp):
     tree.addToObjectModel(item)
     
     widget.show()
-    qapp.processEvents()
     
     # Verify item was added
     objects = tree.getObjects()
@@ -92,7 +89,6 @@ def test_object_model_add_and_show(qapp):
     assert objects[0] == item
     
     widget.close()
-    qapp.processEvents()
 
 
 def test_object_model_property_change_updates_tree_item(qapp):
@@ -107,9 +103,6 @@ def test_object_model_property_change_updates_tree_item(qapp):
     obj = ObjectModelItem("original name")
     tree.addToObjectModel(obj)
     
-    # Process events to ensure tree widget is updated
-    qapp.processEvents()
-    
     # Verify initial name is set correctly
     tree_item = tree_widget.topLevelItem(0)
     assert tree_item is not None
@@ -117,9 +110,6 @@ def test_object_model_property_change_updates_tree_item(qapp):
     
     # Change the name property using setProperty
     obj.setProperty('Name', 'new name')
-    
-    # Process events to allow signal/slot connections to propagate
-    qapp.processEvents()
     
     # Verify the tree widget item text has been updated
     assert tree_item.text(0) == "new name"
@@ -129,10 +119,7 @@ def test_object_model_property_change_updates_tree_item(qapp):
     
     # Test direct property access via properties attribute (using alternate name)
     obj.properties.name = "another name"
-    
-    # Process events again
-    qapp.processEvents()
-    
+        
     # Verify the tree widget item text has been updated again
     assert tree_item.text(0) == "another name"
     assert obj.getProperty('Name') == "another name"

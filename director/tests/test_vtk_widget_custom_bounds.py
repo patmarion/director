@@ -31,9 +31,6 @@ def test_reset_camera_with_custom_bounds(qapp):
     # Reset camera - should use combined bounds
     widget.resetCamera()
     
-    # Process events
-    qapp.processEvents()
-    
     # Verify camera was reset (no exception thrown)
     assert widget.camera() is not None
     

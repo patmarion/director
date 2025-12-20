@@ -133,7 +133,6 @@ def test_image2d_item_anchor_positions(qapp):
     """Test different anchor positions."""
     widget = VTKWidget()
     widget.show()
-    qapp.processEvents()
     
     image = vtk.vtkImageData()
     image.SetDimensions(80, 60, 1)

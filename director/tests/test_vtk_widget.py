@@ -92,9 +92,6 @@ def test_vtk_widget_render(qapp):
     widget = VTKWidget()
     # Should not raise
     widget.render()
-    
-    # Process events to allow render to happen
-    qapp.processEvents()
 
 
 def test_vtk_widget_force_render(qapp):
@@ -102,9 +99,6 @@ def test_vtk_widget_force_render(qapp):
     widget = VTKWidget()
     # Should not raise
     widget.forceRender()
-    
-    # Process events
-    qapp.processEvents()
 
 
 def test_vtk_widget_reset_camera(qapp):
@@ -121,9 +115,6 @@ def test_vtk_widget_reset_camera(qapp):
     
     # Reset camera should not raise
     widget.resetCamera()
-    
-    # Process events
-    qapp.processEvents()
 
 
 def test_vtk_widget_get_average_fps(qapp):
@@ -135,7 +126,6 @@ def test_vtk_widget_get_average_fps(qapp):
     
     # Trigger some renders
     widget.forceRender()
-    qapp.processEvents()
     
     # FPS might still be 0 or have a value depending on timing
     fps = widget.getAverageFramesPerSecond()
@@ -146,10 +136,7 @@ def test_vtk_widget_show_and_close(qapp):
     """Test that VTKWidget can be shown and closed."""
     widget = VTKWidget()
     widget.show()
-    
-    # Process events to allow rendering
-    qapp.processEvents()
-    
+
     # Verify widget is visible
     assert widget.isVisible()
 
