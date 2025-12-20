@@ -59,7 +59,8 @@ class TestMujocoRobotModel:
         applogic.setCurrentRenderView(view)
         
         model = MujocoRobotModel(test_model_path)
-        model_folder = model.show_model()
+        model.show_model()
+        model_folder = model.get_model_folder()
         
         assert model_folder is not None
         assert hasattr(model_folder, 'geom_items')
@@ -92,7 +93,8 @@ class TestMujocoRobotModel:
         applogic.setCurrentRenderView(view)
         
         model = MujocoRobotModel(test_model_path)
-        model_folder = model.show_model()
+        model.show_model()
+        model_folder = model.get_model_folder()
         
         # Expected colors from XML (rgba values)
         expected_colors = {
@@ -138,7 +140,8 @@ class TestMujocoRobotModel:
         applogic.setCurrentRenderView(view)
         
         model = MujocoRobotModel(test_model_path)
-        model_folder = model.show_model()
+        model.show_model()
+        model_folder = model.get_model_folder()
         
         # Find link2_geom which has pos="0.1 0.05 0.02" euler="15 30 45" in XML
         link2_geom_item = None
