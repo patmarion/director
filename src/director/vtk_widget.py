@@ -64,8 +64,9 @@ class VTKWidget(QWidget):
         # closing this widget in pytest.  It's a unlimited recursion bug that
         # is trigger when calling __getattr__ during Finalize.
         def patched_finalize(self):
-            if "_RenderWindow" in self.__dict__:
-                self._RenderWindow.Finalize()
+            pass
+            # if "_RenderWindow" in self.__dict__:
+            #     self._RenderWindow.Finalize()
 
         QVTKRenderWindowInteractor.Finalize = patched_finalize
 
