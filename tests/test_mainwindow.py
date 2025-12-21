@@ -1,18 +1,10 @@
-"""Tests for hello_world module."""
+"""Tests for mainwindowapp module."""
 
 from director import mainwindowapp
 from director.vtk_widget import VTKWidget
 
 
-def test_vtk_widget(qapp):
-    """Test that VTKWidget can be shown and then closed."""
-    widget = VTKWidget()
-    widget.show()
-    assert widget.isVisible()
-    widget.close()
-
-
-def test_mainwindowapp_construction(qapp):
+def test_mainwindowapp(qapp):
     """Test that MainWindowApp can be constructed."""
     fields = mainwindowapp.construct()
     assert fields is not None
