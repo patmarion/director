@@ -24,6 +24,7 @@ steps:
       cd director
       uv sync --all-extras
       uv run ruff format --check .
+      uv run ruff check .
     plugins:
       - docker#v5.11.0:
           image: "ghcr.io/astral-sh/uv:python3.10-bookworm-slim"
