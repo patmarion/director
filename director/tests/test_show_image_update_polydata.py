@@ -1,11 +1,9 @@
 """Tests for showImage, updateImage, and updatePolyData functions."""
 
-import sys
-import pytest
-import director.vtkAll as vtk
-from director.visualization import showImage, updateImage, updatePolyData, showPolyData
-from director.vtk_widget import VTKWidget
 import director.objectmodel as om
+import director.vtkAll as vtk
+from director.visualization import showImage, updateImage, updatePolyData
+from director.vtk_widget import VTKWidget
 
 
 def test_show_image(qapp):

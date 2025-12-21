@@ -1,8 +1,10 @@
 import os
+
+from qtpy import QtWidgets
+
 from director import ioUtils
 from director import objectmodel as om
 from director import visualization as vis
-from qtpy import QtWidgets
 
 
 class OpenDataHandler(object):

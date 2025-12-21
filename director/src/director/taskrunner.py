@@ -1,6 +1,5 @@
 import sys
 import time
-import sys
 from threading import Thread
 
 from director import asynctaskqueue

@@ -1,6 +1,5 @@
 import pyqtgraph as pg
 
-
 win = pg.GraphicsLayoutWidget(show=True)
 win.setWindowTitle("pyqtgraph example")
 label = pg.LabelItem(justify="right")

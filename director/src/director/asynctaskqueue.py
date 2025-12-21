@@ -1,9 +1,11 @@
 import types
+
 import qtpy.QtCore as QtCore
 import qtpy.QtWidgets as QtWidgets
-from director.timercallback import TimerCallback
-from director.simpletimer import SimpleTimer
+
 from director import callbacks
+from director.simpletimer import SimpleTimer
+from director.timercallback import TimerCallback
 
 
 class AsyncTaskQueue(object):

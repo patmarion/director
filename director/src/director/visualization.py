@@ -1,15 +1,15 @@
 """Visualization classes and utilities for displaying VTK objects in Director."""
 
-import director.objectmodel as om
+import numpy as np
+
 import director.applogic as app
-from director.shallowCopy import shallowCopy
+import director.objectmodel as om
 import director.vtkAll as vtk
-from director import filterUtils
-from director import callbacks
+from director import callbacks, filterUtils
 from director.fieldcontainer import FieldContainer
 from director.gridSource import makeGridPolyData
+from director.shallowCopy import shallowCopy
 from director.viewbounds import computeViewBoundsNoGrid
-import numpy as np
 
 try:
     import matplotlib

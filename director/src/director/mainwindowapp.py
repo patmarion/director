@@ -1,27 +1,22 @@
 """MainWindowApp for Director 2.0 - component-based application factory."""
 
-import sys
-import signal
 import argparse
 import runpy
-
-from director.componentgraph import ComponentFactory
-from director import consoleapp
-from director.frame_properties import FrameProperties
-import director.objectmodel as om
-import director.visualization as vis
-from director.icons import Icons
-from director.fieldcontainer import FieldContainer
-from director import applogic
-from director import appsettings
-from director import argutils
-from director import script_context
-from director.timercallback import TimerCallback
+import signal
+import sys
 
 import qtpy.QtCore as QtCore
-import qtpy.QtWidgets as QtWidgets
 import qtpy.QtGui as QtGui
+import qtpy.QtWidgets as QtWidgets
 
+import director.objectmodel as om
+import director.visualization as vis
+from director import applogic, appsettings, argutils, consoleapp, script_context
+from director.componentgraph import ComponentFactory
+from director.fieldcontainer import FieldContainer
+from director.frame_properties import FrameProperties
+from director.icons import Icons
+from director.timercallback import TimerCallback
 from director.viewmenumanager import ViewMenuManager
 
 
@@ -597,24 +592,25 @@ class MainWindowAppFactory(object):
         )
 
     def initGlobalModules(self, fields):
-        import qtpy.QtCore as QtCore
-        import qtpy.QtWidgets as QtWidgets
-        import qtpy.QtGui as QtGui
-        import director.objectmodel as om
-        import director.consoleapp as consoleapp
-        import director.visualization as vis
-        import director.applogic as applogic
-        from director import transformUtils
-        from director import filterUtils
-        from director import ioUtils
-        import director.vtkAll as vtk
-        from director import vtkNumpy as vnp
-        from director.debugVis import DebugData
-        from director.timercallback import TimerCallback
-        from director.fieldcontainer import FieldContainer
-        import numpy as np
+        # ruff: noqa: F401
         import os
         import sys
+
+        import numpy as np
+        import qtpy.QtCore as QtCore
+        import qtpy.QtGui as QtGui
+        import qtpy.QtWidgets as QtWidgets
+
+        import director.applogic as applogic
+        import director.consoleapp as consoleapp
+        import director.objectmodel as om
+        import director.visualization as vis
+        import director.vtkAll as vtk
+        from director import filterUtils, ioUtils, transformUtils
+        from director import vtkNumpy as vnp
+        from director.debugVis import DebugData
+        from director.fieldcontainer import FieldContainer
+        from director.timercallback import TimerCallback
 
         modules = dict(locals())
         del modules["fields"]

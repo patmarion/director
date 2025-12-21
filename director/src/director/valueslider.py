@@ -1,14 +1,14 @@
 """Value slider widget with play/pause controls."""
 
-from director import callbacks
-from director.flags import Flags
-from director.timercallback import TimerCallback
-from director import qtutils
+import time
+
+import numpy as np
 import qtpy.QtCore as QtCore
 import qtpy.QtWidgets as QtWidgets
 
-import time
-import numpy as np
+from director import callbacks, qtutils
+from director.flags import Flags
+from director.timercallback import TimerCallback
 
 
 class ValueSlider(object):

@@ -1,10 +1,7 @@
 """Tests for timercallback module."""
 
-import sys
 import time
-import pytest
-from qtpy.QtWidgets import QApplication
-from qtpy.QtCore import QTimer
+
 from director.timercallback import TimerCallback
 
 

@@ -1,8 +1,8 @@
 """Hello World example demonstrating Director api."""
 
 from director import mainwindowapp
-from director.debugVis import DebugData
 from director import visualization as vis
+from director.debugVis import DebugData
 
 
 def main():

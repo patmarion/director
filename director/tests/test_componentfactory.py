@@ -1,6 +1,7 @@
 """Tests for componentfactory module."""
 
 import pytest
+
 from director.componentgraph import ComponentFactory, ComponentGraph
 from director.fieldcontainer import FieldContainer
 

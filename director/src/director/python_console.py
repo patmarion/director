@@ -3,8 +3,8 @@
 import os
 
 try:
-    from qtconsole.rich_jupyter_widget import RichJupyterWidget
     from qtconsole.inprocess import QtInProcessKernelManager
+    from qtconsole.rich_jupyter_widget import RichJupyterWidget
 
     QTCONSOLE_AVAILABLE = True
 except ImportError:

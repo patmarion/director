@@ -1,8 +1,9 @@
 import os
+import os.path
+import shelve
+
 import director.vtkAll as vtk
 from director.shallowCopy import shallowCopy
-import shelve
-import os.path
 
 
 def readPolyData(filename, computeNormals=False):

@@ -6,9 +6,9 @@ This script patches the VTK file to fix the recursion issue that occurs when
 the widget is closed and _Iren or _RenderWindow have been cleaned up.
 """
 
-import sys
 import inspect
 import os
+import sys
 
 
 def apply_fix():

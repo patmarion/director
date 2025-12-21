@@ -1,10 +1,10 @@
 """Tests for filterUtils module."""
 
-import vtk
 import numpy as np
-import pytest
-from director.filterUtils import computeCentroid, appendPolyData, cleanPolyData, computeNormals, triangulatePolyData
-from director.vtkNumpy import numpyToPolyData, addNumpyToVtk
+import vtk
+
+from director.filterUtils import appendPolyData, cleanPolyData, computeCentroid, computeNormals, triangulatePolyData
+from director.vtkNumpy import numpyToPolyData
 
 
 def test_compute_centroid():

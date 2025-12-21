@@ -1,11 +1,11 @@
 """Example demonstrating Image2DItem for displaying 2D image overlays."""
 
 import sys
-import numpy as np
+
 import director.vtkAll as vtk
 from director import mainwindowapp
-from director.visualization import Image2DItem
 from director.debugVis import DebugData
+from director.visualization import Image2DItem
 
 
 def create_test_image(width, height, pattern="gradient"):

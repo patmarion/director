@@ -1,10 +1,6 @@
 """Tests for consoleapp module."""
 
-import pytest
-import sys
-from qtpy.QtWidgets import QApplication
 from director import consoleapp
-from director.timercallback import TimerCallback
 
 
 def test_consoleapp_register_startup_callback(qapp):

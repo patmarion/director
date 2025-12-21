@@ -1,6 +1,7 @@
 """FFMpegWriter class for encoding video from numpy RGB frames."""
 
 import subprocess
+
 import numpy as np
 
 

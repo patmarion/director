@@ -1,8 +1,5 @@
 """Tests for VTKWidget addCustomBounds functionality."""
 
-import sys
-import pytest
-from qtpy.QtWidgets import QApplication
 from director.vtk_widget import VTKWidget
 
 

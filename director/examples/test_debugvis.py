@@ -4,17 +4,17 @@ This demonstrates creating various 3D shapes using DebugData and displaying
 them as PolyDataItem objects in the object model."""
 
 import sys
+
+import numpy as np
 from qtpy.QtWidgets import QApplication
 
-from director import mainwindowapp
-from director.debugVis import DebugData
+from director import applogic, mainwindowapp
 from director import objectmodel as om
 from director import visualization as vis
-from director import vtkNumpy as vnp
 from director import vtkAll as vtk
-from director import applogic
+from director import vtkNumpy as vnp
+from director.debugVis import DebugData
 from director.vieweventfilter import ViewEventFilter
-import numpy as np
 
 
 class ObjectPickingEventFilter(ViewEventFilter):

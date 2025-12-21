@@ -1,18 +1,19 @@
 """Screen recorder widget for capturing video using FFMpegWriter."""
 
-import os
-import sys
-import subprocess
 import datetime
+import os
+import subprocess
+import sys
 from pathlib import Path
-import qtpy.QtWidgets as QtWidgets
+
 import qtpy.QtCore as QtCore
 import qtpy.QtGui as QtGui
+import qtpy.QtWidgets as QtWidgets
 
+from director import vtkAll as vtk
+from director import vtkNumpy as vnp
 from director.ffmpeg_writer import FFMpegWriter
 from director.timercallback import TimerCallback
-from director import vtkNumpy as vnp
-from director import vtkAll as vtk
 
 
 def capture_screenshot(view):

@@ -1,6 +1,6 @@
 """Application logic utilities (simplified from original Director)."""
 
-from qtpy.QtWidgets import QMessageBox, QApplication
+from qtpy.QtWidgets import QApplication, QMessageBox
 
 # Global variable to store the current render view
 _defaultRenderView = None
@@ -91,8 +91,8 @@ def boolPrompt(title, message, parent=None):
 
 def addShortcut(widget, keySequence, func):
     """Add a keyboard shortcut to a widget."""
-    from qtpy.QtWidgets import QShortcut
     from qtpy.QtGui import QKeySequence
+    from qtpy.QtWidgets import QShortcut
 
     shortcut = QShortcut(QKeySequence(keySequence), widget)
     shortcut.activated.connect(func)

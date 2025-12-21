@@ -1,8 +1,8 @@
 """Tests for shallowCopy module."""
 
 import vtk
-import pytest
-from director.shallowCopy import shallowCopy, deepCopy
+
+from director.shallowCopy import deepCopy, shallowCopy
 
 
 def test_shallow_copy_polydata():

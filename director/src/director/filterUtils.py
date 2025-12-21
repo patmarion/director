@@ -1,9 +1,10 @@
 """Convenience methods for VTK filter routines."""
 
+import numpy as np
+
 import director.vtkAll as vtk
 import director.vtkNumpy as vnp
 from director.shallowCopy import shallowCopy
-import numpy as np
 
 
 def thresholdPoints(polyData, arrayName, thresholdRange):

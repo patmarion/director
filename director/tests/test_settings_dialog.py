@@ -1,6 +1,5 @@
 import json
-from pathlib import Path
-import pytest
+
 from qtpy import QtCore, QtWidgets
 
 from director.propertyset import PropertyAttributes, PropertySet

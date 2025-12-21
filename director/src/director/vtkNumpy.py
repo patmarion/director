@@ -1,9 +1,10 @@
 """Utilities for converting between VTK and NumPy arrays."""
 
-from director.shallowCopy import shallowCopy
-import director.vtkAll as vtk
-from vtk.util import numpy_support
 import numpy as np
+from vtk.util import numpy_support
+
+import director.vtkAll as vtk
+from director.shallowCopy import shallowCopy
 
 
 def numpyToPolyData(pts, pointData=None, createVertexCells=True):

@@ -1,8 +1,5 @@
 """Tests for Image2DItem."""
 
-import sys
-import pytest
-import numpy as np
 import director.vtkAll as vtk
 from director.visualization import Image2DItem
 from director.vtk_widget import VTKWidget

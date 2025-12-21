@@ -1,9 +1,8 @@
 """Tests for objectmodel module."""
 
-import sys
-import pytest
-from qtpy.QtWidgets import QApplication, QTreeWidget
-from director.objectmodel import ObjectModelTree, ObjectModelItem
+from qtpy.QtWidgets import QTreeWidget
+
+from director.objectmodel import ObjectModelItem, ObjectModelTree
 
 
 class DummyPropertiesPanel:
@@ -39,7 +38,7 @@ def test_object_model_tree_init(qapp):
 
 def test_object_model_tree_show(qapp):
     """Test that ObjectModelTree can be shown in a widget."""
-    from qtpy.QtWidgets import QWidget, QVBoxLayout
+    from qtpy.QtWidgets import QVBoxLayout, QWidget
 
     widget = QWidget()
     layout = QVBoxLayout(widget)
@@ -65,7 +64,7 @@ def test_object_model_item_creation(qapp):
 
 def test_object_model_add_and_show(qapp):
     """Test adding an item to the object model and showing it."""
-    from qtpy.QtWidgets import QWidget, QVBoxLayout
+    from qtpy.QtWidgets import QVBoxLayout, QWidget
 
     widget = QWidget()
     layout = QVBoxLayout(widget)

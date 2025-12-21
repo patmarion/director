@@ -1,7 +1,7 @@
 """Qt utility functions."""
 
-from qtpy import QtCore, QtGui, QtWidgets
 import numpy as np
+from qtpy import QtCore, QtGui, QtWidgets
 
 
 def addWidgetsToDict(widgets, d):

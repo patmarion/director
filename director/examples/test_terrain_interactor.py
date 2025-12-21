@@ -5,12 +5,13 @@ Shows a simple scene with some geometries that can be viewed with terrain-style 
 """
 
 import sys
+
 from qtpy.QtWidgets import QApplication, QMainWindow
 
-from director import vtk_widget
-from director.terrain_interactor import setTerrainInteractor
-from director.debugVis import DebugData
 from director import visualization as vis
+from director import vtk_widget
+from director.debugVis import DebugData
+from director.terrain_interactor import setTerrainInteractor
 
 
 def main():

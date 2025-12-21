@@ -1,6 +1,7 @@
-from qtpy import QtWidgets, QtCore, QtGui
 import json
 from typing import Any
+
+from qtpy import QtCore, QtGui, QtWidgets
 
 
 class DictTableWidget(QtWidgets.QWidget):

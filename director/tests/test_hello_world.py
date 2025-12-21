@@ -1,7 +1,7 @@
 """Tests for hello_world module."""
 
-from director.vtk_widget import VTKWidget
 from director import mainwindowapp
+from director.vtk_widget import VTKWidget
 
 
 def test_vtk_widget(qapp):

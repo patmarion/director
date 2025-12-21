@@ -4,16 +4,13 @@ This demonstrates loading a MuJoCo MJCF XML file, performing forward kinematics,
 and visualizing the model geometry using PolyDataItem objects.
 """
 
-import sys
-import os
 import argparse
-from qtpy.QtWidgets import QApplication
+import os
+import sys
 
-from director import mainwindowapp
-from director import mujoco_model
-from director import applogic
-from director import argutils
 import qtpy.QtCore as QtCore
+
+from director import applogic, mujoco_model
 
 
 def main():

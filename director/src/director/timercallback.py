@@ -1,6 +1,7 @@
 """Timer callback utility for periodic execution."""
 
 import time
+
 from qtpy import QtCore
 
 

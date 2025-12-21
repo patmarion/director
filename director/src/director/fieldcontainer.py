@@ -1,7 +1,7 @@
 """FieldContainer class for structured field storage."""
 
-import vtk
 import numpy as np
+import vtk
 
 
 def _max_length(strings):

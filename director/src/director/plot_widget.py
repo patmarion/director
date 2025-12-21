@@ -1,13 +1,14 @@
 from dataclasses import dataclass, field
 from typing import Iterable
 
-import director.objectmodel as om
 import numpy as np
 import pyqtgraph as pg
-from pyqtgraph.dockarea import DockArea, Dock
-from pyqtgraph.dockarea.Dock import DockLabel
 import qtpy.QtCore as QtCore
+from pyqtgraph.dockarea import Dock, DockArea
+from pyqtgraph.dockarea.Dock import DockLabel
 from qtpy import QtWidgets
+
+import director.objectmodel as om
 
 
 @dataclass

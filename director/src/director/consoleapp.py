@@ -1,16 +1,14 @@
+import argparse
 import os
 import traceback
-import argparse
-
-from director import applogic
-from director import argutils
-from director import objectmodel as om
-from director import viewbehaviors
-from director import visualization as vis
-from director.timercallback import TimerCallback
 
 import qtpy.QtCore as QtCore
 import qtpy.QtWidgets as QtWidgets
+
+from director import applogic, argutils, viewbehaviors
+from director import objectmodel as om
+from director import visualization as vis
+from director.timercallback import TimerCallback
 
 
 class ConsoleApp(object):
@@ -133,7 +131,7 @@ class ConsoleApp(object):
 
     def showPythonConsole(self):
         """Show Python console in a standalone window."""
-        from director.python_console import PythonConsoleWidget, QTCONSOLE_AVAILABLE
+        from director.python_console import QTCONSOLE_AVAILABLE, PythonConsoleWidget
 
         if not QTCONSOLE_AVAILABLE:
             print("Python console not available. Please install qtconsole.")

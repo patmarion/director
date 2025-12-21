@@ -1,10 +1,11 @@
 """VTKWidget class implementing the Director VTK widget API."""
 
 import time
-import vtk
+
 import numpy as np
-from qtpy.QtWidgets import QWidget, QVBoxLayout
+import vtk
 from qtpy.QtCore import QTimer
+from qtpy.QtWidgets import QVBoxLayout, QWidget
 
 
 class FPSCounter:
@@ -240,9 +241,8 @@ class VTKWidget(QWidget):
         Returns:
             QShortcut: The created shortcut object
         """
-        from qtpy.QtWidgets import QShortcut
         from qtpy.QtGui import QKeySequence
-        from qtpy.QtWidgets import QApplication
+        from qtpy.QtWidgets import QApplication, QShortcut
 
         shortcut = QShortcut(QKeySequence(key_sequence), self)
         shortcut.activated.connect(QApplication.instance().quit)

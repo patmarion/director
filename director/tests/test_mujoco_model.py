@@ -1,24 +1,9 @@
 """Tests for mujoco_model module using the new MujocoRobotModel API."""
 
-import pytest
 import os
+
 import numpy as np
-
-# Check if mujoco is available
-try:
-    import mujoco
-
-    MUJOCO_AVAILABLE = True
-except ImportError:
-    MUJOCO_AVAILABLE = False
-    pytestmark = pytest.mark.skip(reason="MuJoCo not available")
-
-try:
-    from scipy.spatial.transform import Rotation
-
-    SCIPY_AVAILABLE = True
-except ImportError:
-    SCIPY_AVAILABLE = False
+import pytest
 
 
 @pytest.fixture
@@ -28,14 +13,13 @@ def test_model_path():
     return os.path.join(test_dir, "test_simple_mujoco_model.xml")
 
 
-@pytest.mark.skipif(not MUJOCO_AVAILABLE, reason="MuJoCo not available")
 class TestMujocoRobotModel:
     """Test MujocoRobotModel class."""
 
     def test_load_model(self, test_model_path, qapp):
         """Test loading a MuJoCo model."""
-        from director.mujoco_model import MujocoRobotModel
         from director import objectmodel as om
+        from director.mujoco_model import MujocoRobotModel
 
         # Initialize object model
         om.init()
@@ -48,10 +32,10 @@ class TestMujocoRobotModel:
 
     def test_show_model(self, test_model_path, qapp):
         """Test visualizing the model and checking objects in object model."""
-        from director.mujoco_model import MujocoRobotModel
-        from director import objectmodel as om
-        from director.vtk_widget import VTKWidget
         from director import applogic
+        from director import objectmodel as om
+        from director.mujoco_model import MujocoRobotModel
+        from director.vtk_widget import VTKWidget
 
         # Initialize object model
         om.init()
@@ -81,10 +65,10 @@ class TestMujocoRobotModel:
 
     def test_geom_colors(self, test_model_path, qapp):
         """Test that geom colors match the XML rgba values."""
-        from director.mujoco_model import MujocoRobotModel
-        from director import objectmodel as om
-        from director.vtk_widget import VTKWidget
         from director import applogic
+        from director import objectmodel as om
+        from director.mujoco_model import MujocoRobotModel
+        from director.vtk_widget import VTKWidget
 
         # Initialize object model
         om.init()
@@ -120,7 +104,6 @@ class TestMujocoRobotModel:
                     f"Color mismatch for {geom_name}: got {color[:3]}, expected {expected_color}"
                 )
 
-    @pytest.mark.skipif(not SCIPY_AVAILABLE, reason="scipy not available")
     def test_geom_transform_with_offset(self, test_model_path, qapp):
         """Test that geom with pos/euler offset in XML is handled correctly.
 
@@ -129,10 +112,10 @@ class TestMujocoRobotModel:
         mesh geoms. This test verifies that the model loads and visualizes correctly
         even when XML pos/euler attributes are present.
         """
-        from director.mujoco_model import MujocoRobotModel
-        from director import objectmodel as om
-        from director.vtk_widget import VTKWidget
         from director import applogic
+        from director import objectmodel as om
+        from director.mujoco_model import MujocoRobotModel
+        from director.vtk_widget import VTKWidget
 
         # Initialize object model
         om.init()

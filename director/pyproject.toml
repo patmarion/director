@@ -44,8 +44,8 @@ python_functions = ["test_*"]
 line-length = 120
 
 [tool.ruff.lint]
-# Pyflakes (F) and Bugbear (B) for bug-finding.
-select = ["F", "B"]
+# Pyflakes (F) and Bugbear (B) for bug-finding, and "I" isort
+select = ["F", "B", "I"]
 ignore = [
     "E501", # Ignore line-length violations (let the formatter handle it)
 ]

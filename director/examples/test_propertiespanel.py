@@ -1,9 +1,11 @@
 """Test program for PropertiesPanel - shows two panels synced to the same PropertySet."""
 
 import sys
+
 from qtpy.QtWidgets import QApplication, QSplitter
-from director.propertyset import PropertySet, PropertyAttributes
+
 from director.propertiespanel import PropertiesPanel
+from director.propertyset import PropertyAttributes, PropertySet
 
 
 def main():

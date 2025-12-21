@@ -50,8 +50,8 @@ class OutputConsole(object):
 
     def _pygmentsDemo(self):
         from pygments import highlight
-        from pygments.lexers import PythonLexer
         from pygments.formatters import HtmlFormatter
+        from pygments.lexers import PythonLexer
 
         code = 'def foo(x="bar"): return True'
 

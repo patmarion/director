@@ -1,6 +1,7 @@
 """Frame updating utilities for frame editing (simplified from original Director)."""
 
 from qtpy.QtCore import Qt
+
 import director.vtkAll as vtk
 
 # Global state for frame editing

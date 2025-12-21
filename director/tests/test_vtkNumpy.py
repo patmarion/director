@@ -1,15 +1,15 @@
 """Tests for vtkNumpy module."""
 
-import vtk
 import numpy as np
-import pytest
+import vtk
+
 from director.vtkNumpy import (
-    numpyToPolyData,
-    getNumpyFromVtk,
-    getVtkPointsFromNumpy,
     addNumpyToVtk,
-    numpyToImageData,
+    getNumpyFromVtk,
     getNumpyImageFromVtk,
+    getVtkPointsFromNumpy,
+    numpyToImageData,
+    numpyToPolyData,
 )
 
 

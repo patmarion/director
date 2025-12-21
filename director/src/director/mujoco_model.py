@@ -4,22 +4,21 @@ This module provides utilities to load MuJoCo MJCF XML files, perform forward
 kinematics, and visualize the model geometry in Director using PolyDataItem objects.
 """
 
+import copy
 import math
 import os
-import copy
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Any
-import xml.etree.ElementTree as ET
-import numpy as np
+
 import mujoco
+import numpy as np
 from scipy.spatial.transform import Rotation
 
 import director.vtkAll as vtk
-from director import transformUtils
-from director import ioUtils
-from director import filterUtils
-from director import visualization as vis
+from director import filterUtils, ioUtils, transformUtils
 from director import objectmodel as om
+from director import visualization as vis
 
 
 class MuJoCoMeshResolver:

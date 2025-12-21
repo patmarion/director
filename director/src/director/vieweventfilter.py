@@ -1,6 +1,6 @@
 """View event filter for handling mouse and keyboard events in VTK views."""
 
-from qtpy.QtCore import QObject, QEvent, Qt, QPoint
+from qtpy.QtCore import QEvent, QObject, QPoint, Qt
 from qtpy.QtGui import QCursor
 
 

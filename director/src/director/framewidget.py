@@ -1,10 +1,11 @@
 """Frame widget for manipulating an orthonormal frame in 3D view."""
 
 import numpy as np
+
 import director.vtkAll as vtk
-from director.vieweventfilter import ViewEventFilter
 from director.shallowCopy import shallowCopy
 from director.transformUtils import getAxesFromTransform
+from director.vieweventfilter import ViewEventFilter
 
 try:
     from vtk import mutable

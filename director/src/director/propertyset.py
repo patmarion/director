@@ -1,6 +1,6 @@
-from collections import OrderedDict
 import copy
 import re
+from collections import OrderedDict
 from typing import Any, Dict
 
 from director import callbacks

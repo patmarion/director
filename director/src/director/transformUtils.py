@@ -1,8 +1,9 @@
 """Utilities for working with VTK transforms."""
 
-from director.thirdparty import transformations
-import director.vtkAll as vtk
 import numpy as np
+
+import director.vtkAll as vtk
+from director.thirdparty import transformations
 
 
 def getTransformFromNumpy(mat):

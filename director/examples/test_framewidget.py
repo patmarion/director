@@ -1,12 +1,12 @@
 """Interactive test for FrameWidget."""
 
 import sys
-import vtk
-from qtpy.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel
-from qtpy.QtCore import Qt
 
-from director.vtk_widget import VTKWidget
+import vtk
+from qtpy.QtWidgets import QApplication, QLabel, QMainWindow, QVBoxLayout, QWidget
+
 from director.framewidget import FrameWidget
+from director.vtk_widget import VTKWidget
 
 
 class TestWindow(QMainWindow):

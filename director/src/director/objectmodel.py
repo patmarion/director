@@ -1,10 +1,12 @@
 import re
 from collections import defaultdict
+
 from qtpy import QtCore, QtWidgets
 from qtpy.QtCore import QObject
-from director.propertyset import PropertySet, PropertyAttributes
+
 from director import callbacks
 from director.icons import Icons
+from director.propertyset import PropertyAttributes, PropertySet
 
 
 class ObjectModelItem(object):

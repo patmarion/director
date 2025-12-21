@@ -1,9 +1,10 @@
-from director.valueslider import ValueSlider
+import qtpy.QtGui as QtGui
+import qtpy.QtWidgets as QtWidgets
+
 from director import callbacks
 from director.propertyset import PropertySet
 from director.timercallback import TimerCallback
-import qtpy.QtGui as QtGui
-import qtpy.QtWidgets as QtWidgets
+from director.valueslider import ValueSlider
 
 
 class TimestampSlider:

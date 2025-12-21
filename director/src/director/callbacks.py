@@ -1,5 +1,5 @@
-from weakref import ref
 import types
+from weakref import ref
 
 """
 CallbackRegistry is a class taken from matplotlib.cbook.

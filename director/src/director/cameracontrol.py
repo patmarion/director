@@ -1,9 +1,11 @@
 """Camera control utilities for smooth camera animations."""
 
 import time
+
 import numpy as np
-from director.timercallback import TimerCallback
+
 import director.vtkAll as vtk
+from director.timercallback import TimerCallback
 
 
 class Flyer(TimerCallback):

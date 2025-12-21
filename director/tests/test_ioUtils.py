@@ -2,7 +2,9 @@
 
 import os
 import tempfile
+
 import pytest
+
 import director.ioUtils as io
 import director.vtkAll as vtk
 

@@ -1,9 +1,5 @@
 """Tests for applogic module."""
 
-import sys
-import pytest
-import numpy as np
-from qtpy.QtWidgets import QApplication
 from director.applogic import resetCamera, setBackgroundColor
 from director.vtk_widget import VTKWidget
 

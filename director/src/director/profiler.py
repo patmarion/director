@@ -1,5 +1,5 @@
-import os
 import cProfile
+import os
 import pstats
 import subprocess
 

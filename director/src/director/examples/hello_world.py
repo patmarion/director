@@ -1,6 +1,6 @@
+from director import visualization as vis
 from director.debugVis import DebugData
 from director.script_context import fields
-from director import visualization as vis
 
 
 def main():

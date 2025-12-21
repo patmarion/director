@@ -9,8 +9,9 @@ This interactor provides terrain-style camera controls:
 The view up is kept aligned with the Z-axis (vertical).
 """
 
-import director.vtkAll as vtk
 import math
+
+import director.vtkAll as vtk
 
 
 class TerrainInteractorStyle(vtk.vtkInteractorStyle):

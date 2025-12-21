@@ -1,11 +1,12 @@
 """Example demonstrating VTK widget with a cone using debug vis."""
 
 import sys
+
 from qtpy.QtWidgets import QApplication
 
-from director.vtk_widget import VTKWidget
-from director.debugVis import DebugData
 from director import visualization as vis
+from director.debugVis import DebugData
+from director.vtk_widget import VTKWidget
 
 
 def main():

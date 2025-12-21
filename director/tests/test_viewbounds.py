@@ -1,11 +1,8 @@
 """Tests for viewbounds module."""
 
-import sys
-import pytest
-import numpy as np
-from qtpy.QtWidgets import QApplication
 import vtk
-from director.viewbounds import getVisibleActors, computeViewBoundsNoGrid, computeViewBoundsSoloGrid
+
+from director.viewbounds import computeViewBoundsNoGrid, computeViewBoundsSoloGrid, getVisibleActors
 from director.vtk_widget import VTKWidget
 
 

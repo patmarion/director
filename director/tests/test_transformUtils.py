@@ -1,16 +1,16 @@
 """Tests for transformUtils module."""
 
-import vtk
 import numpy as np
-import pytest
+import vtk
+
 from director.transformUtils import (
-    getTransformFromNumpy,
+    concatenateTransforms,
+    copyFrame,
+    getAxesFromTransform,
     getNumpyFromTransform,
     getTransformFromAxes,
     getTransformFromAxesAndOrigin,
-    getAxesFromTransform,
-    copyFrame,
-    concatenateTransforms,
+    getTransformFromNumpy,
 )
 
 

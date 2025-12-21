@@ -7,9 +7,8 @@ from typing import Optional
 
 from qtpy import QtCore
 
-from director.propertyset import PropertySet
-
 from director.frame_properties import FrameProperties
+from director.propertyset import PropertySet
 from director.visualization import FrameItem
 
 

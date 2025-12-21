@@ -1,18 +1,12 @@
 """Pytest configuration and shared fixtures for Director tests."""
 
+import faulthandler
+import gc
 import sys
+from unittest.mock import patch
+
 import pytest
 from qtpy.QtWidgets import QApplication
-
-import faulthandler
-
-import gc
-import traceback
-
-
-import pytest
-from unittest.mock import patch
-import _pytest.unraisableexception
 
 
 @pytest.fixture(autouse=True, scope="session")

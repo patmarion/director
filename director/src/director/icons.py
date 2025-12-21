@@ -1,6 +1,7 @@
-import os
-from qtpy import QtWidgets, QtGui
 import functools
+import os
+
+from qtpy import QtGui, QtWidgets
 
 
 class Icons(object):

@@ -1,6 +1,7 @@
 """Test program for FrameItem with frame widget integration."""
 
 import sys
+
 from qtpy.QtWidgets import QPushButton
 
 from director import mainwindowapp

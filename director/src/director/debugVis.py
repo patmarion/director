@@ -1,8 +1,9 @@
+import numpy as np
+
 import director.vtkAll as vtk
+from director import transformUtils
 from director import vtkNumpy as vnp
 from director.shallowCopy import shallowCopy
-from director import transformUtils
-import numpy as np
 
 
 class DebugData(object):

@@ -1,22 +1,22 @@
 """PropertiesPanel - Python implementation of property editing panel."""
 
+from qtpy.QtCore import Qt
+from qtpy.QtGui import QColor, QPainter
 from qtpy.QtWidgets import (
-    QWidget,
-    QTreeWidget,
-    QTreeWidgetItem,
-    QVBoxLayout,
-    QHBoxLayout,
     QCheckBox,
-    QSpinBox,
+    QColorDialog,
+    QComboBox,
     QDoubleSpinBox,
+    QHBoxLayout,
     QLineEdit,
     QPushButton,
     QSlider,
-    QColorDialog,
-    QComboBox,
+    QSpinBox,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
 )
-from qtpy.QtCore import Qt
-from qtpy.QtGui import QColor, QPainter
 
 
 class PropertyEditor(QWidget):

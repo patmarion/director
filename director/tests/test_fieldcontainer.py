@@ -1,6 +1,7 @@
 """Tests for fieldcontainer module."""
 
 import pytest
+
 from director.fieldcontainer import FieldContainer
 
 

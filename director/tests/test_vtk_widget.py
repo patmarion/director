@@ -1,11 +1,8 @@
 """Tests for vtk_widget module."""
 
-import sys
-import pytest
-from qtpy.QtWidgets import QApplication
 import vtk
 
-from director.vtk_widget import VTKWidget, FPSCounter
+from director.vtk_widget import FPSCounter, VTKWidget
 
 
 def test_fps_counter():
