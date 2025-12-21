@@ -1,0 +1,73 @@
+env:
+  UV_CACHE_DIR: "/root/.cache/uv"
+
+steps:
+  - label: "🔨 Build"
+    key: "build"
+    command: |
+      set -ex
+      cd director
+      uv sync --all-extras
+    plugins:
+      - docker#v5.11.0:
+          image: "ghcr.io/astral-sh/uv:python3.10-bookworm-slim"
+          volumes:
+            - "/tmp/buildkite-uv-cache:/root/.cache/uv"
+          workdir: "/workdir"
+
+  - label: "🧹 Lint"
+    key: "lint"
+    depends_on: "build"
+    soft_fail: true
+    command: |
+      set -ex
+      cd director
+      uv sync --all-extras
+      uv run ruff format --check .
+    plugins:
+      - docker#v5.11.0:
+          image: "ghcr.io/astral-sh/uv:python3.10-bookworm-slim"
+          volumes:
+            - "/tmp/buildkite-uv-cache:/root/.cache/uv"
+          workdir: "/workdir"
+
+  - label: "🧪 Test"
+    key: "test"
+    depends_on: "lint"
+    command: |
+      set -ex
+      apt-get update
+      apt-get update && apt-get install -y \
+        qt6-base-dev \
+        libxcb-cursor0 \
+        xvfb 
+      cd director
+      uv sync --all-extras
+      uv pip uninstall pytest-xvfb
+      xvfb-run uv run pytest --ignore tests/test_hello_world.py
+    plugins:
+      - docker#v5.11.0:
+          image: "ghcr.io/astral-sh/uv:python3.10-bookworm-slim"
+          volumes:
+            - "/tmp/buildkite-uv-cache:/root/.cache/uv"
+          workdir: "/workdir"
+
+  - label: "📦 Deploy"
+    key: "deploy"
+    depends_on: "test"
+    allow_dependency_failure: true
+    command: |
+      set -ex
+      pwd
+      cd director
+      uv sync --all-extras
+      uv build --wheel
+      ls dist
+    artifact_paths: "director/dist/*.whl" 
+    plugins:
+      - docker#v5.11.0:
+          image: "ghcr.io/astral-sh/uv:python3.10-bookworm-slim"
+          volumes:
+            - "/tmp/buildkite-uv-cache:/root/.cache/uv"
+          workdir: "/workdir"
+
