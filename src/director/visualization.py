@@ -1,4 +1,13 @@
-"""Visualization classes and utilities for displaying VTK objects in Director."""
+"""
+Visualization classes and utilities for displaying VTK objects in Director.
+
+This module contains classes for various visualization types including:
+*   :class:`PolyDataItem`: For displaying general VTK PolyData
+*   :class:`Image2DItem`: For 2D image overlays
+*   :class:`FrameItem`: For coordinate frames
+*   :class:`GridItem`: For reference grids
+*   :class:`TextItem`: For text annotations
+"""
 
 import numpy as np
 

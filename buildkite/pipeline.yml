@@ -60,7 +60,11 @@ steps:
       uv sync --all-extras
       uv build --wheel
       ls dist
-    artifact_paths: "dist/*.whl" 
+      uv run ./manage_docs.py build
+      tar -czf docs.tar.gz -C docs/_build/html .
+    artifact_paths:
+      - "dist/*.whl"
+      - "docs.tar.gz"
     plugins:
       - docker#v5.11.0:
           image: "ghcr.io/astral-sh/uv:python3.10-bookworm-slim"

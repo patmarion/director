@@ -25,6 +25,12 @@ htmlcov/
 .tox/
 .hypothesis/
 
+# Documentation
+docs/_build/
+docs/modules.rst
+docs/director.rst
+docs/director.*.rst
+
 # IDEs
 .vscode/
 .idea/
@@ -42,4 +48,3 @@ Thumbs.db
 # But ignore egg-info and other build artifacts
 *.egg-info/
 director.egg-info/
-

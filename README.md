@@ -97,6 +97,26 @@ Or run with verbose output:
 uv run pytest -v
 ```
 
+## Documentation
+
+To build the documentation (including API docs):
+
+```bash
+uv run ./manage_docs.py build
+```
+
+To view the generated documentation in your browser:
+
+```bash
+uv run ./manage_docs.py view
+```
+
+To clean build artifacts:
+
+```bash
+uv run ./manage_docs.py clean
+```
+
 ## Project Structure
 
 ```

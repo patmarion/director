@@ -17,14 +17,32 @@ dependencies = [
     "ipykernel",
     "jupyter-client",
     "numpy",
-    "mujoco",
     "scipy",
 ]
 
 [project.optional-dependencies]
-dev = [
+opencv = ["opencv-python"]
+mujoco = ["mujoco"]
+test = [
     "pytest",
     "ruff",
+]
+docs = [
+    "sphinx>=7.0",
+    "sphinx-rtd-theme>=2.0.0",
+    "furo",
+]
+all = [
+    "opencv-python",
+    "mujoco",
+    "pytest",
+    "ruff",
+    "sphinx>=7.0",
+    "sphinx-rtd-theme>=2.0.0",
+    "furo",
+]
+dev = [
+    "director[all]",
 ]
 
 [tool.setuptools.packages.find]
