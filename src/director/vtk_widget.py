@@ -60,7 +60,17 @@ class VTKWidget(QWidget):
         except ImportError:
             from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
+        # Add a workaround for a strange bug that only seems to happen when
+        # closing this widget in pytest.  It's a unlimited recursion bug that
+        # is trigger when calling __getattr__ during Finalize.
+        def patched_finalize(self):
+            if "_RenderWindow" in self.__dict__:
+                self._RenderWindow.Finalize()
+
+        QVTKRenderWindowInteractor.Finalize = patched_finalize
+
         self._vtk_widget = QVTKRenderWindowInteractor(self)
+
         layout.addWidget(self._vtk_widget)
 
         # Get render window
@@ -420,31 +430,3 @@ class VTKWidget(QWidget):
     def _on_end_render(self, obj, event):
         """Handle end render event to update FPS counter."""
         self._fps_counter.update()
-
-    def closeEvent(self, event):
-        """Handle widget close event with proper cleanup."""
-        # Stop render timer first
-        if hasattr(self, "_render_timer"):
-            self._render_timer.stop()
-            try:
-                self._render_timer.timeout.disconnect(self._on_render_timer)
-            except (TypeError, RuntimeError):
-                pass
-
-        # Remove observer for render events
-        if hasattr(self, "_render_window") and self._render_window:
-            try:
-                self._render_window.RemoveObserver(self._on_end_render)
-            except:
-                pass
-
-        # Call parent closeEvent (VTK widget will clean itself up now that it's patched)
-        super().closeEvent(event)
-
-    # def resizeEvent(self, event):
-    #     """Handle widget resize events."""
-    #     if hasattr(self, '_vtk_widget') and self._vtk_widget:
-    #         self._vtk_widget.resize(self.width(), self.height())
-    #         if self._render_window:
-    #             self._render_window.SetSize(self.width(), self.height())
-    #     super().resizeEvent(event)
