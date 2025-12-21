@@ -583,7 +583,7 @@ class FrameWidget(ViewEventFilter):
             pass
         else:
             # Frame widget is not interacting - check if camera is, and if so, don't consume
-            camera_interacting = False
+            pass
 
         consumed = False
 

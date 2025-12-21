@@ -45,15 +45,6 @@ def apply_fix():
         return True
 
     # Fix 1: Update __getattr__ method - must use __dict__ check to avoid recursion
-    old_getattr = r'(    def __getattr__\(self, attr\):\s*"""Makes the object behave like a vtkGenericRenderWindowInteractor"""\s*if attr == \'__vtk__\':)'
-    new_getattr = r'''    def __getattr__(self, attr):
-        """Makes the object behave like a vtkGenericRenderWindowInteractor"""
-        # Check if _Iren exists to prevent recursion when it's None during cleanup
-        # Use __dict__ to avoid triggering __getattr__ recursively
-        if '_Iren' not in self.__dict__ or self.__dict__.get('_Iren') is None:
-            raise AttributeError(self.__class__.__name__ +
-                  " has no attribute named " + attr + " (_Iren is not initialized)")
-        if attr == '__vtk__':'''
 
     content = content.replace(
         '    def __getattr__(self, attr):\n        """Makes the object behave like a vtkGenericRenderWindowInteractor"""\n        if attr == \'__vtk__\':',

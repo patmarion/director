@@ -16,7 +16,7 @@ def main():
     sphere_polydata = d.getPolyData()
 
     # Show the sphere using showPolyData
-    sphere_obj = vis.showPolyData(sphere_polydata, "hello_sphere", color=[0.7, 0.3, 0.3])
+    vis.showPolyData(sphere_polydata, "hello_sphere", color=[0.7, 0.3, 0.3])
 
     # Reset camera to fit the scene
     fields.view.resetCamera()

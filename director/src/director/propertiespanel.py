@@ -573,7 +573,6 @@ class ArrayEditor(PropertyEditor):
     def _createElementEditor(self, index, value):
         """Create an editor widget for an array element."""
         # Create a fake property name for this element
-        element_prop_name = f"{self.propertyName}[{index}]"
 
         # Determine type from value
         if isinstance(value, bool):

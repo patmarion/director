@@ -429,8 +429,6 @@ class ScreenRecorder:
         """
         # Get directory and base filename
         file_path = Path(current_filename)
-        directory = str(file_path.parent)
-        base_name = file_path.name
 
         # Open file dialog to choose new name/location
         new_filename, selected_filter = QtWidgets.QFileDialog.getSaveFileName(

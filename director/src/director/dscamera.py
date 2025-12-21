@@ -5,8 +5,6 @@ from typing import Dict, Optional, Tuple
 import cv2
 import numpy as np
 
-with_torch = False
-
 
 class DSCamera(object):
     """DSCamera class. https://github.com/matsuren/dscamera
@@ -100,11 +98,7 @@ class DSCamera(object):
         if not hasattr(u, "__len__"):
             u, v = np.array([u]), np.array([v])
 
-        # Decide numpy or torch
-        if isinstance(u, np.ndarray):
-            xp = np
-        else:
-            xp = torch
+        xp = np
 
         mx = (u - self.cx) / self.fx
         my = (v - self.cy) / self.fy
@@ -122,10 +116,7 @@ class DSCamera(object):
         k = k1 / k2
 
         # Unprojected unit vectors
-        if xp == np:
-            unproj_pts = k[..., np.newaxis] * np.stack([mx, my, mz], axis=-1)
-        else:
-            unproj_pts = k.unsqueeze(-1) * torch.stack([mx, my, mz], dim=-1)
+        unproj_pts = k[..., np.newaxis] * np.stack([mx, my, mz], axis=-1)
         unproj_pts[..., 2] -= self.xi
 
         # Calculate fov
@@ -150,11 +141,7 @@ class DSCamera(object):
             array of valid mask
         """
         x, y, z = point3D[..., 0], point3D[..., 1], point3D[..., 2]
-        # Decide numpy or torch
-        if isinstance(x, np.ndarray):
-            xp = np
-        else:
-            xp = torch
+        xp = np
 
         # Calculate fov
         point3D_fov_cos = point3D[..., 2]  # point3D @ z_axis
@@ -173,10 +160,7 @@ class DSCamera(object):
         v = self.fy * y / div + self.cy
 
         # Projected points on image plane
-        if xp == np:
-            proj_pts = np.stack([u, v], axis=-1)
-        else:
-            proj_pts = torch.stack([u, v], dim=-1)
+        proj_pts = np.stack([u, v], axis=-1)
 
         # Check valid area
         if self.alpha <= 0.5:

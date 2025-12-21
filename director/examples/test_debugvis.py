@@ -127,7 +127,7 @@ def main():
     applogic.setCurrentRenderView(view)
 
     # Install object picking and hover highlighting event filter
-    picking_filter = ObjectPickingEventFilter(view)
+    _object_picker = ObjectPickingEventFilter(view)
 
     # Create various shapes using DebugData
     # Line

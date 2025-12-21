@@ -1407,7 +1407,6 @@ class GridItem(PolyDataItem):
         for i, actor in enumerate(self.textActors):
             distance = i * majorTickSize
             actor = self.textActors[i]
-            prop = actor.GetTextProperty()
             coord = actor.GetPositionCoordinate()
             coord.SetCoordinateSystemToWorld()
             p = transform.TransformPoint((distance * cosAngle, distance * sinAngle, 0.0))
@@ -1421,7 +1420,6 @@ class GridItem(PolyDataItem):
         for i in range(int(gridHalfWidth / majorTickSize)):
             ringDistance = i * majorTickSize
             actor = vtk.vtkTextActor()
-            prop = actor.GetTextProperty()
             actor.SetInput("{:.3f}".format(ringDistance).rstrip("0").rstrip(".") + suffix)
             actor.SetPickable(False)
             self.textActors.append(actor)
@@ -1608,7 +1606,6 @@ class TextItem(om.ObjectModelItem):
             self.actor.SetVisibility(self.getProperty(propertyName))
             self._renderAllViews()
         elif propertyName == "Text":
-            view = app.getCurrentRenderView()
             self.actor.SetInput(self.getProperty(propertyName))
         elif propertyName == "Position":
             pos = self.getProperty(propertyName)

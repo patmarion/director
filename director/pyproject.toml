@@ -48,4 +48,10 @@ line-length = 120
 select = ["F", "B", "I"]
 ignore = [
     "E501", # Ignore line-length violations (let the formatter handle it)
+
+    "B007",
+    "B006",
+    "B019",
+    "B904",
+    "B905",
 ]

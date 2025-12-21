@@ -91,7 +91,7 @@ def getVtkFromNumpy(numpyArray):
 
     def MakeCallback(numpyArray):
         def Closure(caller, event):
-            closureArray = numpyArray
+            _closureArray = numpyArray
 
         return Closure
 

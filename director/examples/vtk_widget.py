@@ -24,7 +24,7 @@ def main():
     d.addCone((0, 0, 0), (0, 0, 1), 1.0, 2.0)
 
     # Show the cone in the view
-    cone_obj = vis.showPolyData(d.getPolyData(), "cone", color=[0.8, 0.2, 0.2], view=view)
+    vis.showPolyData(d.getPolyData(), "cone", color=[0.8, 0.2, 0.2], view=view)
 
     # Reset camera to fit the scene
     view.resetCamera()

@@ -2,7 +2,10 @@ import os
 import os.path
 import shelve
 
+import numpy as np
+
 import director.vtkAll as vtk
+import director.vtkNumpy as vnp
 from director.shallowCopy import shallowCopy
 
 

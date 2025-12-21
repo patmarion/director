@@ -69,7 +69,7 @@ class AsyncTaskQueue(object):
         if isinstance(task, types.GeneratorType):
             task = self.wrapGenerator(task)
 
-        assert hasattr(task, "__call__")
+        assert callable(task)
         self.tasks.append(task)
 
     def callbackLoop(self):

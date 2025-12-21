@@ -64,7 +64,7 @@ def main():
 
     # Show the geometry
     polyData = d.getPolyData()
-    obj = vis.showPolyData(polyData, "test_geometry", view=view, color=[0.8, 0.8, 0.8])
+    vis.showPolyData(polyData, "test_geometry", view=view, color=[0.8, 0.8, 0.8])
 
     # Set up initial camera position for terrain view
     camera = view.camera()

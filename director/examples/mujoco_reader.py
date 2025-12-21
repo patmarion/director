@@ -11,6 +11,7 @@ import sys
 import qtpy.QtCore as QtCore
 
 from director import applogic, mujoco_model
+from director.script_context import fields
 
 
 def main():
@@ -52,7 +53,8 @@ Examples:
 
     # Create properties panel for joint control
     joint_properties_panel = None
-    if show_joint_properties := False:
+    show_joint_properties = False
+    if show_joint_properties:
         from director.propertiespanel import PropertiesPanel
 
         joint_properties_panel = PropertiesPanel()

@@ -1928,7 +1928,7 @@ def _import_module(name, package=None, warn=True, prefix="_py_", ignore="_"):
             module = import_module("." + name, package=package)
     except ImportError:
         if warn:
-            warnings.warn("failed to import module %s" % name)
+            warnings.warn("failed to import module %s" % name, stacklevel=2)
     else:
         for attr in dir(module):
             if ignore and attr.startswith(ignore):
@@ -1937,7 +1937,7 @@ def _import_module(name, package=None, warn=True, prefix="_py_", ignore="_"):
                 if attr in globals():
                     globals()[prefix + attr] = globals()[attr]
                 elif warn:
-                    warnings.warn("no Python implementation of " + attr)
+                    warnings.warn("no Python implementation of " + attr, stacklevel=2)
             globals()[attr] = getattr(module, attr)
         return True
 

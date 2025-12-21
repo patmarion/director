@@ -45,8 +45,8 @@ class MuJoCoMeshResolver:
         self.euler_seq = "xyz"  # Default MuJoCo euler sequence
 
     def add_xml_path(self, xml_path: str):
-        for xml_path in self.find_all_xml_includes(xml_path):
-            self._parse_xml(xml_path)
+        for path in self.find_all_xml_includes(xml_path):
+            self._parse_xml(path)
 
     def find_all_xml_includes(self, xml_path: str):
         """
@@ -318,7 +318,6 @@ def print_model_info(model):
 
     print(f"\nBodies: {model.nbody}")
     for i in range(model.nbody):
-        body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, f"body_{i}" if i > 0 else "world")
         body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i)
         if body_name:
             print(f"  [{i:3d}] {body_name}")
@@ -1238,7 +1237,6 @@ class MujocoRobotModel:
         for body_id in range(model.nbody):
             body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
             body_pos = data.xpos[body_id]  # World position of body origin
-            body_mat = data.xmat[body_id].reshape(3, 3)
 
             # Compute base-to-body transform: base_T_body = inv(base_M) dot body_M
             # For position: p_base = R_base^T @ (p_body - p_base)

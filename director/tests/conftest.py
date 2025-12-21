@@ -35,7 +35,8 @@ def _qt_obj_summary(o):
 def dump_live_qt_wrappers(limit=2000):
     from qtpy import QtCore, QtWidgets  # adjust if using PySide2
 
-    QtCore.QObject  # ensure import
+    # Ensure QObject is available (avoiding B018 useless expression)
+    _ = QtCore.QObject
 
     qobjs = []
     timers = []

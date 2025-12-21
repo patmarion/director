@@ -68,7 +68,7 @@ def main():
 
     from director.visualization import showPolyData
 
-    sphere = showPolyData(dd.getPolyData(), name="test_geometry", view=view)
+    showPolyData(dd.getPolyData(), name="test_geometry", view=view)
 
     # Reset camera to show the geometry
     view.resetCamera()

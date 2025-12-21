@@ -25,7 +25,7 @@ class ConsoleApp(object):
 
     @staticmethod
     def start():
-        if getattr(ConsoleApp.getTestingArgs(), "auto_quit"):
+        if ConsoleApp.getTestingArgs().auto_quit:
             ConsoleApp.startQuitTimer(0.1)
 
         def onStartup():
