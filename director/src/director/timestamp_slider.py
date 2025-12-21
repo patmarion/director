@@ -1,4 +1,3 @@
-import numpy as np
 
 from director.valueslider import ValueSlider
 from director import callbacks

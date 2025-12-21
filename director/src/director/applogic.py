@@ -1,8 +1,6 @@
 """Application logic utilities (simplified from original Director)."""
 
 from qtpy.QtWidgets import QMessageBox, QApplication
-from qtpy.QtCore import Qt
-import director.vtkAll as vtk
 
 # Global variable to store the current render view
 _defaultRenderView = None

@@ -1,5 +1,4 @@
 import types
-import traceback
 import qtpy.QtCore as QtCore
 import qtpy.QtWidgets as QtWidgets
 from director.timercallback import TimerCallback

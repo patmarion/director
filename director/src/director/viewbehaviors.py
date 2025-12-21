@@ -1,10 +1,9 @@
 """View behaviors for standard interaction patterns (context menus, key bindings, etc.)."""
 
-from qtpy import QtCore, QtGui, QtWidgets
+from qtpy import QtCore, QtWidgets
 import director.objectmodel as om
 import director.visualization as vis
 from director import cameracontrol
-from director import propertyset
 from director import frameupdater
 from director.propertiespanel import PropertiesPanel
 from director.vieweventfilter import ViewEventFilter

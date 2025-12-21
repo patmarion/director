@@ -2,7 +2,6 @@
 
 import subprocess
 import numpy as np
-import sys
 
 
 class FFMpegWriter:

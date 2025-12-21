@@ -1,6 +1,5 @@
 """Simple argparse wrapper for adding standard command-line arguments."""
 
-import argparse
 
 
 def add_standard_args(parser):

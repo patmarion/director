@@ -1,6 +1,5 @@
 """MainWindowApp for Director 2.0 - component-based application factory."""
 
-import os
 import sys
 import signal
 import argparse

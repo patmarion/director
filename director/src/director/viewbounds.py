@@ -1,6 +1,5 @@
 """View bounds calculation utilities."""
 
-import director.vtkAll as vtk
 import numpy as np
 
 

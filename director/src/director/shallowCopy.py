@@ -1,6 +1,5 @@
 """Utilities for shallow and deep copying VTK objects."""
 
-import vtk
 
 
 def deepCopy(dataObj):

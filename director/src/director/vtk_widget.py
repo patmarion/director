@@ -4,7 +4,7 @@ import time
 import vtk
 import numpy as np
 from qtpy.QtWidgets import QWidget, QVBoxLayout
-from qtpy.QtCore import QTimer, QObject, Signal
+from qtpy.QtCore import QTimer
 
 
 class FPSCounter:

@@ -1,6 +1,6 @@
 
 from dataclasses import dataclass, field
-from typing import Callable, Iterable
+from typing import Iterable
 
 import director.objectmodel as om
 import numpy as np

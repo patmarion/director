@@ -1,4 +1,3 @@
-from collections import OrderedDict
 from director.fieldcontainer import FieldContainer
 from director.thirdparty.toposort import toposort_flatten
 

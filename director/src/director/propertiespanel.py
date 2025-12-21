@@ -2,11 +2,10 @@
 
 from qtpy.QtWidgets import (QWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout,
                             QHBoxLayout, QCheckBox, QSpinBox, QDoubleSpinBox,
-                            QLineEdit, QPushButton, QSlider, QLabel, QColorDialog,
-                            QFrame, QHeaderView, QComboBox)
-from qtpy.QtCore import Qt, Signal
-from qtpy.QtGui import QColor, QPainter, QPixmap
-import numbers
+                            QLineEdit, QPushButton, QSlider, QColorDialog,
+                            QComboBox)
+from qtpy.QtCore import Qt
+from qtpy.QtGui import QColor, QPainter
 
 
 class PropertyEditor(QWidget):

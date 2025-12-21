@@ -5,13 +5,11 @@ import director.applogic as app
 from director.shallowCopy import shallowCopy
 import director.vtkAll as vtk
 from director import filterUtils
-from director import transformUtils
 from director import callbacks
 from director.fieldcontainer import FieldContainer
 from director.gridSource import makeGridPolyData
-from director.viewbounds import computeViewBoundsNoGrid, computeViewBoundsSoloGrid
+from director.viewbounds import computeViewBoundsNoGrid
 import numpy as np
-import colorsys
 
 try:
     import matplotlib

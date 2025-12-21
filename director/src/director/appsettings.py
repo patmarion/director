@@ -1,6 +1,5 @@
 """Application settings utilities for saving/restoring window state."""
 
-from qtpy.QtCore import QSettings
 
 
 def saveState(settings, widget, key):

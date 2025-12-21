@@ -2,7 +2,6 @@
 
 from qtpy.QtCore import QObject, QEvent, Qt, QPoint
 from qtpy.QtGui import QCursor
-import director.vtkAll as vtk
 
 
 class ViewEventFilter(QObject):

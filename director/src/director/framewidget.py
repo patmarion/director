@@ -4,8 +4,7 @@ import numpy as np
 import director.vtkAll as vtk
 from director.vieweventfilter import ViewEventFilter
 from director.shallowCopy import shallowCopy
-from director.transformUtils import getAxesFromTransform, getTransformFromAxesAndOrigin
-from qtpy.QtCore import Qt
+from director.transformUtils import getAxesFromTransform
 
 try:
     from vtk import mutable

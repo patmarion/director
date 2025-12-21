@@ -1,7 +1,6 @@
 """View menu manager for managing widgets in the View menu."""
 
 from qtpy.QtCore import QObject, QEvent
-from qtpy.QtWidgets import QMenu
 
 
 class VisibilityEventFilter(QObject):
