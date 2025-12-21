@@ -3,7 +3,6 @@ from director.thirdparty.toposort import toposort_flatten
 
 
 class ComponentGraph(object):
-
     def __init__(self):
         self._graph = dict()
 
@@ -28,7 +27,6 @@ class ComponentGraph(object):
         return list(allDeps)
 
     def printComponentGraph(self):
-
         componentGraph = self.getComponentGraph()
 
         for name in sorted(componentGraph.keys()):
@@ -36,15 +34,14 @@ class ComponentGraph(object):
             wants = componentGraph[name]
             needs = list(set(deps).difference(wants))
             print(name)
-            print('       wants -->', ', '.join(wants) or 'none')
-            print('  also needs -->', ', '.join(needs) or 'none')
+            print("       wants -->", ", ".join(wants) or "none")
+            print("  also needs -->", ", ".join(needs) or "none")
 
     def addComponent(self, name, deps):
         self._graph[name] = set(deps)
 
 
 class ComponentFactory(object):
-
     def __init__(self):
         self.componentGraph = ComponentGraph()
         self.initFunctions = {}
@@ -52,27 +49,26 @@ class ComponentFactory(object):
         self.defaultOptions = FieldContainer()
 
     def register(self, factoryClass):
-
         fact = factoryClass()
         components, disabledComponents = fact.getComponents()
 
         for name in sorted(components.keys()):
             if name in self.componentGraph.getComponentNames():
-                raise Exception('Component %s from %s has already been registered.' % (name, factoryClass.__name__))
+                raise Exception("Component %s from %s has already been registered." % (name, factoryClass.__name__))
 
-            if not hasattr(fact, 'init'+name):
-                raise Exception('Missing init function for component %s' % name)
+            if not hasattr(fact, "init" + name):
+                raise Exception("Missing init function for component %s" % name)
 
         for name in disabledComponents:
             if name not in list(components.keys()):
-                raise Exception('Unknown component %s found in list of disabled components.' % name)
+                raise Exception("Unknown component %s found in list of disabled components." % name)
 
         options = dict()
         for name, deps in list(components.items()):
             self.componentGraph.addComponent(name, deps)
-            self.initFunctions[name] = getattr(fact, 'init'+name)
+            self.initFunctions[name] = getattr(fact, "init" + name)
             isEnabled = name not in disabledComponents
-            options['use'+name] = isEnabled
+            options["use" + name] = isEnabled
 
         self.defaultOptions._add_fields(**options)
 
@@ -89,11 +85,11 @@ class ComponentFactory(object):
         return options
 
     def _toComponentName(self, optionName):
-        assert optionName[:3] == 'use'
+        assert optionName[:3] == "use"
         return optionName[3:]
 
     def _toOptionName(self, componentName):
-        return 'use' + componentName
+        return "use" + componentName
 
     def _joinFields(self, fieldsList):
         f = FieldContainer()
@@ -102,11 +98,10 @@ class ComponentFactory(object):
         return f
 
     def setDependentOptions(self, options, **kwargs):
-
         # verify the given args exist in the options fields
         for name in list(kwargs.keys()):
             if name not in options._fields:
-                raise Exception('unknown option given: ' + name)
+                raise Exception("unknown option given: " + name)
 
         for name, enabled in list(kwargs.items()):
             setattr(options, name, enabled)
@@ -121,19 +116,15 @@ class ComponentFactory(object):
         return options
 
     def _verifyOptions(self, options):
-
         for name, enabled in options:
-
             if enabled:
                 name = self._toComponentName(name)
                 dependencies = self.componentGraph.getComponentDependencies(name)
                 for dep in dependencies:
                     if not getattr(options, self._toOptionName(dep)):
-                        raise Exception('Component %s depends on component %s, but %s is disabled.' % (name, dep, dep))
-
+                        raise Exception("Component %s depends on component %s, but %s is disabled." % (name, dep, dep))
 
     def construct(self, options=None, **kwargs):
-
         options = options or self.getDefaultOptions()
         if isinstance(options, dict):
             options = self.setDependentOptions(self.getDefaultOptions(), **options)
@@ -142,7 +133,7 @@ class ComponentFactory(object):
 
         initOrder = toposort_flatten(self.componentGraph.getComponentGraph())
         for name in initOrder:
-            isEnabled = getattr(options, 'use'+name)
+            isEnabled = getattr(options, "use" + name)
             if isEnabled:
                 self.initComponent(name, defaultFields)
 
@@ -151,12 +142,11 @@ class ComponentFactory(object):
 
     def printComponentFields(self):
         for k, v in sorted(self.componentFields.items()):
-            print('%s:' % k)
+            print("%s:" % k)
             for name in v._fields:
-                print('  ', name)
+                print("  ", name)
 
     def initComponent(self, name, defaultFields):
-
         initFunction = self.initFunctions[name]
         dependencies = self.componentGraph.getComponentDependencies(name)
         inputFields = self._joinFields([defaultFields] + [self.componentFields[dep] for dep in dependencies])
@@ -165,4 +155,3 @@ class ComponentFactory(object):
         if not newFields:
             newFields = FieldContainer()
         self.componentFields[name] = newFields
-

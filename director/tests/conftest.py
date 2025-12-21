@@ -14,6 +14,7 @@ import pytest
 from unittest.mock import patch
 import _pytest.unraisableexception
 
+
 @pytest.fixture(autouse=True, scope="session")
 def disable_gc_collect_harder():
     with patch("_pytest.unraisableexception.gc_collect_harder", return_value=None):
@@ -36,8 +37,10 @@ def _qt_obj_summary(o):
     except Exception:
         return type(o).__name__, "<?>", None, ""
 
+
 def dump_live_qt_wrappers(limit=2000):
     from qtpy import QtCore, QtWidgets  # adjust if using PySide2
+
     QtCore.QObject  # ensure import
 
     qobjs = []
@@ -72,7 +75,7 @@ def dump_live_qt_wrappers(limit=2000):
         print(f"  - {cls} name={name!r} interval={interval}ms parent={parent_desc} thread={thr_name!r} repr={t!r}")
 
     # Optionally list some “top” QObjects
-    for o in qobjs[:min(len(qobjs), 50)]:
+    for o in qobjs[: min(len(qobjs), 50)]:
         cls, name, parent_desc, thr_name = _qt_obj_summary(o)
         print(f"  [obj] {cls} name={name!r} parent={parent_desc} thread={thr_name!r}")
 
@@ -93,6 +96,7 @@ def stop_and_delete_timers(app):
 
     # (B) Timers discoverable from Python GC
     import gc
+
     gc_timers = []
     for o in gc.get_objects():
         try:
@@ -138,11 +142,11 @@ def close_and_delete_all_widgets(app):
 
 def pump_events(app, rounds=50):
     from qtpy import QtCore
+
     for _ in range(rounds):
         app.processEvents(QtCore.QEventLoop.AllEvents, 50)
         # Ensure deferred deletes run:
         app.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
-
 
 
 faulthandler.dump_traceback_later(timeout=14.0, repeat=True)
@@ -151,7 +155,7 @@ faulthandler.dump_traceback_later(timeout=14.0, repeat=True)
 @pytest.fixture(scope="session")
 def qapp():
     """Create a single QApplication instance for all tests.
-    
+
     This fixture is session-scoped, meaning it will be created once
     for the entire test session and reused across all test files.
     """
@@ -159,7 +163,6 @@ def qapp():
     assert not app, "QApplication instance already exists"
     app = QApplication(sys.argv)
     yield app
-    
 
     # Close remaining windows
     for window in app.topLevelWidgets():

@@ -4,7 +4,6 @@ from director.vtk_widget import VTKWidget
 from director import mainwindowapp
 
 
-
 def test_vtk_widget(qapp):
     """Test that VTKWidget can be shown and then closed."""
     widget = VTKWidget()

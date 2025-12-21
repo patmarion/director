@@ -1,10 +1,9 @@
-
 from dataclasses import dataclass, field
 from typing import Iterable
 
 import director.objectmodel as om
 import numpy as np
-import pyqtgraph as pg 
+import pyqtgraph as pg
 from pyqtgraph.dockarea import DockArea, Dock
 from pyqtgraph.dockarea.Dock import DockLabel
 import qtpy.QtCore as QtCore
@@ -25,7 +24,7 @@ class PlotEntry:
 class DirectorPlotWidget(pg.PlotWidget):
     sigDropped = QtCore.Signal(object, list)
 
-    def __init__(self, parent=None, background='default', plotItem=None, **kargs):
+    def __init__(self, parent=None, background="default", plotItem=None, **kargs):
         super().__init__(parent, background, plotItem, **kargs)
         self.setAcceptDrops(True)
 
@@ -44,8 +43,9 @@ class DirectorPlotWidget(pg.PlotWidget):
     def dropEvent(self, ev):
         data = ev.mimeData().data("application/x-director-fields")
         import json
+
         try:
-            fields = json.loads(data.data().decode('utf-8'))
+            fields = json.loads(data.data().decode("utf-8"))
             self.sigDropped.emit(self.getPlotItem(), fields)
         except Exception:
             pass
@@ -56,13 +56,13 @@ class PlotObjItem(om.ObjectModelItem):
         om.ObjectModelItem.__init__(self, title or "Plot", icon=om.Icons.Chart)
         self.plot_widget = plot_widget
         self.plot_item = plot_item
-        
+
         self.addProperty("Title", title or " ")
         self.addProperty("X Label", "Time")
         self.addProperty("Y Label", "")
         self.addProperty("Y Units", "")
         self.addProperty("Visible", True)
-        
+
     def _onPropertyChanged(self, propertySet, propertyName):
         om.ObjectModelItem._onPropertyChanged(self, propertySet, propertyName)
         if propertyName == "Title":
@@ -89,26 +89,26 @@ class PlotSeriesItem(om.ObjectModelItem):
         self.plot_widget = plot_widget
         self.plot_item = plot_item
         self.series = series
-        
+
         self.addProperty("Visible", True)
         self.addProperty("Color", [1.0, 1.0, 1.0])
         self.addProperty("Style", 0, attributes=om.PropertyAttributes(enumNames=["Line", "Points", "Line + Points"]))
         self.addProperty("Line Width", 2, attributes=om.PropertyAttributes(minimum=1, maximum=10))
         self.addProperty("Point Size", 5, attributes=om.PropertyAttributes(minimum=1, maximum=20))
-        
+
         color = self._get_color_from_series()
         if color:
-             self.setProperty("Color", color)
+            self.setProperty("Color", color)
 
     def _get_color_from_series(self):
         opts = self.series.opts
-        pen = opts.get('pen')
+        pen = opts.get("pen")
         if pen is None:
-             pen = opts.get('symbolPen')
-        
+            pen = opts.get("symbolPen")
+
         if pen is not None:
-             c = pg.mkPen(pen).color()
-             return [c.redF(), c.greenF(), c.blueF()]
+            c = pg.mkPen(pen).color()
+            return [c.redF(), c.greenF(), c.blueF()]
         return [1.0, 1.0, 1.0]
 
     def _onPropertyChanged(self, propertySet, propertyName):
@@ -117,7 +117,7 @@ class PlotSeriesItem(om.ObjectModelItem):
             self.series.setVisible(self.getProperty(propertyName))
         elif propertyName == "Name":
             # OM handles name change, we might want to update series name if possible
-            pass 
+            pass
         elif propertyName in ["Color", "Style", "Line Width", "Point Size"]:
             self._update_style()
 
@@ -126,21 +126,21 @@ class PlotSeriesItem(om.ObjectModelItem):
         color_list = self.getProperty("Color")
         line_width = self.getProperty("Line Width")
         point_size = self.getProperty("Point Size")
-        
-        color = pg.mkColor(int(color_list[0]*255), int(color_list[1]*255), int(color_list[2]*255))
+
+        color = pg.mkColor(int(color_list[0] * 255), int(color_list[1] * 255), int(color_list[2] * 255))
         pen = pg.mkPen(color, width=line_width)
         brush = pg.mkBrush(color)
-        
-        if style_idx == 0: # Line
+
+        if style_idx == 0:  # Line
             self.series.setPen(pen)
             self.series.setSymbol(None)
-        elif style_idx == 1: # Points
+        elif style_idx == 1:  # Points
             self.series.setPen(None)
             self.series.setSymbol("o")
             self.series.setSymbolPen(pen)
             self.series.setSymbolBrush(brush)
             self.series.setSymbolSize(point_size)
-        elif style_idx == 2: # Both
+        elif style_idx == 2:  # Both
             self.series.setPen(pen)
             self.series.setSymbol("o")
             self.series.setSymbolPen(pen)
@@ -152,10 +152,9 @@ class PlotSeriesItem(om.ObjectModelItem):
         self.plot_widget.remove_series(self.plot_item, self.series, from_om=True)
 
 
-
 class PlotWidget(QtCore.QObject):
     """Utility for creating synchronized plots from log channels."""
-    
+
     sigPlotsDropped = QtCore.Signal(object, list)
 
     def __init__(self):
@@ -224,10 +223,10 @@ class PlotWidget(QtCore.QObject):
         self.add_data_to_plot(plot_item, timestamps_s, series)
         self.add_horizontal_lines(plot_item, horizontal_lines)
 
-    def add_plot(self, title: str=None, y_label: str=None, y_units: str=None) -> pg.PlotItem:
+    def add_plot(self, title: str = None, y_label: str = None, y_units: str = None) -> pg.PlotItem:
         dock_name = title if title else " "
         dock = Dock(dock_name, size=(500, 300), closable=True)
-        
+
         view_box = PlotInteractionViewBox(plot_widget=self)
         plot_widget = DirectorPlotWidget(viewBox=view_box)
         plot_widget.sigDropped.connect(self.sigPlotsDropped)
@@ -237,9 +236,9 @@ class PlotWidget(QtCore.QObject):
         dock.sigClosed.connect(self._on_plot_closed)
 
         if not self._plots:
-            self.plot_widget.addDock(dock, 'top')
+            self.plot_widget.addDock(dock, "top")
         else:
-            self.plot_widget.addDock(dock, 'bottom')
+            self.plot_widget.addDock(dock, "bottom")
 
         plot_item = plot_widget.getPlotItem()
         view_box.setPlotItem(plot_item)
@@ -262,13 +261,15 @@ class PlotWidget(QtCore.QObject):
         self._plot_entries[plot_item] = PlotEntry(plot_item=plot_item, vline=vline, legend=legend)
         self._plot_docks[plot_item] = dock
         self._on_plot_clicked(plot_item)
-             
+
         if self.object_model:
             plots_folder = self.object_model.getOrCreateContainer("Plots")
             obj_item = PlotObjItem(self, plot_item, title)
             self._plot_entries[plot_item].object_item = obj_item
-            if y_label: obj_item.setProperty("Y Label", y_label)
-            if y_units: obj_item.setProperty("Y Units", y_units)
+            if y_label:
+                obj_item.setProperty("Y Label", y_label)
+            if y_units:
+                obj_item.setProperty("Y Units", y_units)
             self.object_model.addToObjectModel(obj_item, parentObj=plots_folder)
 
         return plot_item
@@ -283,12 +284,12 @@ class PlotWidget(QtCore.QObject):
         self._selected_plot = plot_item
         for p, d in self._plot_docks.items():
             if d.label:
-                 d.label.setDim(p != plot_item)
-        
+                d.label.setDim(p != plot_item)
+
         if self.object_model:
-             entry = self._plot_entries.get(plot_item)
-             if entry and entry.object_item:
-                 self.object_model.setActiveObject(entry.object_item)
+            entry = self._plot_entries.get(plot_item)
+            if entry and entry.object_item:
+                self.object_model.setActiveObject(entry.object_item)
 
     def get_plots(self) -> list[pg.PlotItem]:
         return list(self._plots)
@@ -306,31 +307,31 @@ class PlotWidget(QtCore.QObject):
 
         to_remove = []
         if isinstance(series, str):
-             to_remove = [item for item in entry.line_series if item.name() == series]
+            to_remove = [item for item in entry.line_series if item.name() == series]
         else:
-             if series in entry.line_series:
-                  to_remove = [series]
-        
+            if series in entry.line_series:
+                to_remove = [series]
+
         for item in to_remove:
             plot_item.removeItem(item)
             entry.line_series.remove(item)
-            
+
             if item in entry.series_items:
-                 series_item = entry.series_items.pop(item)
-                 if not from_om and self.object_model and series_item.getObjectTree():
-                      self.object_model.removeFromObjectModel(series_item)
+                series_item = entry.series_items.pop(item)
+                if not from_om and self.object_model and series_item.getObjectTree():
+                    self.object_model.removeFromObjectModel(series_item)
 
     def remove_plot(self, plot_item: pg.PlotItem, from_om=False):
         if plot_item not in self._plots:
             return
-            
+
         if from_om:
-             self._plots_removing_from_om.add(plot_item)
-             
+            self._plots_removing_from_om.add(plot_item)
+
         self._plot_docks[plot_item].close()
-        
+
         if from_om:
-             self._plots_removing_from_om.discard(plot_item)
+            self._plots_removing_from_om.discard(plot_item)
 
     def _on_plot_closed(self, dock):
         # Find the plot item associated with this dock
@@ -356,9 +357,9 @@ class PlotWidget(QtCore.QObject):
 
         # Perform cleanup
         if self.object_model and plot_item not in self._plots_removing_from_om:
-             entry = self._plot_entries.get(plot_item)
-             if entry and entry.object_item and entry.object_item.getObjectTree():
-                  self.object_model.removeFromObjectModel(entry.object_item)
+            entry = self._plot_entries.get(plot_item)
+            if entry and entry.object_item and entry.object_item.getObjectTree():
+                self.object_model.removeFromObjectModel(entry.object_item)
 
         self._plots.remove(plot_item)
         del self._plot_entries[plot_item]
@@ -366,7 +367,7 @@ class PlotWidget(QtCore.QObject):
 
         # Handle X-Link
         if not self._plots:
-             self._x_link_source = None
+            self._x_link_source = None
 
         if self._x_link_source == plot_item:
             self._x_link_source = self._plots[0] if self._plots else None
@@ -434,6 +435,7 @@ class PlotWidget(QtCore.QObject):
     def _make_click_handler(self, line_series):
         def handler():
             print(f"Clicked on {line_series.name()}")
+
         return handler
 
     def _make_drag_handler(self, vline):
@@ -467,7 +469,7 @@ class PlotWidget(QtCore.QObject):
     def _update_vlines(self, time_offset_s):
         if not self._plots:
             return
-    
+
         # This logic examines the axis x range and the total x extent of the data.
         # We implement some fancy auto scrolling logic to keep the playhead in a reasonable
         # location and auto scroll the plots when necessary.
@@ -499,8 +501,7 @@ class PlotWidget(QtCore.QObject):
                     self.auto_scroll = True
 
         if not self._suspend_auto_scroll and (time_offset_s < x_min or time_offset_s > x_max):
-            self._x_link_source.setXRange(time_offset_s - width/2, time_offset_s + width/2, padding=0)
-
+            self._x_link_source.setXRange(time_offset_s - width / 2, time_offset_s + width / 2, padding=0)
 
         pre_positions = {}
 
@@ -550,13 +551,13 @@ class PlotInteractionViewBox(pg.ViewBox):
     """Custom ViewBox implementing tailored interaction modes."""
 
     def __init__(
-        self, 
+        self,
         plot_widget: "PlotWidget",
     ):
         super().__init__(enableMenu=True)
         self._plot_widget = plot_widget
         self._plot_item: pg.PlotItem | None = None
-        
+
         self.setMouseMode(self.PanMode)
         self._previous_mouse_mode = None
         self._right_drag_mode = None
@@ -569,9 +570,9 @@ class PlotInteractionViewBox(pg.ViewBox):
 
     def raiseContextMenu(self, ev):
         menu = self._plot_item.getMenu()
-        
+
         # Clean up previous series actions
-        if hasattr(self, '_context_menu_series_actions'):
+        if hasattr(self, "_context_menu_series_actions"):
             for action in self._context_menu_series_actions:
                 menu.removeAction(action)
         self._context_menu_series_actions = []
@@ -612,7 +613,7 @@ class PlotInteractionViewBox(pg.ViewBox):
         pos = ev.scenePos()
         if self.scene() is None:
             return None
-        
+
         for item in self.scene().items(pos):
             if isinstance(item, pg.PlotDataItem):
                 return item
@@ -629,11 +630,15 @@ class PlotInteractionViewBox(pg.ViewBox):
         color = "b"
         current_pen = series.opts.get("pen")
         if current_pen is not None:
-             color = current_pen.color() if hasattr(current_pen, "color") else pg.mkPen(current_pen).color()
+            color = current_pen.color() if hasattr(current_pen, "color") else pg.mkPen(current_pen).color()
         else:
             current_symbol_pen = series.opts.get("symbolPen")
             if current_symbol_pen is not None:
-                color = current_symbol_pen.color() if hasattr(current_symbol_pen, "color") else pg.mkPen(current_symbol_pen).color()
+                color = (
+                    current_symbol_pen.color()
+                    if hasattr(current_symbol_pen, "color")
+                    else pg.mkPen(current_symbol_pen).color()
+                )
 
         pen = pg.mkPen(color, width=2)
         brush = pg.mkBrush(color)
@@ -654,13 +659,13 @@ class PlotInteractionViewBox(pg.ViewBox):
             series.setSymbolBrush(brush)
             series.setSymbolSize(4)
 
-    def _customize_context_menu(self, menu):        
+    def _customize_context_menu(self, menu):
         # Helper to recursively find and hide
         for action in menu.actions():
             text = action.text()
             if text in ["Transforms", "Downsample", "Average", "Alpha", "Points", "Export..."]:
                 action.setVisible(False)
-        
+
         # Legend Toggle
         legend_action_text = "Show Legend"
         legend_action = None
@@ -668,12 +673,12 @@ class PlotInteractionViewBox(pg.ViewBox):
             if action.text() == legend_action_text:
                 legend_action = action
                 break
-        
+
         if not legend_action:
             menu.addSeparator()
             legend_action = menu.addAction(legend_action_text)
             legend_action.setCheckable(True)
-            legend_action.setChecked(True) # Assume visible by default or check actual state
+            legend_action.setChecked(True)  # Assume visible by default or check actual state
             if self._plot_item and self._plot_item.legend:
                 legend_action.setChecked(self._plot_item.legend.isVisible())
             legend_action.triggered.connect(self._toggle_legend)
@@ -682,7 +687,7 @@ class PlotInteractionViewBox(pg.ViewBox):
         add_hline_text = "Add Horizontal Line..."
         menu.addSeparator()
         menu.addAction(add_hline_text, self._on_add_hline)
-            
+
         clear_hline_text = "Clear Horizontal Lines"
         menu.addAction(clear_hline_text, self._on_clear_hlines)
 
@@ -697,25 +702,21 @@ class PlotInteractionViewBox(pg.ViewBox):
                 None, "Set Plot Title", "Title:", text=self._plot_item.titleLabel.text
             )
             if ok:
-                #self._plot_item.setTitle(text)
+                # self._plot_item.setTitle(text)
                 # avoid setting empty string because it will hide the dock title bar
                 self._plot_widget._plot_docks[self._plot_item].setTitle(text or " ")
 
     def _on_set_ylabel(self):
         if self._plot_item:
             axis = self._plot_item.getAxis("left")
-            text, ok = QtWidgets.QInputDialog.getText(
-                None, "Set Y Label", "Label:", text=axis.labelText
-            )
+            text, ok = QtWidgets.QInputDialog.getText(None, "Set Y Label", "Label:", text=axis.labelText)
             if ok:
                 axis.setLabel(text=text, units=axis.labelUnits)
 
     def _on_set_yunits(self):
         if self._plot_item:
             axis = self._plot_item.getAxis("left")
-            text, ok = QtWidgets.QInputDialog.getText(
-                None, "Set Y Units", "Units:", text=axis.labelUnits
-            )
+            text, ok = QtWidgets.QInputDialog.getText(None, "Set Y Units", "Units:", text=axis.labelUnits)
             if ok:
                 axis.setLabel(text=axis.labelText, units=text)
 
@@ -758,25 +759,25 @@ class PlotInteractionViewBox(pg.ViewBox):
                 self.enableAutoRange(pg.ViewBox.XYAxes, True)
                 self.autoRange()
             else:
-                 # Single click logic
-                 series = self._get_clicked_series(ev)
-                 if series and self._plot_widget.object_model:
-                     # Find series item
-                     entry = self._plot_widget._plot_entries.get(self._plot_item)
-                     if entry and series in entry.series_items:
-                         self._plot_widget.object_model.setActiveObject(entry.series_items[series])
-                         ev.accept()
-                         return
+                # Single click logic
+                series = self._get_clicked_series(ev)
+                if series and self._plot_widget.object_model:
+                    # Find series item
+                    entry = self._plot_widget._plot_entries.get(self._plot_item)
+                    if entry and series in entry.series_items:
+                        self._plot_widget.object_model.setActiveObject(entry.series_items[series])
+                        ev.accept()
+                        return
 
-                 # If not series or not found, delegate to default (which might select plot)
-                 # But _on_plot_clicked is not automatically called by pg.ViewBox click.
-                 # We should call it manually if we want clicking plot bg to select plot.
-                 if self._plot_item:
-                      self._plot_widget._on_plot_clicked(self._plot_item)
+                # If not series or not found, delegate to default (which might select plot)
+                # But _on_plot_clicked is not automatically called by pg.ViewBox click.
+                # We should call it manually if we want clicking plot bg to select plot.
+                if self._plot_item:
+                    self._plot_widget._on_plot_clicked(self._plot_item)
 
             ev.accept()
             return
-        
+
         super().mouseClickEvent(ev)
 
     def mouseDragEvent(self, ev, axis=None):
@@ -866,17 +867,17 @@ class PlotInteractionViewBox(pg.ViewBox):
 
 
 def updateStylePatched(self):
-    r = '3px'
+    r = "3px"
     if self.dim:
-        fg = '#404040'
-        bg = '#d0d0d0'
-        border = '#d0d0d0'
+        fg = "#404040"
+        bg = "#d0d0d0"
+        border = "#d0d0d0"
     else:
-        fg = '#fff'
-        bg = '#808080'
-        border = '#808080'
+        fg = "#fff"
+        bg = "#808080"
+        border = "#808080"
 
-    if self.orientation == 'vertical':
+    if self.orientation == "vertical":
         self.vStyle = """DockLabel {
             background-color : %s;
             color : %s;

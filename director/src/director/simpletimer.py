@@ -2,7 +2,6 @@ import time
 
 
 class SimpleTimer(object):
-
     def __init__(self):
         self.reset()
 
@@ -17,7 +16,6 @@ class SimpleTimer(object):
 
 
 class FPSCounter(object):
-
     def __init__(self):
         self.averageComputer = MovingAverageComputer()
         self.lastUpdateTime = self.averageComputer.timer.now()
@@ -34,7 +32,6 @@ class FPSCounter(object):
 
 
 class AverageComputer(object):
-
     def __init__(self):
         self.timer = SimpleTimer()
         self.quantity = 0.0
@@ -51,7 +48,6 @@ class AverageComputer(object):
 
 
 class MovingAverageComputer(object):
-
     def __init__(self):
         self.timer = SimpleTimer()
         self.quantity = 0.0
@@ -69,4 +65,3 @@ class MovingAverageComputer(object):
     def reset(self):
         self.quantity = 0.0
         self.timer.reset()
-

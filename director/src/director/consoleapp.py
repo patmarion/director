@@ -14,7 +14,6 @@ import qtpy.QtWidgets as QtWidgets
 
 
 class ConsoleApp(object):
-
     _startupCallbacks = {}
     _exitCode = 0
     _quitTimer = None
@@ -30,7 +29,7 @@ class ConsoleApp(object):
     def start():
         if getattr(ConsoleApp.getTestingArgs(), "auto_quit"):
             ConsoleApp.startQuitTimer(0.1)
-    
+
         def onStartup():
             callbacks = []
             for priority in sorted(ConsoleApp._startupCallbacks.keys()):
@@ -85,7 +84,6 @@ class ConsoleApp(object):
         ConsoleApp._startupCallbacks.setdefault(priority, []).append(func)
 
     def showObjectModel(self):
-
         if not self.objectModelWidget:
             w = QtWidgets.QSplitter(QtCore.Qt.Vertical)
             model = om.getDefaultObjectModel()
@@ -94,7 +92,7 @@ class ConsoleApp(object):
             sw.setWidget(model.getPropertiesPanel())
             sw.setWidgetResizable(True)
             w.addWidget(sw)
-            applogic.addShortcut(w, 'Ctrl+Q', self.quit)
+            applogic.addShortcut(w, "Ctrl+Q", self.quit)
             self.objectModelWidget = w
             self.objectModelWidget.resize(350, 700)
             w.setSizes([350, 350])
@@ -107,7 +105,7 @@ class ConsoleApp(object):
     def createView(self, useGrid=True):
         # Note: This creates a VTKWidget view - simplified from original PythonQt version
         from director.vtk_widget import VTKWidget
-        
+
         view = VTKWidget()
         self.view = view  # Store reference for Python console namespace
         applogic.setCurrentRenderView(view)
@@ -115,58 +113,58 @@ class ConsoleApp(object):
 
         if useGrid:
             view.initializeGrid()
-            self.gridObj = om.findObjectByName('grid')
+            self.gridObj = om.findObjectByName("grid")
 
         # ViewOptionsItem is not yet implemented - skip for now
         self.viewOptions = vis.ViewOptionsItem(view)
-        om.addToObjectModel(self.viewOptions, parentObj=om.findObjectByName('scene'))
+        om.addToObjectModel(self.viewOptions, parentObj=om.findObjectByName("scene"))
 
-        applogic.resetCamera(viewDirection=[-1,-1,-0.3], view=view)
+        applogic.resetCamera(viewDirection=[-1, -1, -0.3], view=view)
         self.viewBehaviors = viewbehaviors.ViewBehaviors(view)
 
-        applogic.addShortcut(view, 'Ctrl+Q', self.quit)
-        applogic.addShortcut(view, 'F8', self.showPythonConsole)
-        applogic.addShortcut(view, 'F1', self.showObjectModel)
+        applogic.addShortcut(view, "Ctrl+Q", self.quit)
+        applogic.addShortcut(view, "F8", self.showPythonConsole)
+        applogic.addShortcut(view, "F1", self.showObjectModel)
 
         view.setWindowIcon(om.Icons.getIcon(om.Icons.Robot))
-        view.setWindowTitle('View')
+        view.setWindowTitle("View")
 
         return view
 
     def showPythonConsole(self):
         """Show Python console in a standalone window."""
         from director.python_console import PythonConsoleWidget, QTCONSOLE_AVAILABLE
-        
+
         if not QTCONSOLE_AVAILABLE:
             print("Python console not available. Please install qtconsole.")
             return
-        
+
         # Create console widget if it doesn't exist
         if self.pythonConsoleWidget is None:
             # Set up minimal initial namespace
             namespace = {
-                'om': om,
-                'vis': vis,
+                "om": om,
+                "vis": vis,
             }
-            
+
             # Add gridObj if it exists
-            if hasattr(self, 'gridObj') and self.gridObj:
-                namespace['gridObj'] = self.gridObj
-            
+            if hasattr(self, "gridObj") and self.gridObj:
+                namespace["gridObj"] = self.gridObj
+
             try:
                 self.pythonConsoleWidget = PythonConsoleWidget(namespace=namespace)
             except RuntimeError as e:
                 print(str(e))
                 return
-        
+
         # Create window if it doesn't exist
         if self.pythonConsoleWindow is None:
             window = QtWidgets.QMainWindow()
-            window.setWindowTitle('Python Console')
+            window.setWindowTitle("Python Console")
             window.setCentralWidget(self.pythonConsoleWidget.get_widget())
             window.resize(800, 400)
             self.pythonConsoleWindow = window
-        
+
         # Show the window
         self.pythonConsoleWindow.show()
         self.pythonConsoleWindow.raise_()
@@ -175,30 +173,29 @@ class ConsoleApp(object):
 
     @staticmethod
     def getTestingArgs(dataDirRequired=False, outputDirRequired=False):
+        parser = argparse.ArgumentParser()
+        argutils.add_standard_args(parser)
 
-      parser = argparse.ArgumentParser()
-      argutils.add_standard_args(parser)
-      
-      # Note: --data-dir and --output-dir are already added by add_standard_args
-      # Just update the required status if needed
-      # We need to get the existing actions and update them
-      for action in parser._actions:
-          if '--data-dir' in action.option_strings:
-              action.required = dataDirRequired
-          if '--output-dir' in action.option_strings:
-              action.required = outputDirRequired
+        # Note: --data-dir and --output-dir are already added by add_standard_args
+        # Just update the required status if needed
+        # We need to get the existing actions and update them
+        for action in parser._actions:
+            if "--data-dir" in action.option_strings:
+                action.required = dataDirRequired
+            if "--output-dir" in action.option_strings:
+                action.required = outputDirRequired
 
-      args = parser.parse_known_args()[0]
-      
-      # Cache the result
-      ConsoleApp._testingArgs = args
-      return args
+        args = parser.parse_known_args()[0]
+
+        # Cache the result
+        ConsoleApp._testingArgs = args
+        return args
 
     @staticmethod
     def getTestingDataDirectory():
         path = ConsoleApp.getTestingArgs(dataDirRequired=True).data_dir
         if not os.path.isdir(path):
-            raise Exception('Testing data directory does not exist: %s' % path)
+            raise Exception("Testing data directory does not exist: %s" % path)
         return path
 
     @staticmethod
@@ -206,9 +203,9 @@ class ConsoleApp(object):
         args = ConsoleApp.getTestingArgs()
         path = args.output_dir
         if outputDirRequired and not path:
-            raise Exception('Testing output directory is required but not provided')
+            raise Exception("Testing output directory is required but not provided")
         if path and not os.path.isdir(path):
-            raise Exception('Testing output directory does not exist: %s' % path)
+            raise Exception("Testing output directory does not exist: %s" % path)
         return path
 
     @staticmethod
@@ -220,12 +217,10 @@ class ConsoleApp(object):
         return "PYTEST_CURRENT_TEST" in os.environ
 
 
-
 def main():
-
     # Ensure QApplication exists
     ConsoleApp.applicationInstance()
-    
+
     app = ConsoleApp()
     app.showPythonConsole()
     view = app.createView()
@@ -235,16 +230,17 @@ def main():
 
     # Push variables to Python console namespace
     if app.pythonConsoleWidget is not None:
-        app.pythonConsoleWidget.push_variables({
-            'app': app,
-            'view': view,
-            'quit': ConsoleApp.quit,
-            'exit': ConsoleApp.exit,
-        })
+        app.pythonConsoleWidget.push_variables(
+            {
+                "app": app,
+                "view": view,
+                "quit": ConsoleApp.quit,
+                "exit": ConsoleApp.exit,
+            }
+        )
 
     app.start()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-

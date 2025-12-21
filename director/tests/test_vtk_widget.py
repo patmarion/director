@@ -11,14 +11,14 @@ from director.vtk_widget import VTKWidget, FPSCounter
 def test_fps_counter():
     """Test FPS counter functionality."""
     counter = FPSCounter(alpha=0.9, time_window=0.1)
-    
+
     # Initially should be 0
     assert counter.get_average_fps() == 0.0
-    
+
     # Update a few times
     counter.update()
     counter.update()
-    
+
     # After updates, should have some value (might still be 0 if time window not elapsed)
     fps = counter.get_average_fps()
     assert fps >= 0.0
@@ -112,7 +112,7 @@ def test_vtk_widget_reset_camera(qapp):
     actor = vtk.vtkActor()
     actor.SetMapper(mapper)
     widget.renderer().AddActor(actor)
-    
+
     # Reset camera should not raise
     widget.resetCamera()
 
@@ -123,10 +123,10 @@ def test_vtk_widget_get_average_fps(qapp):
     # Initially might be 0 or have some value
     fps = widget.getAverageFramesPerSecond()
     assert fps >= 0.0
-    
+
     # Trigger some renders
     widget.forceRender()
-    
+
     # FPS might still be 0 or have a value depending on timing
     fps = widget.getAverageFramesPerSecond()
     assert fps >= 0.0
@@ -139,4 +139,3 @@ def test_vtk_widget_show_and_close(qapp):
 
     # Verify widget is visible
     assert widget.isVisible()
-

@@ -30,9 +30,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self._dialog_name = dialog_name
         self._qsettings = settings or QtCore.QSettings()
         self._entries: Dict[str, Dict[str, object]] = {}
-        self._stored_selection_name = self._qsettings.value(
-            f"{self._dialog_name}/_selected_name", None
-        )
+        self._stored_selection_name = self._qsettings.value(f"{self._dialog_name}/_selected_name", None)
         self._applying_stored_selection = False
         self._build_ui()
 
@@ -60,11 +58,9 @@ class SettingsDialog(QtWidgets.QDialog):
         # Try to apply stored selection if it exists
         if self._apply_stored_selection():
             return  # Selection was applied, don't set default
-        
+
         # Only set default selection if no stored selection exists and no row is selected
-        if (self.list_widget.count() == 1 and 
-            self.list_widget.currentRow() == -1 and 
-            not self._stored_selection_name):
+        if self.list_widget.count() == 1 and self.list_widget.currentRow() == -1 and not self._stored_selection_name:
             self.list_widget.setCurrentRow(0)
 
     def apply_current_settings(self):
@@ -87,16 +83,12 @@ class SettingsDialog(QtWidgets.QDialog):
             entry = self._current_entry()
             if not entry:
                 return
-            entry["properties"].restore_from_state_dict(
-                copy.deepcopy(entry["default_state"]), merge=True
-            )
+            entry["properties"].restore_from_state_dict(copy.deepcopy(entry["default_state"]), merge=True)
             self._update_button_states()
             return
 
         for entry in self._entries.values():
-            entry["properties"].restore_from_state_dict(
-                copy.deepcopy(entry["last_saved"]), merge=True
-            )
+            entry["properties"].restore_from_state_dict(copy.deepcopy(entry["last_saved"]), merge=True)
         self._update_button_states()
 
     def restore_all(self):
@@ -215,7 +207,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def _apply_stored_selection(self):
         """Apply stored selection if it exists in the list.
-        
+
         Returns:
             bool: True if selection was applied, False otherwise
         """
@@ -230,4 +222,3 @@ class SettingsDialog(QtWidgets.QDialog):
                 self._applying_stored_selection = False
                 return True
         return False
-

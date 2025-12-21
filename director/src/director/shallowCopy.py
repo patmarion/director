@@ -1,7 +1,6 @@
 """Utilities for shallow and deep copying VTK objects."""
 
 
-
 def deepCopy(dataObj):
     """Create a deep copy of a VTK data object."""
     newData = dataObj.NewInstance()
@@ -14,4 +13,3 @@ def shallowCopy(dataObj):
     newData = dataObj.NewInstance()
     newData.ShallowCopy(dataObj)
     return newData
-

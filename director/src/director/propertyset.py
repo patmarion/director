@@ -5,35 +5,36 @@ from typing import Any, Dict
 
 from director import callbacks
 
+
 def cleanPropertyName(s):
     """
     Generate a valid python property name by replacing all non-alphanumeric characters with underscores and adding an initial underscore if the first character is a digit
     """
-    return re.sub(r'\W|^(?=\d)','_',s).lower()
+    return re.sub(r"\W|^(?=\d)", "_", s).lower()
 
 
 class PropertyAttributes(object):
     """Property attributes for controlling how properties are displayed/edited."""
 
     _FIELDS = (
-        'decimals',
-        'minimum',
-        'maximum',
-        'singleStep',
-        'hidden',
-        'enumNames',
-        'readOnly',
+        "decimals",
+        "minimum",
+        "maximum",
+        "singleStep",
+        "hidden",
+        "enumNames",
+        "readOnly",
     )
 
     def __init__(self, **kwargs):
         defaults = {
-            'decimals': 5,
-            'minimum': -1e4,
-            'maximum': 1e4,
-            'singleStep': 1,
-            'hidden': False,
-            'enumNames': None,
-            'readOnly': False,
+            "decimals": 5,
+            "minimum": -1e4,
+            "maximum": 1e4,
+            "singleStep": 1,
+            "hidden": False,
+            "enumNames": None,
+            "readOnly": False,
         }
         defaults.update(kwargs)
         for field in self._FIELDS:
@@ -60,24 +61,28 @@ class PropertyAttributes(object):
 def fromQColor(propertyName, propertyValue):
     """Convert QColor to list if needed."""
     from qtpy import QtGui
+
     if isinstance(propertyValue, QtGui.QColor):
-        return [propertyValue.red()/255.0, propertyValue.green()/255.0, propertyValue.blue()/255.0]
+        return [propertyValue.red() / 255.0, propertyValue.green() / 255.0, propertyValue.blue() / 255.0]
     else:
         return propertyValue
 
 
 class PropertySet(object):
-
-    PROPERTY_CHANGED_SIGNAL = 'PROPERTY_CHANGED_SIGNAL'
-    PROPERTY_ADDED_SIGNAL = 'PROPERTY_ADDED_SIGNAL'
-    PROPERTY_REMOVED_SIGNAL = 'PROPERTY_REMOVED_SIGNAL'
-    PROPERTY_ATTRIBUTE_CHANGED_SIGNAL = 'PROPERTY_ATTRIBUTE_CHANGED_SIGNAL'
+    PROPERTY_CHANGED_SIGNAL = "PROPERTY_CHANGED_SIGNAL"
+    PROPERTY_ADDED_SIGNAL = "PROPERTY_ADDED_SIGNAL"
+    PROPERTY_REMOVED_SIGNAL = "PROPERTY_REMOVED_SIGNAL"
+    PROPERTY_ATTRIBUTE_CHANGED_SIGNAL = "PROPERTY_ATTRIBUTE_CHANGED_SIGNAL"
 
     def __init__(self):
-        self.callbacks = callbacks.CallbackRegistry([self.PROPERTY_CHANGED_SIGNAL,
-                                                     self.PROPERTY_ADDED_SIGNAL,
-                                                     self.PROPERTY_REMOVED_SIGNAL,
-                                                     self.PROPERTY_ATTRIBUTE_CHANGED_SIGNAL])
+        self.callbacks = callbacks.CallbackRegistry(
+            [
+                self.PROPERTY_CHANGED_SIGNAL,
+                self.PROPERTY_ADDED_SIGNAL,
+                self.PROPERTY_REMOVED_SIGNAL,
+                self.PROPERTY_ATTRIBUTE_CHANGED_SIGNAL,
+            ]
+        )
 
         self._properties = OrderedDict()
         self._attributes = {}
@@ -99,6 +104,7 @@ class PropertySet(object):
         def onPropertyChanged(propertySet, changedPropertyName):
             if changedPropertyName == propertyName:
                 func(propertySet.getProperty(propertyName))
+
         return self.connectPropertyChanged(onPropertyChanged)
 
     def connectPropertyAdded(self, func):
@@ -137,9 +143,15 @@ class PropertySet(object):
     def addProperty(self, propertyName, propertyValue, attributes=None, index=None):
         alternateName = cleanPropertyName(propertyName)
         if propertyName not in self._properties and alternateName in self._alternateNames:
-            raise ValueError('Adding this property would conflict with a different existing property with alternate name {:s}'.format(alternateName))
+            raise ValueError(
+                "Adding this property would conflict with a different existing property with alternate name {:s}".format(
+                    alternateName
+                )
+            )
         attrs = self._coerce_attributes(attributes)
-        propertyValue = self._normalize_property_value(propertyName, propertyValue, existing_value=None, attributes=attrs)
+        propertyValue = self._normalize_property_value(
+            propertyName, propertyValue, existing_value=None, attributes=attrs
+        )
         self._properties[propertyName] = propertyValue
         self._attributes[propertyName] = attrs
         self._alternateNames[alternateName] = propertyName
@@ -159,9 +171,11 @@ class PropertySet(object):
     def setProperty(self, propertyName, propertyValue):
         previousValue = self._properties[propertyName]
         attrs = self._attributes[propertyName]
-        propertyValue = self._normalize_property_value(propertyName, propertyValue, existing_value=previousValue, attributes=attrs)
+        propertyValue = self._normalize_property_value(
+            propertyName, propertyValue, existing_value=previousValue, attributes=attrs
+        )
         if propertyValue == previousValue:
-          return
+            return
 
         self._properties[propertyName] = propertyValue
         self.callbacks.process(self.PROPERTY_CHANGED_SIGNAL, self, propertyName)
@@ -180,22 +194,22 @@ class PropertySet(object):
         try:
             return object.__getattribute__(self, name)
         except AttributeError as exc:
-            alternateNames = object.__getattribute__(self, '_alternateNames')
+            alternateNames = object.__getattribute__(self, "_alternateNames")
             if name in alternateNames:
-                return object.__getattribute__(self, 'getProperty')(alternateNames[name])
+                return object.__getattribute__(self, "getProperty")(alternateNames[name])
             else:
                 raise exc
-    
+
     def __setattr__(self, name, value):
         """Allow setting properties via alternate names."""
         # First, check if this is a real attribute (one that exists or is being initialized)
         # We need to check this carefully to avoid infinite recursion
-        
+
         # Check if this is a protected/private attribute or an internal attribute
-        if name.startswith('_') or name in ['callbacks', '_properties', '_attributes', '_alternateNames']:
+        if name.startswith("_") or name in ["callbacks", "_properties", "_attributes", "_alternateNames"]:
             object.__setattr__(self, name, value)
             return
-        
+
         # Try to get the attribute - if it exists, set it normally
         try:
             # If we can get it, it's a real attribute
@@ -205,11 +219,11 @@ class PropertySet(object):
         except AttributeError:
             # Attribute doesn't exist, check if it's an alternate property name
             try:
-                alternateNames = object.__getattribute__(self, '_alternateNames')
+                alternateNames = object.__getattribute__(self, "_alternateNames")
                 if name in alternateNames:
                     # Found as alternate name, set the property
                     propertyName = alternateNames[name]
-                    object.__getattribute__(self, 'setProperty')(propertyName, value)
+                    object.__getattribute__(self, "setProperty")(propertyName, value)
                     return
                 else:
                     # Not found, raise AttributeError
@@ -228,16 +242,13 @@ class PropertySet(object):
         for name, value in self._properties.items():
             properties_copy[name] = copy.deepcopy(value)
 
-        attributes_copy = {
-            name: attrs.to_dict()
-            for name, attrs in self._attributes.items()
-        }
-        return {'properties': properties_copy, 'attributes': attributes_copy}
+        attributes_copy = {name: attrs.to_dict() for name, attrs in self._attributes.items()}
+        return {"properties": properties_copy, "attributes": attributes_copy}
 
     def restore_from_state_dict(self, state: Dict[str, Any], merge: bool = True, verbose: bool = False):
         """Restore properties/attributes from a state dict."""
-        properties = state.get('properties') or {}
-        attributes = state.get('attributes') or {}
+        properties = state.get("properties") or {}
+        attributes = state.get("attributes") or {}
 
         if not merge:
             if self._properties:
@@ -274,11 +285,17 @@ class PropertySet(object):
             return PropertyAttributes.from_dict(attributes)
         raise TypeError(f"Unsupported attributes type: {type(attributes)}")
 
-    def _normalize_property_value(self, propertyName: str, propertyValue: Any, existing_value: Any | None, attributes: PropertyAttributes | None = None) -> Any:
+    def _normalize_property_value(
+        self,
+        propertyName: str,
+        propertyValue: Any,
+        existing_value: Any | None,
+        attributes: PropertyAttributes | None = None,
+    ) -> Any:
         value = fromQColor(propertyName, propertyValue)
         if attributes and attributes.enumNames:
             value = self._coerce_enum_value(propertyName, value, attributes.enumNames)
-        if hasattr(value, 'tolist'):
+        if hasattr(value, "tolist"):
             try:
                 value = value.tolist()
             except Exception:
@@ -323,11 +340,15 @@ class PropertySet(object):
         attrs = self._attributes[propertyName]
         if isinstance(value, (int, float)):
             if value < attrs.minimum or value > attrs.maximum:
-                print(f"[PropertySet] Value {value} for '{propertyName}' is outside [{attrs.minimum}, {attrs.maximum}].")
+                print(
+                    f"[PropertySet] Value {value} for '{propertyName}' is outside [{attrs.minimum}, {attrs.maximum}]."
+                )
         elif isinstance(value, (list, tuple)) and value and isinstance(value[0], (int, float)):
             for idx, component in enumerate(value):
                 if component < attrs.minimum or component > attrs.maximum:
-                    print(f"[PropertySet] Component {idx} value {component} for '{propertyName}' is outside [{attrs.minimum}, {attrs.maximum}].")
+                    print(
+                        f"[PropertySet] Component {idx} value {component} for '{propertyName}' is outside [{attrs.minimum}, {attrs.maximum}]."
+                    )
                     break
 
     def _cast_like_existing(self, propertyName: str, new_value: Any, existing_value: Any):

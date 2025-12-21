@@ -12,6 +12,7 @@ from director.propertyset import PropertySet
 from director.frame_properties import FrameProperties
 from director.visualization import FrameItem
 
+
 def _get_settings(settings: Optional[QtCore.QSettings] = None) -> QtCore.QSettings:
     return settings or QtCore.QSettings()
 
@@ -37,10 +38,10 @@ def restore_properties_from_settings(
     """
     qsettings = _get_settings(settings)
     stored = qsettings.value(key, None)
-    if stored in (None, ''):
+    if stored in (None, ""):
         return False
     if isinstance(stored, QtCore.QByteArray):
-        stored = bytes(stored).decode('utf-8')
+        stored = bytes(stored).decode("utf-8")
     state = json.loads(str(stored))
     properties.restore_from_state_dict(state, merge=merge)
     return True

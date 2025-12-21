@@ -8,29 +8,29 @@ import numpy as np
 
 def thresholdPoints(polyData, arrayName, thresholdRange):
     """Threshold points in PolyData based on array values."""
-    assert(polyData.GetPointData().GetArray(arrayName))
+    assert polyData.GetPointData().GetArray(arrayName)
     f = vtk.vtkThresholdPoints()
     f.SetInputData(polyData)
     f.ThresholdBetween(thresholdRange[0], thresholdRange[1])
-    f.SetInputArrayToProcess(0,0,0, vtk.vtkDataObject.FIELD_ASSOCIATION_POINTS, arrayName)
+    f.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_POINTS, arrayName)
     f.Update()
     return shallowCopy(f.GetOutput())
 
 
-def thresholdCells(polyData, arrayName, thresholdRange, arrayType='cells'):
+def thresholdCells(polyData, arrayName, thresholdRange, arrayType="cells"):
     """Threshold cells in PolyData based on array values."""
-    assert arrayType in ('points', 'cells')
+    assert arrayType in ("points", "cells")
 
     f = vtk.vtkThreshold()
     f.SetInputData(polyData)
     f.ThresholdBetween(thresholdRange[0], thresholdRange[1])
 
-    if arrayType == 'cells':
-        assert(polyData.GetCellData().GetArray(arrayName))
-        f.SetInputArrayToProcess(0,0,0, vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS, arrayName)
+    if arrayType == "cells":
+        assert polyData.GetCellData().GetArray(arrayName)
+        f.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS, arrayName)
     else:
-        assert(polyData.GetPointData().GetArray(arrayName))
-        f.SetInputArrayToProcess(0,0,0, vtk.vtkDataObject.FIELD_ASSOCIATION_POINTS, arrayName)
+        assert polyData.GetPointData().GetArray(arrayName)
+        f.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_POINTS, arrayName)
 
     f.Update()
     g = vtk.vtkGeometryFilter()
@@ -76,7 +76,7 @@ def computeDelaunay2D(polyData):
 
 def computeCentroid(polyData):
     """Compute centroid of PolyData points."""
-    return np.average(vnp.getNumpyFromVtk(polyData, 'Points'), axis=0)
+    return np.average(vnp.getNumpyFromVtk(polyData, "Points"), axis=0)
 
 
 def appendPolyData(polyDataList):
@@ -126,26 +126,26 @@ def decimateMesh(polyData, targetReduction=0.1):
     return shallowCopy(f.GetOutput())
 
 
-def hasNonFinitePoints(polyData, arrayName='Points'):
+def hasNonFinitePoints(polyData, arrayName="Points"):
     """Check if PolyData has non-finite points."""
     pts = vnp.getNumpyFromVtk(polyData, arrayName)
     return np.isfinite(pts).any()
 
 
-def labelNonFinitePoints(polyData, arrayName='Points'):
+def labelNonFinitePoints(polyData, arrayName="Points"):
     """
     Adds is_nonfinite label to polyData. Non-finite includes nan and +/- inf.
     """
     pts = vnp.getNumpyFromVtk(polyData, arrayName)
     labels = np.logical_not(np.isfinite(pts)).any(axis=1)
-    vnp.addNumpyToVtk(polyData, np.array(labels, dtype=np.int32), 'is_nonfinite')
+    vnp.addNumpyToVtk(polyData, np.array(labels, dtype=np.int32), "is_nonfinite")
 
 
-def removeNonFinitePoints(polyData, arrayName='Points'):
+def removeNonFinitePoints(polyData, arrayName="Points"):
     """Remove non-finite points from PolyData."""
     polyData = shallowCopy(polyData)
     labelNonFinitePoints(polyData, arrayName)
-    return thresholdPoints(polyData, 'is_nonfinite', [0, 0])
+    return thresholdPoints(polyData, "is_nonfinite", [0, 0])
 
 
 def flipImage(image, flipAxis=1):
@@ -172,4 +172,3 @@ def rotateImage180(image):
     r2.SetFilteredAxis(1)
     r2.Update()
     return shallowCopy(r2.GetOutput())
-

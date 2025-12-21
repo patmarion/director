@@ -90,9 +90,7 @@ class FrameProperties:
         )
 
         self._frame_callback = self.frame.connectFrameModified(self._on_frame_modified)
-        self._properties_callback = self._properties.connectPropertyChanged(
-            self._on_property_changed
-        )
+        self._properties_callback = self._properties.connectPropertyChanged(self._on_property_changed)
 
     def set_undo_stack(self, undo_stack: QtGui.QUndoStack):
         self._undo_stack = undo_stack
@@ -135,9 +133,7 @@ class FrameProperties:
             self._record_transform_change(new_transform, f"Update {property_name}")
 
     def _apply_properties_to_frame(self):
-        position = self._as_float_list(
-            self._properties.getProperty(self.POSITION_PROPERTY)
-        )
+        position = self._as_float_list(self._properties.getProperty(self.POSITION_PROPERTY))
         rpy_deg = self._as_float_list(self._properties.getProperty(self.RPY_PROPERTY))
         new_transform = transformUtils.frameFromPositionAndRPY(position, rpy_deg)
         self.frame.copyFrame(new_transform)
@@ -214,9 +210,7 @@ class FrameSync:
                 continue
             if ref_frame is frame:
                 continue
-            current_delta = transformUtils.copyFrame(
-                frame_data.baseTransform.GetLinearInverse()
-            )
+            current_delta = transformUtils.copyFrame(frame_data.baseTransform.GetLinearInverse())
             current_delta.Concatenate(transformUtils.copyFrame(ref_frame.transform))
             break
 
@@ -256,9 +250,7 @@ class FrameSync:
             return
 
         if self.frames[modified_frame_id].ignoreIncoming:
-            self.frames[modified_frame_id].baseTransform = self._compute_base_transform(
-                frame
-            )
+            self.frames[modified_frame_id].baseTransform = self._compute_base_transform(frame)
             return
 
         self._block_callbacks = True
@@ -269,5 +261,3 @@ class FrameSync:
             if frame_id != modified_frame_id:
                 self._move_frame(frame_id, modified_frame_id)
         self._block_callbacks = False
-
-

@@ -11,7 +11,7 @@ from director.frame_properties import FrameProperties, FrameSync
 
 def main():
     fields = mainwindowapp.construct()
-    
+
     t = vtk.vtkTransform()
     t.RotateZ(45)
     t.RotateX(45)
@@ -27,7 +27,7 @@ def main():
         t2 = vtk.vtkTransform()
         t2.Translate(0.3, 0.3, 0.0)
         t2.RotateY(20)
-        child = vis.showFrame(t2, "synced frame", parent='data')
+        child = vis.showFrame(t2, "synced frame", parent="data")
         child.properties.edit = True
         undo_stack = getattr(fields, "undoStack", None)
         child.frameProperties = FrameProperties(child, undo_stack=undo_stack)
@@ -38,7 +38,7 @@ def main():
 
     def reset_frame():
         obj.copyFrame(vtk.vtkTransform())
-    
+
     button = QPushButton("Reset Frame")
     fields.mainToolbar.addWidget(button)
     button.clicked.connect(reset_frame)
@@ -53,4 +53,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-

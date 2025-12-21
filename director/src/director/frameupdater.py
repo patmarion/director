@@ -16,7 +16,7 @@ def registerFrame(frame):
 def applyFrameTransform(x, y, z, yaw):
     """Apply a transform to the currently edited frame."""
     global lastEditedFrame
-    if lastEditedFrame is not None and lastEditedFrame.getProperty('Edit'):
+    if lastEditedFrame is not None and lastEditedFrame.getProperty("Edit"):
         t = vtk.vtkTransform()
         t.Concatenate(lastEditedFrame.transform)
         t.RotateZ(yaw)
@@ -27,8 +27,8 @@ def applyFrameTransform(x, y, z, yaw):
 def disableFrameEdit():
     """Disable frame editing mode."""
     global lastEditedFrame
-    if lastEditedFrame is not None and lastEditedFrame.getProperty('Edit'):
-        lastEditedFrame.setProperty('Edit', False)
+    if lastEditedFrame is not None and lastEditedFrame.getProperty("Edit"):
+        lastEditedFrame.setProperty("Edit", False)
 
 
 def shiftFrameX(amount):
@@ -88,6 +88,5 @@ def handleKey(event):
     elif event.key() == Qt.Key_Escape:
         disableFrameEdit()
         return True
-    
-    return False
 
+    return False

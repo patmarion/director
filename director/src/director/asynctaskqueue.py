@@ -7,14 +7,13 @@ from director import callbacks
 
 
 class AsyncTaskQueue(object):
-
-    QUEUE_STARTED_SIGNAL = 'QUEUE_STARTED_SIGNAL'
-    QUEUE_STOPPED_SIGNAL = 'QUEUE_STOPPED_SIGNAL'
-    TASK_STARTED_SIGNAL = 'TASK_STARTED_SIGNAL'
-    TASK_ENDED_SIGNAL = 'TASK_ENDED_SIGNAL'
-    TASK_PAUSED_SIGNAL = 'TASK_PAUSED_SIGNAL'
-    TASK_FAILED_SIGNAL = 'TASK_FAILED_SIGNAL'
-    TASK_EXCEPTION_SIGNAL = 'TASK_EXCEPTION_SIGNAL'
+    QUEUE_STARTED_SIGNAL = "QUEUE_STARTED_SIGNAL"
+    QUEUE_STOPPED_SIGNAL = "QUEUE_STOPPED_SIGNAL"
+    TASK_STARTED_SIGNAL = "TASK_STARTED_SIGNAL"
+    TASK_ENDED_SIGNAL = "TASK_ENDED_SIGNAL"
+    TASK_PAUSED_SIGNAL = "TASK_PAUSED_SIGNAL"
+    TASK_FAILED_SIGNAL = "TASK_FAILED_SIGNAL"
+    TASK_EXCEPTION_SIGNAL = "TASK_EXCEPTION_SIGNAL"
 
     class PauseException(Exception):
         pass
@@ -27,13 +26,17 @@ class AsyncTaskQueue(object):
         self.generators = []
         self.timer = TimerCallback(targetFps=10)
         self.timer.callback = self.callbackLoop
-        self.callbacks = callbacks.CallbackRegistry([self.QUEUE_STARTED_SIGNAL,
-                                                     self.QUEUE_STOPPED_SIGNAL,
-                                                     self.TASK_STARTED_SIGNAL,
-                                                     self.TASK_ENDED_SIGNAL,
-                                                     self.TASK_PAUSED_SIGNAL,
-                                                     self.TASK_FAILED_SIGNAL,
-                                                     self.TASK_EXCEPTION_SIGNAL])
+        self.callbacks = callbacks.CallbackRegistry(
+            [
+                self.QUEUE_STARTED_SIGNAL,
+                self.QUEUE_STOPPED_SIGNAL,
+                self.TASK_STARTED_SIGNAL,
+                self.TASK_ENDED_SIGNAL,
+                self.TASK_PAUSED_SIGNAL,
+                self.TASK_FAILED_SIGNAL,
+                self.TASK_EXCEPTION_SIGNAL,
+            ]
+        )
         self.currentTask = None
         self.isRunning = False
 
@@ -57,18 +60,17 @@ class AsyncTaskQueue(object):
     def wrapGenerator(self, generator):
         def generatorWrapper():
             return generator
+
         return generatorWrapper
 
     def addTask(self, task):
-
         if isinstance(task, types.GeneratorType):
             task = self.wrapGenerator(task)
 
-        assert hasattr(task, '__call__')
+        assert hasattr(task, "__call__")
         self.tasks.append(task)
 
     def callbackLoop(self):
-
         try:
             for i in range(10):
                 self.doWork()
@@ -172,19 +174,17 @@ class AsyncTaskQueue(object):
 
 
 class AsyncTask(object):
-
     def __init__(self):
         pass
 
     def getStatus(self):
-        return 'none'
+        return "none"
 
     def __call__(self):
         pass
 
 
 class PrintTask(AsyncTask):
-
     def __init__(self, message):
         self.message = message
 
@@ -193,7 +193,6 @@ class PrintTask(AsyncTask):
 
 
 class UserPromptTask(AsyncTask):
-
     promptsEnabled = True
 
     def __init__(self, message, force=False, testingValue=None):
@@ -202,12 +201,11 @@ class UserPromptTask(AsyncTask):
         self.testingValue = testingValue
 
     def showDialog(self):
-
         self.d = QtWidgets.QDialog()
 
         buttons = QtWidgets.QDialogButtonBox()
-        buttons.addButton('Yes', QtWidgets.QDialogButtonBox.AcceptRole)
-        buttons.addButton('No', QtWidgets.QDialogButtonBox.RejectRole)
+        buttons.addButton("Yes", QtWidgets.QDialogButtonBox.AcceptRole)
+        buttons.addButton("No", QtWidgets.QDialogButtonBox.RejectRole)
         buttons.accepted.connect(self.d.accept)
         buttons.rejected.connect(self.d.reject)
 
@@ -228,7 +226,6 @@ class UserPromptTask(AsyncTask):
         self.result = False
 
     def __call__(self):
-
         if not self.promptsEnabled and not self.force:
             return
 
@@ -248,19 +245,16 @@ class UserPromptTask(AsyncTask):
 
 
 class DelayTask(AsyncTask):
-
     def __init__(self, delayTimeInSeconds):
         self.delayTimeInSeconds = delayTimeInSeconds
 
     def __call__(self):
-
         t = SimpleTimer()
         while t.elapsed() < self.delayTimeInSeconds:
             yield
 
 
 class PauseTask(AsyncTask):
-
     def __init__(self):
         pass
 
@@ -269,7 +263,6 @@ class PauseTask(AsyncTask):
 
 
 class QuitTask(AsyncTask):
-
     def __init__(self):
         pass
 

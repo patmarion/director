@@ -5,17 +5,17 @@ from director.fieldcontainer import FieldContainer
 
 class Flags(FieldContainer):
     """An enum-like class that acts as a simple container for flags.
-    
+
     The enum members are strings.
-    
+
     Usage:
         colors = Flags('RED', 'GREEN', 'BLUE')
         assert colors.RED == 'RED'
     """
-    
+
     def __init__(self, *strs):
         """Initialize Flags with string constants.
-        
+
         Args:
             *strs: String names for flags
         """
@@ -25,9 +25,8 @@ class Flags(FieldContainer):
 
     def __setattr__(self, name, value):
         """Prevent setting attributes (read-only)."""
-        raise RuntimeError('Flags object is read only')
+        raise RuntimeError("Flags object is read only")
 
     def __delattr__(self, name):
         """Prevent deleting attributes (read-only)."""
-        raise RuntimeError('Flags object is read only')
-
+        raise RuntimeError("Flags object is read only")

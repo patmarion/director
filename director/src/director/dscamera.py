@@ -114,9 +114,7 @@ class DSCamera(object):
         s = 1 - (2 * self.alpha - 1) * r2
         valid_mask = s >= 0
         s[~valid_mask] = 0.0
-        mz = (1 - self.alpha * self.alpha * r2) / (
-            self.alpha * xp.sqrt(s) + 1 - self.alpha
-        )
+        mz = (1 - self.alpha * self.alpha * r2) / (self.alpha * xp.sqrt(s) + 1 - self.alpha)
 
         mz2 = mz * mz
         k1 = mz * self.xi + xp.sqrt(mz2 + (1 - self.xi * self.xi) * r2)
@@ -261,23 +259,17 @@ class DSCamera(object):
 
         # Compute the intrinsics of the perspective image
         h_p, w_p = img_persp.shape[:2]
-        map_xy, valid_mask = self._get_from_perspective_img_pts_and_valid_mask(
-            (h_p, w_p), img_size, f
-        )
+        map_xy, valid_mask = self._get_from_perspective_img_pts_and_valid_mask((h_p, w_p), img_size, f)
 
         # Remap from perspective to fisheye
-        img_fisheye = cv2.remap(
-            img_persp, map_xy[..., 0], map_xy[..., 1], interpolation=cv2.INTER_LINEAR
-        )
+        img_fisheye = cv2.remap(img_persp, map_xy[..., 0], map_xy[..., 1], interpolation=cv2.INTER_LINEAR)
 
         # Mask out invalid regions
         img_fisheye[~valid_mask] = 0.0
         return img_fisheye
 
     @lru_cache(maxsize=30)
-    def _get_from_perspective_img_pts_and_valid_mask(
-        self, input_img_size, output_img_size, f
-    ):
+    def _get_from_perspective_img_pts_and_valid_mask(self, input_img_size, output_img_size, f):
         h_p, w_p = input_img_size
         focal = f * min(h_p, w_p)
         fx_p = fy_p = focal

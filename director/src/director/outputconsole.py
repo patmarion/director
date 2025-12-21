@@ -1,11 +1,10 @@
-from qtpy import QtCore, QtGui,QtWidgets
+from qtpy import QtCore, QtGui, QtWidgets
+
 
 class OutputConsole(object):
-
     def __init__(self):
-
         self.textEdit = QtWidgets.QTextEdit()
-        self.textEdit.setWindowTitle('Output console')
+        self.textEdit.setWindowTitle("Output console")
         self.textEdit.readOnly = True
         self.scrollBar = self.textEdit.verticalScrollBar()
 
@@ -40,17 +39,16 @@ class OutputConsole(object):
         self.scrollToBottom()
 
     def appendText(self, text, color=None, bold=False):
-        '''Add text to the output console.  The color arg should be a string that is a valid CSS color
-           string, for example: red, or #FF0000, or rgb(255,0,0).'''
+        """Add text to the output console.  The color arg should be a string that is a valid CSS color
+        string, for example: red, or #FF0000, or rgb(255,0,0)."""
         if color is not None:
             text = '<font color="%s">%s</font>' % (color, text)
         if bold:
-            text = '<b>%s</b>' % text
+            text = "<b>%s</b>" % text
 
-        self.textEdit.append(text.replace('\n', '<br/>'))
+        self.textEdit.append(text.replace("\n", "<br/>"))
 
     def _pygmentsDemo(self):
-
         from pygments import highlight
         from pygments.lexers import PythonLexer
         from pygments.formatters import HtmlFormatter

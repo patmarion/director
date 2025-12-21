@@ -8,22 +8,20 @@ from director.icons import Icons
 
 
 class ObjectModelItem(object):
-
-    REMOVED_FROM_OBJECT_MODEL = 'REMOVED_FROM_OBJECT_MODEL'
+    REMOVED_FROM_OBJECT_MODEL = "REMOVED_FROM_OBJECT_MODEL"
 
     def __getstate__(self):
-        #print 'getstate called on:', self
+        # print 'getstate called on:', self
         d = dict(properties=self.properties)
         return d
 
     def __setstate__(self, state):
-        #print 'setstate called on:', self
+        # print 'setstate called on:', self
         self._tree = None
-        self.properties = state['properties']
+        self.properties = state["properties"]
 
     def __init__(self, name, properties=None, icon=None):
-
-        #print 'init called on:', self
+        # print 'init called on:', self
         self._tree = None
         self.actionDelegates = []
         self.callbacks = callbacks.CallbackRegistry([self.REMOVED_FROM_OBJECT_MODEL])
@@ -32,12 +30,12 @@ class ObjectModelItem(object):
         self.properties.connectPropertyAdded(self._onPropertyAdded)
         self.properties.connectPropertyAttributeChanged(self._onPropertyAttributeChanged)
 
-        self.addProperty('Icon', icon or Icons.Empty, attributes=PropertyAttributes(hidden=True))
-        self.addProperty('Deletable', True, attributes=PropertyAttributes(hidden=True))
-        self.addProperty('Name', name, attributes=PropertyAttributes(hidden=True))
+        self.addProperty("Icon", icon or Icons.Empty, attributes=PropertyAttributes(hidden=True))
+        self.addProperty("Deletable", True, attributes=PropertyAttributes(hidden=True))
+        self.addProperty("Name", name, attributes=PropertyAttributes(hidden=True))
 
     def setIcon(self, icon):
-        self.setProperty('Icon', icon)
+        self.setProperty("Icon", icon)
 
     def propertyNames(self):
         return self.properties.propertyNames()
@@ -83,22 +81,22 @@ class ObjectModelItem(object):
         return False
 
     def getActionNames(self):
-        actions = ['Rename']
+        actions = ["Rename"]
         for delegate in self.actionDelegates:
             delegateActions = delegate.getActionNames()
             if delegateActions:
-                actions.append('')
+                actions.append("")
                 actions.extend(delegateActions)
         return actions
 
     def onAction(self, action):
-        if action == 'Rename':
-            name = self.getProperty('Name')
+        if action == "Rename":
+            name = self.getProperty("Name")
 
             inputDialog = QtWidgets.QInputDialog()
             inputDialog.setInputMode(QtWidgets.QInputDialog.TextInput)
-            inputDialog.setLabelText('Name:')
-            inputDialog.setWindowTitle('Enter name')
+            inputDialog.setLabelText("Name:")
+            inputDialog.setWindowTitle("Enter name")
             inputDialog.setTextValue(name)
             result = inputDialog.exec_()
 
@@ -111,13 +109,13 @@ class ObjectModelItem(object):
                 break
 
     def rename(self, name, renameChildren=True):
-        oldName = self.getProperty('Name')
+        oldName = self.getProperty("Name")
         if renameChildren:
             for child in self.children():
-                childName = child.getProperty('Name')
+                childName = child.getProperty("Name")
                 if childName.startswith(oldName):
-                    child.setProperty('Name', name + childName[len(oldName):])
-        self.setProperty('Name', name)
+                    child.setProperty("Name", name + childName[len(oldName) :])
+        self.setProperty("Name", name)
 
     def getObjectTree(self):
         return self._tree
@@ -147,14 +145,13 @@ class ObjectModelItem(object):
 
 
 class ContainerItem(ObjectModelItem):
-
     def __init__(self, name):
         ObjectModelItem.__init__(self, name, icon=Icons.Directory)
-        self.addProperty('Visible', True)
+        self.addProperty("Visible", True)
 
     def _onPropertyChanged(self, propertySet, propertyName):
         ObjectModelItem._onPropertyChanged(self, propertySet, propertyName)
-        if propertyName == 'Visible':
+        if propertyName == "Visible":
             visible = self.getProperty(propertyName)
             for child in self.children():
                 if child.hasProperty(propertyName):
@@ -162,11 +159,10 @@ class ContainerItem(ObjectModelItem):
 
 
 class ObjectModelTree(QObject):
-
-    ACTION_SELECTED = 'ACTION_SELECTED'
-    OBJECT_ADDED = 'OBJECT_ADDED'
-    OBJECT_CLICKED = 'OBJECT_CLICKED'
-    SELECTION_CHANGED = 'SELECTION_CHANGED'
+    ACTION_SELECTED = "ACTION_SELECTED"
+    OBJECT_ADDED = "OBJECT_ADDED"
+    OBJECT_CLICKED = "OBJECT_CLICKED"
+    SELECTION_CHANGED = "SELECTION_CHANGED"
 
     def __init__(self):
         QObject.__init__(self)
@@ -178,12 +174,14 @@ class ObjectModelTree(QObject):
         self._nameToItems = defaultdict(set)
         self._blockSignals = False
         self.actions = []
-        self.callbacks = callbacks.CallbackRegistry([
-                            self.ACTION_SELECTED,
-                            self.OBJECT_ADDED,
-                            self.OBJECT_CLICKED,
-                            self.SELECTION_CHANGED,
-                            ])
+        self.callbacks = callbacks.CallbackRegistry(
+            [
+                self.ACTION_SELECTED,
+                self.OBJECT_ADDED,
+                self.OBJECT_CLICKED,
+                self.SELECTION_CHANGED,
+            ]
+        )
 
     def getTreeWidget(self):
         return self._treeWidget
@@ -201,8 +199,9 @@ class ObjectModelTree(QObject):
         return [self._getObjectForItem(item.child(i)) for i in range(item.childCount())]
 
     def getTopLevelObjects(self):
-        return [self._getObjectForItem(self._treeWidget.topLevelItem(i))
-                  for i in range(self._treeWidget.topLevelItemCount)]
+        return [
+            self._getObjectForItem(self._treeWidget.topLevelItem(i)) for i in range(self._treeWidget.topLevelItemCount)
+        ]
 
     def getActiveObject(self):
         item = self._getSelectedItem()
@@ -240,7 +239,7 @@ class ObjectModelTree(QObject):
             items.append(parent)
             parent = parent.parent()
         return tuple(self._itemToName[item] for item in reversed(items))
-        
+
     def findObjectByName(self, name, parent=None):
         if parent:
             return self.findChildByName(parent, name)
@@ -248,7 +247,7 @@ class ObjectModelTree(QObject):
         if items:
             return self._getObjectForItem(next(iter(items)))
 
-    def findObjectByPath(self, path, separator='/'):
+    def findObjectByPath(self, path, separator="/"):
         return self.findObjectByPathList(path.split(separator))
 
     def findObjectByPathList(self, pathList):
@@ -278,16 +277,15 @@ class ObjectModelTree(QObject):
     def findChildByName(self, parent, name):
         parentItem = self._getItemForObject(parent) if parent else None
         for item in self._nameToItems[name]:
-          if item.parent() == parentItem:
-            return self._getObjectForItem(item)
+            if item.parent() == parentItem:
+                return self._getObjectForItem(item)
 
     def findTopLevelObjectByName(self, name):
         for item in self._nameToItems[name]:
-          if item.parent() is None:
-            return self._getObjectForItem(item)
+            if item.parent() is None:
+                return self._getObjectForItem(item)
 
     def _onTreeSelectionChanged(self):
-
         panel = self.getPropertiesPanel()
         if panel:
             panel.clear()
@@ -299,42 +297,39 @@ class ObjectModelTree(QObject):
         self.callbacks.process(self.SELECTION_CHANGED, self)
 
     def updateVisIcon(self, obj):
-
-        if not obj.hasProperty('Visible'):
+        if not obj.hasProperty("Visible"):
             return
 
-        isVisible = obj.getProperty('Visible')
+        isVisible = obj.getProperty("Visible")
         item = self._getItemForObject(obj)
         item.setIcon(1, Icons.getIcon(Icons.Eye if isVisible else Icons.EyeOff))
 
     def updateObjectIcon(self, obj):
         item = self._getItemForObject(obj)
-        item.setIcon(0, Icons.getIcon(obj.getProperty('Icon')))
+        item.setIcon(0, Icons.getIcon(obj.getProperty("Icon")))
 
     def updateObjectName(self, obj):
         item = self._getItemForObject(obj)
         oldName = self._itemToName[item]
         self._nameToItems[oldName].remove(item)
-        name = obj.getProperty('Name')
+        name = obj.getProperty("Name")
         self._itemToName[item] = name
         self._nameToItems[name].add(item)
         item.setText(0, name)
 
     def _onPropertyValueChanged(self, obj, propertyName):
-
-        if propertyName == 'Visible':
+        if propertyName == "Visible":
             self.updateVisIcon(obj)
-        elif propertyName == 'Name':
+        elif propertyName == "Name":
             self.updateObjectName(obj)
-        elif propertyName == 'Icon':
+        elif propertyName == "Icon":
             self.updateObjectIcon(obj)
 
     def _onItemClicked(self, item, column):
-
         obj = self._itemToObject[item]
 
-        if column == 1 and obj.hasProperty('Visible'):
-            obj.setProperty('Visible', not obj.getProperty('Visible'))
+        if column == 1 and obj.hasProperty("Visible"):
+            obj.setProperty("Visible", not obj.getProperty("Visible"))
             self.updateVisIcon(obj)
         self.callbacks.process(self.OBJECT_CLICKED, self, obj)
 
@@ -367,10 +362,10 @@ class ObjectModelTree(QObject):
         assert obj._tree is None
 
         parentItem = self._getItemForObject(parentObj) if parentObj else None
-        objName = obj.getProperty('Name')
+        objName = obj.getProperty("Name")
 
         item = QtWidgets.QTreeWidgetItem(parentItem, [objName])
-        item.setIcon(0, Icons.getIcon(obj.getProperty('Icon')))
+        item.setIcon(0, Icons.getIcon(obj.getProperty("Icon")))
 
         obj._tree = self
 
@@ -378,7 +373,7 @@ class ObjectModelTree(QObject):
         self._itemToObject[item] = obj
         self._itemToName[item] = objName
         self._nameToItems[objName].add(item)
-        
+
         # Update visibility icon if the object has a Visible property
         self.updateVisIcon(obj)
 
@@ -389,22 +384,18 @@ class ObjectModelTree(QObject):
 
         self.callbacks.process(self.OBJECT_ADDED, self, obj)
 
-
     def collapse(self, obj):
         item = self._getItemForObject(obj)
         self.getTreeWidget().collapseItem(item)
-
 
     def expand(self, obj):
         item = self._getItemForObject(obj)
         self.getTreeWidget().expandItem(item)
 
-
     def addContainer(self, name, parentObj=None):
         obj = ContainerItem(name)
         self.addToObjectModel(obj, parentObj)
         return obj
-
 
     def getOrCreateContainer(self, name, parentObj=None):
         if parentObj:
@@ -415,18 +406,14 @@ class ObjectModelTree(QObject):
             containerObj = self.addContainer(name, parentObj)
         return containerObj
 
-
     def _onShowContextMenu(self, clickPosition):
-
         obj = self.getActiveObject()
         if not obj:
             self._onTreeContextMenu(clickPosition)
         else:
             self._onObjectContextMenu(obj, clickPosition)
 
-
     def _showMenu(self, actions, clickPosition):
-
         if not actions:
             return None
 
@@ -447,40 +434,34 @@ class ObjectModelTree(QObject):
         else:
             return None
 
-
     def _onTreeContextMenu(self, clickPosition):
-
         selectedAction = self._showMenu(self.actions, clickPosition)
         if selectedAction:
             self.callbacks.process(self.ACTION_SELECTED, self, selectedAction)
 
-
     def _onObjectContextMenu(self, obj, clickPosition):
-
         actions = list(obj.getActionNames())
 
-        if obj.hasProperty('Deletable') and obj.getProperty('Deletable'):
+        if obj.hasProperty("Deletable") and obj.getProperty("Deletable"):
             actions.append(None)
-            actions.append('Remove')
+            actions.append("Remove")
 
         selectedAction = self._showMenu(actions, clickPosition)
 
-        if selectedAction == 'Remove':
+        if selectedAction == "Remove":
             self.removeFromObjectModel(obj)
         elif selectedAction:
             obj.onAction(selectedAction)
 
-
     def removeSelectedItems(self):
         for item in self.getTreeWidget().selectedItems():
             obj = self._getObjectForItem(item)
-            if (not obj.hasProperty('Deletable')) or obj.getProperty('Deletable'):
+            if (not obj.hasProperty("Deletable")) or obj.getProperty("Deletable"):
                 self._removeItemFromObjectModel(item)
-
 
     def eventFilter(self, obj, event):
         """Event filter for handling delete key."""
-        if hasattr(self, '_treeWidget') and obj == self._treeWidget and event.type() == QtCore.QEvent.KeyPress:
+        if hasattr(self, "_treeWidget") and obj == self._treeWidget and event.type() == QtCore.QEvent.KeyPress:
             if event.key() == QtCore.Qt.Key_Delete:
                 self.removeSelectedItems()
                 return True
@@ -505,7 +486,6 @@ class ObjectModelTree(QObject):
         self.callbacks.disconnect(callbackId)
 
     def init(self, treeWidget, propertiesPanel):
-
         self._treeWidget = treeWidget
         self._propertiesPanel = propertiesPanel
         # Note: propertiesPanel may be None initially and set later
@@ -513,11 +493,11 @@ class ObjectModelTree(QObject):
             propertiesPanel.clear()
 
         treeWidget.setColumnCount(2)
-        treeWidget.setHeaderLabels(['Name', ''])
+        treeWidget.setHeaderLabels(["Name", ""])
         treeWidget.headerItem().setIcon(1, Icons.getIcon(Icons.Eye))
         treeWidget.header().setVisible(True)
         treeWidget.header().setStretchLastSection(False)
-        qt_version = int(re.search(r'^([0-9]+).*', QtCore.qVersion()).group(1))
+        qt_version = int(re.search(r"^([0-9]+).*", QtCore.qVersion()).group(1))
         if qt_version < 5:
             treeWidget.header().setResizeMode(0, QtWidgets.QHeaderView.Stretch)
             treeWidget.header().setResizeMode(1, QtWidgets.QHeaderView.Fixed)
@@ -539,59 +519,78 @@ class ObjectModelTree(QObject):
 
 _t = ObjectModelTree()
 
+
 def getDefaultObjectModel():
     return _t
+
 
 def getActiveObject():
     return _t.getActiveObject()
 
+
 def setActiveObject(obj):
     _t.setActiveObject(obj)
+
 
 getSelectedObject = getActiveObject
 setSelectedObject = setActiveObject
 
+
 def clearSelection():
     _t.clearSelection()
+
 
 def getObjects():
     return _t.getObjects()
 
+
 def getTopLevelObjects():
     return _t.getTopLevelObjects()
+
 
 def getObjectPath(obj):
     return _t.getObjectPath(obj)
 
+
 def findObjectByName(name, parent=None):
     return _t.findObjectByName(name, parent)
+
 
 def findObjectByPathList(pathList):
     return _t.findObjectByPathList(pathList)
 
-def findObjectByPath(path, separator='/'):
+
+def findObjectByPath(path, separator="/"):
     return _t.findObjectByPath(path, separator)
+
 
 def findTopLevelObjectByName(name):
     return _t.findTopLevelObjectByName(name)
 
+
 def removeFromObjectModel(obj):
     _t.removeFromObjectModel(obj)
+
 
 def addToObjectModel(obj, parentObj=None):
     _t.addToObjectModel(obj, parentObj)
 
+
 def collapse(obj):
     _t.collapse(obj)
+
 
 def expand(obj):
     _t.expand(obj)
 
+
 def addContainer(name, parentObj=None):
     return _t.addContainer(name, parentObj)
 
+
 def getOrCreateContainer(name, parentObj=None):
     return _t.getOrCreateContainer(name, parentObj)
+
 
 def isInitialized():
     """Check if the object model is initialized."""
@@ -599,7 +598,6 @@ def isInitialized():
 
 
 def init(objectTree=None, propertiesPanel=None):
-
     if _t._treeWidget:
         # If already initialized, update propertiesPanel if provided
         if propertiesPanel is not None and _t._propertiesPanel is None:
@@ -613,25 +611,30 @@ def init(objectTree=None, propertiesPanel=None):
 
     _t.init(objectTree, propertiesPanel)
 
+
 def addParentPropertySync(obj):
     parent = obj.parent()
     if parent is None:
         return
-    if not hasattr(parent, '_syncedProperties'):
+    if not hasattr(parent, "_syncedProperties"):
+
         def onPropertyChanged(propertySet, propertyName):
             if propertyName in parent._syncedProperties:
                 for obj in parent.children():
                     obj.setProperty(propertyName, propertySet.getProperty(propertyName))
+
         parent._syncedProperties = set()
         parent.properties.connectPropertyChanged(onPropertyChanged)
     for propertyName in obj.properties.propertyNames():
         if propertyName in parent._syncedProperties:
             continue
         parent._syncedProperties.add(propertyName)
-        parent.properties.addProperty(propertyName, obj.properties.getProperty(propertyName), attributes=obj.properties._attributes[propertyName])
+        parent.properties.addProperty(
+            propertyName, obj.properties.getProperty(propertyName), attributes=obj.properties._attributes[propertyName]
+        )
+
 
 def addChildPropertySync(obj):
     children = obj.children()
     if children:
         addParentPropertySync(children[0])
-

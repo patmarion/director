@@ -11,14 +11,14 @@ def test_shallow_copy_polydata():
     sphere = vtk.vtkSphereSource()
     sphere.SetRadius(1.0)
     sphere.Update()
-    
+
     original = sphere.GetOutput()
     shallow = shallowCopy(original)
-    
+
     assert shallow is not None
     assert shallow.GetNumberOfPoints() == original.GetNumberOfPoints()
     assert shallow.GetNumberOfCells() == original.GetNumberOfCells()
-    
+
     # Shallow copy should share the same data arrays
     assert shallow.GetPoints() == original.GetPoints()
 
@@ -29,14 +29,14 @@ def test_deep_copy_polydata():
     sphere = vtk.vtkSphereSource()
     sphere.SetRadius(1.0)
     sphere.Update()
-    
+
     original = sphere.GetOutput()
     deep = deepCopy(original)
-    
+
     assert deep is not None
     assert deep.GetNumberOfPoints() == original.GetNumberOfPoints()
     assert deep.GetNumberOfCells() == original.GetNumberOfCells()
-    
+
     # Deep copy should have different data arrays
     assert deep.GetPoints() != original.GetPoints()
 
@@ -46,9 +46,9 @@ def test_shallow_copy_image_data():
     image = vtk.vtkImageData()
     image.SetDimensions(10, 10, 1)
     image.AllocateScalars(vtk.VTK_UNSIGNED_CHAR, 1)
-    
+
     shallow = shallowCopy(image)
-    
+
     assert shallow is not None
     assert shallow.GetDimensions() == image.GetDimensions()
 
@@ -58,9 +58,8 @@ def test_deep_copy_image_data():
     image = vtk.vtkImageData()
     image.SetDimensions(10, 10, 1)
     image.AllocateScalars(vtk.VTK_UNSIGNED_CHAR, 1)
-    
+
     deep = deepCopy(image)
-    
+
     assert deep is not None
     assert deep.GetDimensions() == image.GetDimensions()
-

@@ -1,11 +1,12 @@
 from weakref import ref
 import types
 
-'''
+"""
 CallbackRegistry is a class taken from matplotlib.cbook.
 
 http://sourceforge.net/p/matplotlib/code/HEAD/tree/trunk/matplotlib/lib/matplotlib/cbook.py
-'''
+"""
+
 
 class CallbackRegistry:
     """
@@ -47,6 +48,7 @@ class CallbackRegistry:
     `"Mindtrove" blog
     <http://mindtrove.info/articles/python-weak-references/>`_.
     """
+
     def __init__(self, signals):
         """
         *signals* a sequence of signal names, or None if not providing
@@ -78,7 +80,7 @@ class CallbackRegistry:
         callback_ids = []
         for sig in signals:
             if self.signals is not None and sig not in self.signals:
-                raise ValueError('Unknown signal: %s' % sig)
+                raise ValueError("Unknown signal: %s" % sig)
             if sig not in self.callbacks:
                 self.callbacks[sig] = set()
             if func not in self._proxy_objs:
@@ -137,6 +139,7 @@ class CallbackRegistry:
         Based on code from Peter Parente's "Mindtrove" blog:
         http://mindtrove.info/articles/python-weak-references/
         """
+
         def __init__(self, callback):
             if isinstance(callback, types.MethodType):
                 # callback is bound method
@@ -173,4 +176,3 @@ class CallbackRegistry:
 
         def __hash__(self):
             return id(self._func)
-

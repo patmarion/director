@@ -12,7 +12,7 @@ def find_timestamp_index(timestamps, query_timestamp, clamp: bool = True) -> int
     if len(timestamps) == 0:
         raise ValueError("Timestamps array is empty.")
 
-    idx = np.searchsorted(timestamps, query_timestamp, side='right') - 1
+    idx = np.searchsorted(timestamps, query_timestamp, side="right") - 1
 
     if idx < 0:
         if clamp:

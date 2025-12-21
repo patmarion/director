@@ -11,7 +11,7 @@ def _max_length(strings):
 
 
 def _fields_repr(self, indent=4):
-    indent_str = ' '*indent
+    indent_str = " " * indent
     field_names = list(self._fields)
     field_names.sort()
     fill_length = _max_length(field_names) + 1
@@ -20,13 +20,13 @@ def _fields_repr(self, indent=4):
     for field in field_names:
         value = getattr(self, field)
         value_repr = _repr(value, indent + 4)
-        s += "%s%s%s= %s,\n" % (indent_str, field, ' '*(fill_length-len(field)), value_repr)
+        s += "%s%s%s= %s,\n" % (indent_str, field, " " * (fill_length - len(field)), value_repr)
     s += "%s)" % indent_str
     return s
 
 
 def _dict_repr(self, indent=4):
-    indent_str = ' '*indent
+    indent_str = " " * indent
     field_names = list(self.keys())
     field_names.sort()
     fill_length = _max_length(field_names) + 3
@@ -35,21 +35,27 @@ def _dict_repr(self, indent=4):
     for field in field_names:
         value = self[field]
         value_repr = _repr(value, indent + 4)
-        s += "%s'%s'%s: %s,\n" % (indent_str, field, ' '*(fill_length-len(field)-2), value_repr)
+        s += "%s'%s'%s: %s,\n" % (indent_str, field, " " * (fill_length - len(field) - 2), value_repr)
     s += "%s}" % indent_str
     return s
 
 
 def _list_repr(self, indent=4):
-    indent_str = ' '*indent
-    return "[\n" + indent_str + (",\n" + indent_str).join(
-              [_repr(item, indent + 4) for item in self]) + "\n" + indent_str + "]"
+    indent_str = " " * indent
+    return (
+        "[\n"
+        + indent_str
+        + (",\n" + indent_str).join([_repr(item, indent + 4) for item in self])
+        + "\n"
+        + indent_str
+        + "]"
+    )
 
 
 def _transform_repr(mat, indent=4):
     mat = np.array([[mat.GetMatrix().GetElement(r, c) for c in range(4)] for r in range(4)])
-    indent_str = ' '*indent
-    return '\n' + indent_str + repr(mat)
+    indent_str = " " * indent
+    return "\n" + indent_str + repr(mat)
 
 
 def _repr(self, indent=4):
@@ -78,15 +84,15 @@ class FieldContainer(object):
             yield name, getattr(self, name)
 
     def _add_fields(self, **fields):
-        if not hasattr(self, '_fields'):
-            object.__setattr__(self, '_fields', list(fields.keys()))
+        if not hasattr(self, "_fields"):
+            object.__setattr__(self, "_fields", list(fields.keys()))
         else:
-            object.__setattr__(self, '_fields', list(set(self._fields + list(fields.keys()))))
+            object.__setattr__(self, "_fields", list(set(self._fields + list(fields.keys()))))
         for name, value in list(fields.items()):
             object.__setattr__(self, name, value)
 
     def _set_fields(self, **fields):
-        if not hasattr(self, '_fields'):
+        if not hasattr(self, "_fields"):
             self._add_fields(**fields)
         else:
             for name, value in list(fields.items()):
@@ -116,4 +122,3 @@ class FieldContainer(object):
             object.__delattr__(self, name)
         else:
             raise AttributeError("'%s' object has no attribute '%s'" % (type(self).__name__, name))
-

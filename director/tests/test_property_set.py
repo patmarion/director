@@ -139,19 +139,17 @@ def test_type_mismatch_raises_value_error():
 
 
 def test_enum_properties_accept_string_and_int():
-    attrs = PropertyAttributes(enumNames=['Surface', 'Wireframe', 'Points'])
+    attrs = PropertyAttributes(enumNames=["Surface", "Wireframe", "Points"])
     props = PropertySet()
-    props.addProperty('Surface Mode', 0, attributes=attrs)
+    props.addProperty("Surface Mode", 0, attributes=attrs)
 
-    props.setProperty('Surface Mode', 'Wireframe')
-    assert props.getProperty('Surface Mode') == 1
-    assert props.getPropertyEnumValue('Surface Mode') == 'Wireframe'
+    props.setProperty("Surface Mode", "Wireframe")
+    assert props.getProperty("Surface Mode") == 1
+    assert props.getPropertyEnumValue("Surface Mode") == "Wireframe"
 
-    props.setProperty('Surface Mode', 2)
-    assert props.getProperty('Surface Mode') == 2
-    assert props.getPropertyEnumValue('Surface Mode') == 'Points'
-
+    props.setProperty("Surface Mode", 2)
+    assert props.getProperty("Surface Mode") == 2
+    assert props.getPropertyEnumValue("Surface Mode") == "Points"
 
     with pytest.raises(ValueError):
-        props.setProperty('Surface Mode', 'Invalid')
-
+        props.setProperty("Surface Mode", "Invalid")

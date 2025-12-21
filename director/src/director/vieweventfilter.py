@@ -7,7 +7,7 @@ from qtpy.QtGui import QCursor
 class ViewEventFilter(QObject):
     """Event filter for VTK views using Qt event filtering."""
 
-    LEFT_DOUBLE_CLICK_EVENT = 'LEFT_DOUBLE_CLICK_EVENT'
+    LEFT_DOUBLE_CLICK_EVENT = "LEFT_DOUBLE_CLICK_EVENT"
 
     def __init__(self, view):
         super().__init__()
@@ -15,7 +15,7 @@ class ViewEventFilter(QObject):
         self._leftMouseStart = None
         self._rightMouseStart = None
         self._handlers = {}
-        
+
         # Install event filter on the VTK widget
         vtk_widget = view.vtkWidget()
         if vtk_widget:
@@ -24,7 +24,7 @@ class ViewEventFilter(QObject):
     def eventFilter(self, obj, event):
         """Qt event filter implementation. Returns True to consume event, False to continue."""
         consumed = False
-        
+
         if event.type() == QEvent.MouseButtonDblClick and event.button() == Qt.LeftButton:
             consumed = self.onLeftDoubleClick(event) or consumed
 
@@ -163,4 +163,3 @@ class ViewEventFilter(QObject):
         vtk_widget = self.view.vtkWidget()
         if vtk_widget:
             vtk_widget.removeEventFilter(self)
-

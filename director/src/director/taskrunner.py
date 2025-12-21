@@ -8,21 +8,19 @@ from director.timercallback import TimerCallback
 
 
 class TaskRunner(object):
-
     def __init__(self):
-        self.interval = 1/60.0
+        self.interval = 1 / 60.0
         sys.setswitchinterval(self.interval)
 
         self.taskQueue = asynctaskqueue.AsyncTaskQueue()
         self.pendingTasks = []
         self.threads = []
-        self.timer = TimerCallback(callback=self._onTimer, targetFps=1/self.interval)
+        self.timer = TimerCallback(callback=self._onTimer, targetFps=1 / self.interval)
 
         # call timer.start here to initialize the QTimer now on the main thread
         self.timer.start()
 
     def _onTimer(self):
-
         # add all tasks in self.pendingTasks to the AsyncTaskQueue
         if self.pendingTasks:
             while True:

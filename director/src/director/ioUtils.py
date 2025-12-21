@@ -4,25 +4,25 @@ from director.shallowCopy import shallowCopy
 import shelve
 import os.path
 
-def readPolyData(filename, computeNormals=False):
 
+def readPolyData(filename, computeNormals=False):
     ext = os.path.splitext(filename)[1].lower()
 
     readers = {
-            '.vtp' : vtk.vtkXMLPolyDataReader,
-            '.vtk' : vtk.vtkPolyDataReader,
-            '.ply' : vtk.vtkPLYReader,
-            '.obj' : vtk.vtkOBJReader,
-            '.stl' : vtk.vtkSTLReader,
-              }
+        ".vtp": vtk.vtkXMLPolyDataReader,
+        ".vtk": vtk.vtkPolyDataReader,
+        ".ply": vtk.vtkPLYReader,
+        ".obj": vtk.vtkOBJReader,
+        ".stl": vtk.vtkSTLReader,
+    }
 
     try:
-        readers['.pcd'] = vtk.vtkPCDReader
+        readers[".pcd"] = vtk.vtkPCDReader
     except AttributeError:
         pass
 
     if ext not in readers:
-        raise Exception('Unknown file extension in readPolyData: %s' % filename)
+        raise Exception("Unknown file extension in readPolyData: %s" % filename)
 
     reader = readers[ext]()
     reader.SetFileName(filename)
@@ -40,6 +40,7 @@ def readPolyData(filename, computeNormals=False):
     else:
         return polyData
 
+
 def readPlyFile(filename):
     """
     Usese plyfile python pacakage to read a ply file.
@@ -53,17 +54,17 @@ def readPlyFile(filename):
     from plyfile import PlyData
 
     plydata = PlyData.read(filename)
-    vertex_data = plydata['vertex'].data # numpy array with fields ['x', 'y', 'z']
+    vertex_data = plydata["vertex"].data  # numpy array with fields ['x', 'y', 'z']
     pts = np.zeros([vertex_data.size, 3])
-    pts[:, 0] = vertex_data['x']
-    pts[:, 1] = vertex_data['y']
-    pts[:, 2] = vertex_data['z']
+    pts[:, 0] = vertex_data["x"]
+    pts[:, 1] = vertex_data["y"]
+    pts[:, 2] = vertex_data["z"]
 
     return vnp.numpyToPolyData(pts)
 
 
 def readMultiBlock(filename):
-    '''Reads a .vtm file and returns a list of vtkPolyData objects'''
+    """Reads a .vtm file and returns a list of vtkPolyData objects"""
 
     reader = vtk.vtkXMLMultiBlockDataReader()
     reader.SetFileName(filename)
@@ -80,17 +81,16 @@ def readMultiBlock(filename):
 
 
 def readImage(filename):
-
     ext = os.path.splitext(filename)[1].lower()
 
     readers = {
-            '.png' : vtk.vtkPNGReader,
-            '.jpg' : vtk.vtkJPEGReader,
-            '.vti' : vtk.vtkXMLImageDataReader,
-              }
+        ".png": vtk.vtkPNGReader,
+        ".jpg": vtk.vtkJPEGReader,
+        ".vti": vtk.vtkXMLImageDataReader,
+    }
 
     if ext not in readers:
-        raise Exception('Unknown file extension in readImage: %s' % filename)
+        raise Exception("Unknown file extension in readImage: %s" % filename)
 
     reader = readers[ext]()
     reader.SetFileName(filename)
@@ -100,9 +100,9 @@ def readImage(filename):
 
 
 def readVrml(filename):
-    '''
+    """
     Returns list of vtkPolyData meshes and a list of colors as 3-tuples
-    '''
+    """
     l = vtk.vtkVRMLImporter()
     l.SetFileName(filename)
     l.Read()
@@ -116,20 +116,20 @@ def readVrml(filename):
 
 
 def readObjMtl(filename):
-    '''
+    """
     Read an obj file and return a list of vtkPolyData objects.
     If the obj file has an associated material file, this function returns
     (polyDataList, actors).  If there is not a material file, this function
     returns (polyDataList, None).
-    '''
+    """
 
     def getMtlFilename(filename, maxLines=1000):
         with open(filename) as f:
             for i, l in enumerate(f):
-                if l.startswith('mtllib'):
+                if l.startswith("mtllib"):
                     tokens = l.split()
                     if len(tokens) < 2:
-                        raise Exception('Error parsing mtllib line in file: %s\n%s' % (filename, l))
+                        raise Exception("Error parsing mtllib line in file: %s\n%s" % (filename, l))
                     return os.path.join(os.path.dirname(filename), tokens[1])
 
     mtlFilename = getMtlFilename(filename)
@@ -153,53 +153,53 @@ def readObjMtl(filename):
 
 
 def writePolyData(polyData, filename):
-
     ext = os.path.splitext(filename)[1].lower()
 
     writers = {
-            '.vtp' : vtk.vtkXMLPolyDataWriter,
-            '.vtk' : vtk.vtkPolyDataWriter,
-            '.ply' : vtk.vtkPLYWriter,
-            '.stl' : vtk.vtkSTLWriter,
-              }
+        ".vtp": vtk.vtkXMLPolyDataWriter,
+        ".vtk": vtk.vtkPolyDataWriter,
+        ".ply": vtk.vtkPLYWriter,
+        ".stl": vtk.vtkSTLWriter,
+    }
 
     if ext not in writers:
-        raise Exception('Unknown file extension in writePolyData: %s' % filename)
+        raise Exception("Unknown file extension in writePolyData: %s" % filename)
 
     writer = writers[ext]()
 
-    if ext in ('.ply', '.stl'):
+    if ext in (".ply", ".stl"):
         polyData = _triangulate(polyData)
         writer.SetFileTypeToASCII()
 
-    if ext in ('.ply'):
-        if polyData.GetPointData().GetArray('RGB255'):
-            writer.SetArrayName('RGB255')
+    if ext in (".ply"):
+        if polyData.GetPointData().GetArray("RGB255"):
+            writer.SetArrayName("RGB255")
 
     writer.SetFileName(filename)
     writer.SetInputData(polyData)
     writer.Update()
 
-def writeImage(image, filename):
 
+def writeImage(image, filename):
     ext = os.path.splitext(filename)[1].lower()
 
     writers = {
-            '.png' : vtk.vtkPNGWriter,
-            '.jpg' : vtk.vtkJPEGWriter,
-            '.pnm' : vtk.vtkPNMWriter,
-            '.tiff' : vtk.vtkTIFFWriter,
-            '.bmp' : vtk.vtkBMPWriter,
-            '.vti' : vtk.vtkXMLImageDataWriter,
-              }
+        ".png": vtk.vtkPNGWriter,
+        ".jpg": vtk.vtkJPEGWriter,
+        ".pnm": vtk.vtkPNMWriter,
+        ".tiff": vtk.vtkTIFFWriter,
+        ".bmp": vtk.vtkBMPWriter,
+        ".vti": vtk.vtkXMLImageDataWriter,
+    }
 
     if ext not in writers:
-        raise Exception('Unknown file extension in writePolyData: %s' % filename)
+        raise Exception("Unknown file extension in writePolyData: %s" % filename)
 
     writer = writers[ext]()
     writer.SetFileName(filename)
     writer.SetInputData(image)
     writer.Write()
+
 
 def _computeNormals(polyData):
     normals = vtk.vtkPolyDataNormals()
@@ -208,22 +208,24 @@ def _computeNormals(polyData):
     normals.Update()
     return shallowCopy(normals.GetOutput())
 
+
 def _triangulate(polyData):
     normals = vtk.vtkTriangleFilter()
     normals.SetInputData(polyData)
     normals.Update()
     return shallowCopy(normals.GetOutput())
 
+
 def saveDataToFile(filename, dataDict, overwrite=False):
     if overwrite is False and os.path.isfile(filename):
         raise ValueError("file already exists, overwrite option was False")
 
-    myShelf = shelve.open(filename,'n')
-    myShelf['dataDict'] = dataDict
+    myShelf = shelve.open(filename, "n")
+    myShelf["dataDict"] = dataDict
     myShelf.close()
+
 
 def readDataFromFile(filename):
     myShelf = shelve.open(filename)
-    dataDict = myShelf['dataDict']
+    dataDict = myShelf["dataDict"]
     return dataDict
-

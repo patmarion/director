@@ -14,11 +14,11 @@ import numpy as np
 class ValueSlider(object):
     """Slider widget with double spin box and play/pause button."""
 
-    events = Flags('VALUE_CHANGED')
+    events = Flags("VALUE_CHANGED")
 
     def __init__(self, minValue=0.0, maxValue=1.0, resolution=1000):
         """Initialize ValueSlider.
-        
+
         Args:
             minValue: Minimum value
             maxValue: Maximum value
@@ -26,7 +26,7 @@ class ValueSlider(object):
         """
         self._value = 0.0
         self.spinbox = QtWidgets.QDoubleSpinBox()
-        self.spinbox.setSuffix('s')
+        self.spinbox.setSuffix("s")
         self.slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.playButton = QtWidgets.QPushButton()
         self.playButton.setFlat(True)
@@ -70,9 +70,11 @@ class ValueSlider(object):
             dt = tnow - self.animationPrevTime
             self.animationPrevTime = tnow
         else:
-            dt = (1.0 / self.animationTimer.targetFps)
+            dt = 1.0 / self.animationTimer.targetFps
 
-        self.animationRate = (1.0 - self.animationRateAlpha)*self.animationRate + self.animationRateAlpha*self.animationRateTarget
+        self.animationRate = (
+            1.0 - self.animationRateAlpha
+        ) * self.animationRate + self.animationRateAlpha * self.animationRateTarget
 
         valueChange = dt * self.animationRate
         value = self.getValue() + valueChange
@@ -85,7 +87,7 @@ class ValueSlider(object):
 
     def setAnimationRate(self, animationRate, rateAlpha=1.0):
         """Set animation playback rate.
-        
+
         Args:
             animationRate: Rate of change per second
             rateAlpha: Smoothing factor (0-1)
@@ -115,7 +117,7 @@ class ValueSlider(object):
 
     def setResolution(self, resolution):
         """Set slider resolution.
-        
+
         Args:
             resolution: Maximum slider value (number of steps)
         """
@@ -125,7 +127,7 @@ class ValueSlider(object):
 
     def setValueRange(self, minValue, maxValue):
         """Set the value range.
-        
+
         Args:
             minValue: Minimum value
             maxValue: Maximum value
@@ -149,7 +151,7 @@ class ValueSlider(object):
 
     def setValue(self, value):
         """Set current value.
-        
+
         Args:
             value: Value to set (will be clipped to range)
         """
@@ -160,10 +162,10 @@ class ValueSlider(object):
 
     def connectValueChanged(self, callback):
         """Connect callback to value changed event.
-        
+
         Args:
             callback: Function to call when value changes
-            
+
         Returns:
             Callback ID for disconnection
         """
@@ -176,7 +178,9 @@ class ValueSlider(object):
     def _syncSlider(self):
         """Sync slider position to current value."""
         with qtutils.BlockSignals(self.slider):
-            slider_value = int(self.slider.maximum() * (self._value - self.minValue) / float(self.maxValue - self.minValue))
+            slider_value = int(
+                self.slider.maximum() * (self._value - self.minValue) / float(self.maxValue - self.minValue)
+            )
             self.slider.setValue(slider_value)
 
     def _syncSpinBox(self):
@@ -192,37 +196,37 @@ class ValueSlider(object):
 
     def _onSliderValueChanged(self, sliderValue):
         """Handle slider value change."""
-        self._value = (self.minValue + (self.maxValue - self.minValue) * (sliderValue / float(self.slider.maximum())))
+        self._value = self.minValue + (self.maxValue - self.minValue) * (sliderValue / float(self.slider.maximum()))
         self._syncSpinBox()
         self._notifyValueChanged()
 
     def _setupSpeedComboBox(self):
         """Setup speed combobox with predefined speed options."""
-        speed_options = ['10x', '8x', '6x', '5x', '4x', '3x', '2x', '1x', '0.5x', '0.25x', '0.1x']
+        speed_options = ["10x", "8x", "6x", "5x", "4x", "3x", "2x", "1x", "0.5x", "0.25x", "0.1x"]
         self.speedComboBox.addItems(speed_options)
         # Add separator after predefined speeds
         self.speedComboBox.insertSeparator(len(speed_options))
         # Add "Enter custom value" after separator
-        self.speedComboBox.addItem('Enter custom value')
+        self.speedComboBox.addItem("Enter custom value")
         # Set default to 1x
-        self.speedComboBox.setCurrentText('1x')
+        self.speedComboBox.setCurrentText("1x")
 
     def _onSpeedComboBoxChanged(self, text):
         """Handle speed combobox selection change."""
-        if text == 'Enter custom value':
+        if text == "Enter custom value":
             # Open input dialog for custom value
             value, ok = QtWidgets.QInputDialog.getDouble(
                 self.widget,
-                'Custom Playback Speed',
-                'Enter playback speed:',
+                "Custom Playback Speed",
+                "Enter playback speed:",
                 1.0,  # value
                 0.01,  # min
                 100.0,  # max
-                2  # decimals
+                2,  # decimals
             )
             if ok:
                 # Format the custom value
-                custom_text = f'{value}x'
+                custom_text = f"{value}x"
                 # Check if this custom value already exists
                 existing_index = self.speedComboBox.findText(custom_text)
                 if existing_index >= 0:
@@ -231,7 +235,7 @@ class ValueSlider(object):
                         self.speedComboBox.setCurrentText(custom_text)
                 else:
                     # Find the index of "Enter custom value" (after separator)
-                    enter_custom_index = self.speedComboBox.findText('Enter custom value')
+                    enter_custom_index = self.speedComboBox.findText("Enter custom value")
                     # Insert the custom value after the separator, before "Enter custom value"
                     with qtutils.BlockSignals(self.speedComboBox):
                         self.speedComboBox.insertItem(enter_custom_index, custom_text)
@@ -241,7 +245,7 @@ class ValueSlider(object):
         else:
             # Parse the speed value from text (e.g., "2x" -> 2.0, "0.5x" -> 0.5)
             try:
-                speed_value = float(text.rstrip('x'))
+                speed_value = float(text.rstrip("x"))
                 self.setAnimationRate(speed_value)
             except ValueError:
                 # If parsing fails, default to 1x
@@ -250,30 +254,30 @@ class ValueSlider(object):
     def _updatePlayButtonIcon(self, is_playing: bool):
         """Update play button to show play/pause icon."""
         icon = self._pause_icon if is_playing else self._play_icon
-        tooltip = 'Pause' if is_playing else 'Play'
+        tooltip = "Pause" if is_playing else "Play"
         self.playButton.setIcon(icon)
         self.playButton.setToolTip(tooltip)
 
 
 class SliderEventFilter(QtCore.QObject):
     """Event filter for direct slider clicking."""
-    
+
     def __init__(self, valueSlider):
         """Initialize event filter.
-        
+
         Args:
             valueSlider: ValueSlider instance
         """
         super().__init__()
         self.valueSlider = valueSlider
-    
+
     def eventFilter(self, obj, event):
         """Filter mouse events for direct slider clicking.
-        
+
         Args:
             obj: Object receiving the event
             event: QEvent
-            
+
         Returns:
             True if event was handled, False otherwise
         """
@@ -284,8 +288,7 @@ class SliderEventFilter(QtCore.QObject):
                 # Get mouse position
                 pos = event.pos()
                 x = pos.x()
-                val = QtWidgets.QStyle.sliderValueFromPosition(
-                    obj.minimum(), obj.maximum(), x, obj.width())
+                val = QtWidgets.QStyle.sliderValueFromPosition(obj.minimum(), obj.maximum(), x, obj.width())
                 obj.setValue(val)
                 return True
         elif event.type() == QtCore.QEvent.Type.MouseMove:
@@ -293,9 +296,7 @@ class SliderEventFilter(QtCore.QObject):
                 # Get mouse position
                 pos = event.pos()
                 x = pos.x()
-                val = QtWidgets.QStyle.sliderValueFromPosition(
-                    obj.minimum(), obj.maximum(), x, obj.width())
+                val = QtWidgets.QStyle.sliderValueFromPosition(obj.minimum(), obj.maximum(), x, obj.width())
                 obj.setValue(val)
                 return True
         return False
-

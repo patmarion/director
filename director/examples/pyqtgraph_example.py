@@ -1,22 +1,17 @@
 import pyqtgraph as pg
 
 
-
 win = pg.GraphicsLayoutWidget(show=True)
-win.setWindowTitle('pyqtgraph example')
-label = pg.LabelItem(justify='right')
+win.setWindowTitle("pyqtgraph example")
+label = pg.LabelItem(justify="right")
 win.addItem(label)
 
 p1 = win.addPlot(row=1, col=0)
 # customize the averaged curve that can be activated from the context menu:
-p1.avgPen = pg.mkPen('#FFFFFF')
-p1.avgShadowPen = pg.mkPen('#8080DD', width=10)
+p1.avgPen = pg.mkPen("#FFFFFF")
+p1.avgShadowPen = pg.mkPen("#8080DD", width=10)
 
 p2 = win.addPlot(row=2, col=0)
-
-
-
-
 
 
 w = fields.mainWindow.centralWidget()
@@ -31,9 +26,8 @@ fields.mainWindow.setCentralWidget(splitter)
 win.show()
 
 
-
-#create numpy arrays
-#make the numbers large to show that the range shows data from 10000 to all the way 0
+# create numpy arrays
+# make the numbers large to show that the range shows data from 10000 to all the way 0
 data1 = 10000 + 15000 * pg.gaussianFilter(np.random.random(size=10000), 10) + 3000 * np.random.random(size=10000)
 data2 = 15000 + 15000 * pg.gaussianFilter(np.random.random(size=10000), 10) + 3000 * np.random.random(size=10000)
 
