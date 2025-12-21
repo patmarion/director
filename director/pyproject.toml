@@ -39,3 +39,13 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# Pyflakes (F) and Bugbear (B) for bug-finding.
+select = ["F", "B"]
+ignore = [
+    "E501", # Ignore line-length violations (let the formatter handle it)
+]
