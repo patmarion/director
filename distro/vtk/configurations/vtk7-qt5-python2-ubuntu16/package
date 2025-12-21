@@ -1,3 +1,0 @@
-set -ex
-
-tar -czf vtk7.1-qt5.5-python2.7-ubuntu16.04.tar.gz install

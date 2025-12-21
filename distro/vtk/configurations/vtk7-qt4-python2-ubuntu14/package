@@ -1,3 +1,0 @@
-set -ex
-
-tar -czf vtk7.1-qt4.8-python2.7-ubuntu14.04.tar.gz install

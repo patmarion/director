@@ -1,2 +1,0 @@
-LCM Robot State
-===============
