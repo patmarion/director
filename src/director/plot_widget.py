@@ -94,8 +94,8 @@ class PlotSeriesItem(om.ObjectModelItem):
         self.addProperty("Visible", True)
         self.addProperty("Color", [1.0, 1.0, 1.0])
         self.addProperty("Style", 0, attributes=om.PropertyAttributes(enumNames=["Line", "Points", "Line + Points"]))
-        self.addProperty("Line Width", 2, attributes=om.PropertyAttributes(minimum=1, maximum=10))
-        self.addProperty("Point Size", 5, attributes=om.PropertyAttributes(minimum=1, maximum=20))
+        self.addProperty("Line Width", 1, attributes=om.PropertyAttributes(minimum=1, maximum=10))
+        self.addProperty("Point Size", 3, attributes=om.PropertyAttributes(minimum=1, maximum=20))
 
         color = self._get_color_from_series()
         if color:
