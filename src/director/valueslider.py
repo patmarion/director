@@ -121,6 +121,7 @@ class ValueSlider(object):
         Args:
             resolution: Maximum slider value (number of steps)
         """
+        resolution = min(resolution, 32767)
         with qtutils.BlockSignals(self.slider):
             self.slider.setMaximum(resolution)
         self._syncSlider()
