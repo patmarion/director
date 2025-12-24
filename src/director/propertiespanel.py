@@ -18,6 +18,8 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from director import _pyqt_patch  # noqa: F401
+
 
 class PropertyEditor(QWidget):
     """Base class for property editors."""

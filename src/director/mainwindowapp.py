@@ -768,8 +768,8 @@ def construct(**kwargs):
     fact.register(MainWindowAppFactory)
 
     # Ensure QApplication exists
-    MainWindowApp.applicationInstance()
+    qapp = MainWindowApp.applicationInstance()
 
-    fields = fact.construct(**kwargs)
+    fields = fact.construct(**kwargs, qapp=qapp)
     fields.register_application_fields(fields)
     return fields
