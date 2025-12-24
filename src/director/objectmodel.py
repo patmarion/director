@@ -4,6 +4,7 @@ The object model manages the hierarchy of objects in the scene.
 It provides a tree-based structure where items can have properties and children.
 The :class:`ObjectModelItem` is the base class for all items in the tree.
 """
+
 import re
 from collections import defaultdict
 

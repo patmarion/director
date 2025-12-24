@@ -18,6 +18,8 @@ class ConsoleApp(object):
     _testingArgs = None
 
     def __init__(self):
+        # ensure QApplication exists
+        self.applicationInstance()
         om.init()
         self.objectModelWidget = None
         self.pythonConsoleWidget = None
@@ -124,9 +126,7 @@ class ConsoleApp(object):
         applogic.addShortcut(view, "F8", self.showPythonConsole)
         applogic.addShortcut(view, "F1", self.showObjectModel)
 
-        view.setWindowIcon(om.Icons.getIcon(om.Icons.Robot))
         view.setWindowTitle("View")
-
         return view
 
     def showPythonConsole(self):

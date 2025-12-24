@@ -27,6 +27,7 @@ htmlcov/
 
 # Documentation
 docs/_build/
+docs/generated/
 docs/modules.rst
 docs/director.rst
 docs/director.*.rst
