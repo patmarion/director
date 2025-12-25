@@ -8,6 +8,7 @@ import qtpy.QtWidgets as QtWidgets
 from director import applogic, argutils, viewbehaviors
 from director import objectmodel as om
 from director import visualization as vis
+from director.vtk_widget import VTKWidget
 from director.timercallback import TimerCallback
 
 
@@ -19,7 +20,7 @@ class ConsoleApp(object):
 
     def __init__(self):
         # ensure QApplication exists
-        self.applicationInstance()
+        self.qapp = self.applicationInstance()
         om.init()
         self.objectModelWidget = None
         self.pythonConsoleWidget = None
@@ -103,8 +104,6 @@ class ConsoleApp(object):
         return self.objectModelWidget
 
     def createView(self, useGrid=True):
-        # Note: This creates a VTKWidget view - simplified from original PythonQt version
-        from director.vtk_widget import VTKWidget
 
         view = VTKWidget()
         self.view = view  # Store reference for Python console namespace
@@ -115,7 +114,6 @@ class ConsoleApp(object):
             view.initializeGrid()
             self.gridObj = om.findObjectByName("grid")
 
-        # ViewOptionsItem is not yet implemented - skip for now
         self.viewOptions = vis.ViewOptionsItem(view)
         om.addToObjectModel(self.viewOptions, parentObj=om.findObjectByName("scene"))
 
@@ -212,7 +210,7 @@ class ConsoleApp(object):
 
     @staticmethod
     def getTestingEnabled():
-        return "PYTEST_CURRENT_TEST" in os.environ
+        return "PYTEST_CURRENT_TEST" in os.environ or ConsoleApp.getTestingArgs().testing
 
 
 def main():

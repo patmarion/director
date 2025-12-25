@@ -129,24 +129,25 @@ class VTKWidget(QWidget):
             camera.SetFocalPoint(0.0, 0.0, 0.0)
             camera.SetViewUp(0.0, 0.0, 1.0)
 
-        # Grid will be added later when object model is initialized
         self._grid_obj = None
 
-        # Reset camera (will adjust to scene bounds if actors exist)
+        self._view_behaviors = None
+
         self._renderer.ResetCamera()
+
+    def initializeViewBehaviors(self):
+        """Initialize the view behaviors."""
+        if self._view_behaviors is None:
+            from director import viewbehaviors
+            self._view_behaviors = viewbehaviors.ViewBehaviors(self)
 
     def initializeGrid(self):
         """Initialize the default grid (called after object model is set up)."""
         if self._grid_obj is None:
             from director import visualization as vis
-
-            try:
-                self._grid_obj = vis.showGrid(
-                    self, name="grid", parent="scene", cellSize=0.5, numberOfCells=25, alpha=0.3, color=[0.5, 0.5, 0.5]
+            self._grid_obj = vis.showGrid(
+                    self, name="grid", parent="scene", cellSize=0.5, numberOfCells=25, alpha=0.05, color=[1.0, 1.0, 1.0]
                 )
-            except:
-                # Object model might not be ready yet, ignore
-                pass
 
     def renderWindow(self):
         """Return the VTK render window."""
@@ -316,20 +317,19 @@ class VTKWidget(QWidget):
         # Try to compute bounds excluding grid
         bounds = None
         if hasattr(self, "_grid_obj") and self._grid_obj:
-            try:
-                from director.viewbounds import computeViewBoundsNoGrid
 
-                bounds = computeViewBoundsNoGrid(self, self._grid_obj)
-                # Check if bounds are valid
-                if bounds is not None and len(bounds) == 6:
-                    # Check if bounds are initialized (not all zeros)
-                    if not all(abs(b) < 1e-9 for b in bounds):
-                        bounds_array = [float(b) for b in bounds]
-                        self._renderer.ResetCamera(bounds_array)
-                        self._renderer.ResetCameraClippingRange()
-                        return
-            except:
-                pass
+            from director.viewbounds import computeViewBoundsNoGrid
+
+            bounds = computeViewBoundsNoGrid(self, self._grid_obj)
+            # Check if bounds are valid
+            if bounds is not None and len(bounds) == 6:
+                # Check if bounds are initialized (not all zeros)
+                if not all(abs(b) < 1e-9 for b in bounds):
+                    bounds_array = [float(b) for b in bounds]
+                    self._renderer.ResetCamera(bounds_array)
+                    self._renderer.ResetCameraClippingRange()
+                    return
+
 
         # Fall back to custom bounds if available
         if self._custom_bounds:
