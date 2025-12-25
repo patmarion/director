@@ -1,5 +1,4 @@
 from director import mainwindowapp
-from director import visualization as vis
 from director.vtk_widget import VTKWidget
 
 fields = mainwindowapp.construct()

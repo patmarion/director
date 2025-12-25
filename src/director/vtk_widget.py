@@ -139,15 +139,17 @@ class VTKWidget(QWidget):
         """Initialize the view behaviors."""
         if self._view_behaviors is None:
             from director import viewbehaviors
+
             self._view_behaviors = viewbehaviors.ViewBehaviors(self)
 
     def initializeGrid(self):
         """Initialize the default grid (called after object model is set up)."""
         if self._grid_obj is None:
             from director import visualization as vis
+
             self._grid_obj = vis.showGrid(
-                    self, name="grid", parent="scene", cellSize=0.5, numberOfCells=25, alpha=0.05, color=[1.0, 1.0, 1.0]
-                )
+                self, name="grid", parent="scene", cellSize=0.5, numberOfCells=25, alpha=0.05, color=[1.0, 1.0, 1.0]
+            )
 
     def renderWindow(self):
         """Return the VTK render window."""
@@ -317,7 +319,6 @@ class VTKWidget(QWidget):
         # Try to compute bounds excluding grid
         bounds = None
         if hasattr(self, "_grid_obj") and self._grid_obj:
-
             from director.viewbounds import computeViewBoundsNoGrid
 
             bounds = computeViewBoundsNoGrid(self, self._grid_obj)
@@ -329,7 +330,6 @@ class VTKWidget(QWidget):
                     self._renderer.ResetCamera(bounds_array)
                     self._renderer.ResetCameraClippingRange()
                     return
-
 
         # Fall back to custom bounds if available
         if self._custom_bounds:

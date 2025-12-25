@@ -8,8 +8,8 @@ import qtpy.QtWidgets as QtWidgets
 from director import applogic, argutils, viewbehaviors
 from director import objectmodel as om
 from director import visualization as vis
-from director.vtk_widget import VTKWidget
 from director.timercallback import TimerCallback
+from director.vtk_widget import VTKWidget
 
 
 class ConsoleApp(object):
@@ -104,7 +104,6 @@ class ConsoleApp(object):
         return self.objectModelWidget
 
     def createView(self, useGrid=True):
-
         view = VTKWidget()
         self.view = view  # Store reference for Python console namespace
         applogic.setCurrentRenderView(view)
