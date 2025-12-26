@@ -1,6 +1,7 @@
 import director.consoleapp as consoleapp
 
 app = consoleapp.ConsoleApp()
+app.showPythonConsole()
 view = app.createView()
 view.show()
 

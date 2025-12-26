@@ -16,6 +16,9 @@ import director.objectmodel as om
 import director.vtkAll as vtk
 from director import callbacks, filterUtils
 from director.fieldcontainer import FieldContainer
+from director.frame_properties import FrameProperties
+from director.frame_sync import FrameSync
+from director.frame_trace import FrameTraceVisualizer
 from director.gridSource import makeGridPolyData
 from director.shallowCopy import shallowCopy
 from director.viewbounds import computeViewBoundsNoGrid
@@ -953,6 +956,9 @@ class FrameItem(PolyDataItem):
         self.transform = transform
         self._blockSignals = False
         self.frameWidget = None
+        self._frameSync = None
+        self._frameTrace = None
+        self._frameProperties = None
 
         self.actor.SetUserTransform(transform)
 
@@ -962,6 +968,7 @@ class FrameItem(PolyDataItem):
             attributes=om.PropertyAttributes(decimals=2, minimum=0.01, maximum=3.0, singleStep=0.05, hidden=False),
         )
         self.addProperty("Edit", False)
+        self.addProperty("Trace", False)
         self.addProperty("Tube", False)
         self.addProperty(
             "Tube Width",
@@ -1023,6 +1030,13 @@ class FrameItem(PolyDataItem):
             self._updateAxesGeometry()
         elif propertyName == "Tube Width":
             self._updateAxesGeometry()
+        elif propertyName == "Trace":
+            trace = self.getProperty(propertyName)
+            if trace and not self._frameTrace:
+                self._frameTrace = FrameTraceVisualizer(self)
+            elif not trace and self._frameTrace:
+                self._frameTrace.remove()
+                self._frameTrace = None
 
     def _updateFrameWidget(self):
         """Create or destroy frame widget based on Edit property."""
@@ -1052,6 +1066,17 @@ class FrameItem(PolyDataItem):
                 # Disable widget but don't destroy it (keep it for toggling)
                 self.frameWidget.setEnabled(False)
                 self.frameWidget.view.render()
+
+    def getFrameSync(self):
+        if not self._frameSync:
+            self._frameSync = FrameSync()
+            self._frameSync.addFrame(self)
+        return self._frameSync
+
+    def addFrameProperties(self, undo_stack=None):
+        if not self._frameProperties:
+            self._frameProperties = FrameProperties(self, undo_stack=undo_stack)
+        return self._frameProperties
 
     def hasDataSet(self, dataSet):
         return dataSet == self.transform

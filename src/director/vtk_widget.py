@@ -147,9 +147,18 @@ class VTKWidget(QWidget):
         if self._grid_obj is None:
             from director import visualization as vis
 
-            self._grid_obj = vis.showGrid(
+            grid = vis.showGrid(
                 self, name="grid", parent="scene", cellSize=0.5, numberOfCells=25, alpha=0.05, color=[1.0, 1.0, 1.0]
             )
+            grid.setProperty("Surface Mode", "Wireframe")
+            grid.setProperty("Color", [1, 1, 1])
+            grid.setProperty("Alpha", 0.05)
+            grid.setProperty("Show Text", False)
+            grid.setProperty("Text Alpha", 0.4)
+            grid_frame = vis.addChildFrame(grid)
+            grid_frame.addFrameProperties()
+            self._grid_obj = grid
+        return self._grid_obj
 
     def renderWindow(self):
         """Return the VTK render window."""

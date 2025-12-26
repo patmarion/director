@@ -370,15 +370,7 @@ class MainWindowAppFactory(object):
         return FieldContainer(objectModel=objectModel)
 
     def initGrid(self, fields):
-        grid = vis.showGrid(fields.view, parent="scene")
-        grid.setProperty("Surface Mode", "Wireframe")
-        grid.setProperty("Color", [1, 1, 1])
-        grid.setProperty("Alpha", 0.05)
-        grid.setProperty("Show Text", False)
-        grid.setProperty("Text Alpha", 0.4)
-        vis.addChildFrame(grid)
-        FrameProperties(grid.getChildFrame())
-        fields.view._grid_obj = grid
+        grid = fields.view.initializeGrid()
         applogic.resetCamera(viewDirection=[-1, -1, -0.3], view=fields.view)
         return FieldContainer(grid=grid)
 
