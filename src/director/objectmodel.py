@@ -618,8 +618,6 @@ def init(objectTree=None, propertiesPanel=None):
         return
 
     objectTree = objectTree or QtWidgets.QTreeWidget()
-    # For now, use a dummy properties panel
-    # propertiesPanel = propertiesPanel or PythonQt.dd.ddPropertiesPanel()
 
     _t.init(objectTree, propertiesPanel)
 

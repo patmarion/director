@@ -386,7 +386,8 @@ class MainWindowAppFactory(object):
         return FieldContainer(viewOptions=viewOptions)
 
     def initCommandLineArgs(self, fields):
-        # Get command line args from fields if provided, otherwise parse them
+        # Get command line args from fields if provided.
+        # If not provided then add the standard arguments and parse them in a non-strict mode.
         if hasattr(fields, "command_line_args"):
             commandLineArgs = fields.command_line_args
         else:
@@ -554,10 +555,6 @@ class MainWindowAppFactory(object):
                 fields.view.setTerrainInteractor()
 
         terrainToggle = applogic.ActionToggleHelper(terrainModeAction, getFreeCameraMode, setFreeCameraMode)
-
-        # viewBackgroundLightHandler = viewcolors.ViewBackgroundLightHandler(fields.viewOptions, fields.gridObj,
-        #                         lightAction)
-        # TODO: Implement ViewBackgroundLightHandler when viewcolors is ported
 
         return FieldContainer(
             # viewBackgroundLightHandler=viewBackgroundLightHandler,

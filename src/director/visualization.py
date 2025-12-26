@@ -892,13 +892,8 @@ def showImage(image, name, anchor="Top Left", parent=None, view=None):
         # Assume it's already an index
         item.setProperty("Anchor", anchor)
 
-    # Only add to object model if it's initialized
     if om.isInitialized():
-        parent_obj = getParentObj(parent)
-        if parent_obj is not None:
-            om.addToObjectModel(item, parent_obj)
-        else:
-            om.addToObjectModel(item)
+        om.addToObjectModel(item, getParentObj(parent))
 
     return item
 
@@ -1205,11 +1200,12 @@ def showFrame(frame, name, view=None, parent="data", scale=0.35, visible=True, a
     assert view
 
     item = FrameItem(name, frame, view)
-    om.addToObjectModel(item, getParentObj(parent))
     item.setProperty("Visible", visible)
     item.setProperty("Alpha", alpha)
     item.setProperty("Scale", scale)
     item.setProperty("Line Width", line_width)
+    if om.isInitialized():
+        om.addToObjectModel(item, getParentObj(parent))
     return item
 
 
@@ -1498,7 +1494,8 @@ def showGrid(
     gridObj.viewBoundsFunction = computeViewBoundsNoGrid
     gridObj.emptyBoundsSize = 1.0
 
-    om.addToObjectModel(gridObj, parentObj=getParentObj(parent))
+    if om.isInitialized():
+        om.addToObjectModel(gridObj, parentObj=getParentObj(parent))
 
     # Add child frame if requested
     if gridTransform:
@@ -1709,7 +1706,8 @@ def showText(text, name, fontSize=18, position=(10, 10), parent=None, view=None)
     item.setProperty("Font Size", fontSize)
     item.setProperty("Position", list(position))
 
-    om.addToObjectModel(item, getParentObj(parent))
+    if om.isInitialized():
+        om.addToObjectModel(item, getParentObj(parent))
     return item
 
 
