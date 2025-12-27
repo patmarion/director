@@ -18,7 +18,9 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from director import _pyqt_patch  # noqa: F401
+from director import qtutils
+
+qtutils.installPyQtPatch()
 
 
 class PropertyEditor(QWidget):

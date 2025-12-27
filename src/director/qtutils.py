@@ -83,6 +83,15 @@ def pixmapToNumpy(pixmap):
     return rgb_arr.astype(np.uint8)
 
 
+def installPyQtPatch():
+    """Install PyQt patch to make QTreeWidgetItem hashable so that
+    it can be used as a dictionary key.
+    """
+    cls = QtWidgets.QTreeWidgetItem
+    if not hasattr(cls, "__hash__"):
+        cls.__hash__ = lambda self: id(self)
+
+
 class BlockSignals(object):
     """Context manager to block signals on QObjects.
 

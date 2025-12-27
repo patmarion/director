@@ -12,11 +12,13 @@ from qtpy import QtCore, QtWidgets
 from qtpy.QtCore import QObject
 
 from director import (
-    _pyqt_patch,  # noqa: F401
     callbacks,
+    qtutils,
 )
 from director.icons import Icons
 from director.propertyset import PropertyAttributes, PropertySet
+
+qtutils.installPyQtPatch()
 
 
 class ObjectModelItem(object):
