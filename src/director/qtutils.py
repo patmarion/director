@@ -88,7 +88,7 @@ def installPyQtPatch():
     it can be used as a dictionary key.
     """
     cls = QtWidgets.QTreeWidgetItem
-    if not hasattr(cls, "__hash__"):
+    if not hasattr(cls, "__hash__") or cls.__hash__ is None:
         cls.__hash__ = lambda self: id(self)
 
 

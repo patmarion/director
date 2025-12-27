@@ -7,42 +7,42 @@ name = "director"
 version = "2.0.0"
 description = "Director - A robotics interface and visualization framework using VTK and Qt"
 readme = "README.md"
+license = "BSD-3-Clause"
 requires-python = ">=3.10.19"
 dependencies = [
     "vtk>=9.0",
     "qtpy",
-    "PySide6",
-    "pyqtgraph",
-    "qtconsole",
-    "ipykernel",
-    "jupyter-client",
     "numpy",
     "scipy",
 ]
 
 [project.optional-dependencies]
-opencv = ["opencv-python"]
+
+# Extra dependencies
+extras = ["director[mujoco,opencv,plot,qtconsole]"]
 mujoco = ["mujoco"]
+opencv = ["opencv-python"]
+plot = [
+    "matplotlib",
+    "pyqtgraph"
+]
+qtconsole = [
+    "qtconsole",
+]
+
+# Qt bindings
+pyside = ["PySide6"]
+pyqt = ["PyQt6"]
+
+# Dev, docs, test
+dev = [ "director[extras,pyside,docs,test]"]
+docs = [
+    "furo",
+    "sphinx",
+]
 test = [
     "pytest",
     "ruff",
-]
-docs = [
-    "sphinx>=7.0",
-    "sphinx-rtd-theme>=2.0.0",
-    "furo",
-]
-all = [
-    "opencv-python",
-    "mujoco",
-    "pytest",
-    "ruff",
-    "sphinx>=7.0",
-    "sphinx-rtd-theme>=2.0.0",
-    "furo",
-]
-dev = [
-    "director[all]",
 ]
 
 [tool.setuptools.packages.find]

@@ -9,16 +9,8 @@ try:
     QTCONSOLE_AVAILABLE = True
 except ImportError:
     QTCONSOLE_AVAILABLE = False
-    RichJupyterWidget = None
-    QtInProcessKernelManager = None
 
-try:
-    from qtpy.QtWidgets import QApplication
-
-    QT_AVAILABLE = True
-except ImportError:
-    QT_AVAILABLE = False
-    QApplication = None
+from qtpy.QtWidgets import QApplication
 
 
 class PythonConsoleWidget:
@@ -93,9 +85,4 @@ class PythonConsoleWidget:
 
     def connect_quit_handler(self):
         """Connect to QApplication's aboutToQuit signal to automatically shutdown on quit."""
-        if not QT_AVAILABLE:
-            return
-
-        app = QApplication.instance()
-        if app:
-            app.aboutToQuit.connect(self.shutdown)
+        QApplication.instance().aboutToQuit.connect(self.shutdown)

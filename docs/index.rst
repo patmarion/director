@@ -4,7 +4,9 @@ Overview
 Introduction
 ------------
 
-Director is a robotics interface and visualization framework built on top of VTK and Qt. It provides a python-centric environment for developing interactive 3D applications, with a focus on robotics visualization and control.
+Director is a robotics interface and visualization framework built on top of VTK and Qt.
+It provides a python-centric environment for developing interactive 3D applications, with
+a focus on robotics visualization and control.
 
 Key Features
 ------------
@@ -24,12 +26,12 @@ Core Dependencies
 Examples
 --------
 
-Console App
+Minimal App
 ~~~~~~~~~~~
 
-A minimal example of running a standalone console application with a 3D view:
+A minimal example of running an application with a 3D view:
 
-.. literalinclude:: ../src/director/examples/simple.py
+.. literalinclude:: ../src/director/examples/main_window.py
    :language: python
 
 Visualizing PolyData

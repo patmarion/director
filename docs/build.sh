@@ -1,4 +1,4 @@
 #!/bin/bash
 
 cd $(dirname $0)
-uv run python manage_docs.py build
+uv run --all-extras python manage_docs.py build

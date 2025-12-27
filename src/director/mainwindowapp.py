@@ -502,12 +502,13 @@ class MainWindowAppFactory(object):
 
     def initPythonConsole(self, fields):
         """Initialize the Python console widget (dock is created by MainWindow)."""
-        from director.python_console import PythonConsoleWidget
+        from director.python_console import QTCONSOLE_AVAILABLE, PythonConsoleWidget
 
         console_widget_manager = None
 
         # Skip python console construction in test mode
-        if not consoleapp.ConsoleApp.getTestingEnabled():
+        is_test_mode = consoleapp.ConsoleApp.getTestingEnabled()
+        if QTCONSOLE_AVAILABLE and not is_test_mode:
             console_widget_manager = PythonConsoleWidget()
 
         def register_application_fields(fields):
