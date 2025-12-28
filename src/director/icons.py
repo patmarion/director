@@ -9,6 +9,7 @@ class Icons(object):
     Axes = "axes_icon.png"
     Eye = "eye_icon.png"
     EyeOff = "eye_icon_gray.png"
+    LightBulb = "light_bulb.png"
     Python = "python_logo.png"
     ResetCamera = "reset_camera.png"
     CameraRotate = "camera_mode.png"

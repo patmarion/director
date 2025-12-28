@@ -304,13 +304,14 @@ class MainWindowAppFactory(object):
             "ObjectModel": [],
             "CommandLineArgs": [],
             "ViewOptions": ["View", "ObjectModel"],
-            "MainToolBar": ["View", "Grid", "MainWindow"],
+            "MainToolBar": ["View", "Grid", "MainWindow", "ViewOptions"],
             "ViewBehaviors": ["View"],
             "Grid": ["View", "ObjectModel"],
             "PythonConsole": ["Globals", "GlobalModules"],
             "OpenMeshDataHandler": ["MainWindow", "CommandLineArgs"],
             "OutputConsole": ["MainWindow"],
             "MainWindow": ["View", "ObjectModel", "PythonConsole"],
+            "MeasurementPanel": ["MainWindow"],
             "SignalHandlers": ["MainWindow"],
             "AdjustedClippingRange": ["View"],
             "StartupRender": ["View", "MainWindow"],
@@ -526,9 +527,6 @@ class MainWindowAppFactory(object):
         )
 
     def initMainToolBar(self, fields):
-        # viewcolors.ViewBackgroundLightHandler not yet ported - commented out for now
-        # from director import viewcolors
-
         app = fields.app
         toolBar = app.addToolBar("Main Toolbar")
 
@@ -538,8 +536,10 @@ class MainWindowAppFactory(object):
 
         terrainModeAction = app.addToolBarAction(toolBar, "Camera Free Rotate", Icons.CameraRotate)
 
-        # lightAction = app.addToolBarAction(toolBar, 'Background Light', None)
-        # viewBackgroundLightHandler not yet implemented
+        from director.viewcolors import ViewBackgroundLightHandler
+
+        lightAction = app.addToolBarAction(toolBar, "Background Light", Icons.LightBulb)
+        viewBackgroundLightHandler = ViewBackgroundLightHandler(fields.viewOptions, fields.grid, lightAction)
 
         app.addToolBarAction(
             toolBar, "Reset Camera", Icons.ResetCamera, callback=lambda: applogic.resetCamera(view=fields.view)
@@ -558,10 +558,20 @@ class MainWindowAppFactory(object):
         terrainToggle = applogic.ActionToggleHelper(terrainModeAction, getFreeCameraMode, setFreeCameraMode)
 
         return FieldContainer(
-            # viewBackgroundLightHandler=viewBackgroundLightHandler,
+            viewBackgroundLightHandler=viewBackgroundLightHandler,
             terrainToggle=terrainToggle,
             mainToolbar=toolBar,
         )
+
+    def initMeasurementPanel(self, fields):
+        from director import measurementpanel
+
+        measurementPanel = measurementpanel.MeasurementPanel(fields.app, fields.view)
+        measurementDock = fields.app.addWidgetToDock(
+            measurementPanel.widget, QtCore.Qt.RightDockWidgetArea, visible=False
+        )
+
+        return FieldContainer(measurementPanel=measurementPanel, measurementDock=measurementDock)
 
     def initUndoRedo(self, fields):
         undoStack = QtGui.QUndoStack()
