@@ -41,7 +41,10 @@ steps:
         libxcb-cursor0 \
         xvfb 
       uv sync --all-extras
-      xvfb-run uv run pytest
+      # use xdist to launch a test subprocess for each test file
+      # this can be faster and isolates the tests from each other
+      uv pip install pytest-xdist
+      xvfb-run uv run pytest --dist=loadfile
     plugins:
       - docker#v5.11.0:
           image: "ghcr.io/astral-sh/uv:python3.10-bookworm-slim"
