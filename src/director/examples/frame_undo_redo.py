@@ -7,35 +7,28 @@ from qtpy.QtWidgets import QPushButton
 from director import mainwindowapp
 from director import visualization as vis
 from director import vtkAll as vtk
-from director.frame_properties import FrameProperties, FrameSync
 
 
 def main():
     fields = mainwindowapp.construct()
 
+    undo_stack = fields.undoStack
+
     t = vtk.vtkTransform()
-    t.RotateZ(45)
-    t.RotateX(45)
-    obj = vis.showFrame(t, "frame widget")
+    obj = vis.showFrame(t, "parent frame", parent="Frame Demo")
     obj.properties.edit = True
-    undo_stack = getattr(fields, "undoStack", None)
-    obj.frameProperties = FrameProperties(obj, undo_stack=undo_stack)
+    obj.addFrameProperties(undo_stack=undo_stack)
 
-    sync = FrameSync()
-    sync.addFrame(obj)
+    sync = obj.getFrameSync()
 
-    def add_frame_sync():
-        t2 = vtk.vtkTransform()
-        t2.Translate(0.3, 0.3, 0.0)
-        t2.RotateY(20)
-        child = vis.showFrame(t2, "synced frame", parent="data")
-        child.properties.edit = True
-        undo_stack = getattr(fields, "undoStack", None)
-        child.frameProperties = FrameProperties(child, undo_stack=undo_stack)
-        sync.addFrame(child)
-        return child
-
-    add_frame_sync()
+    t2 = vtk.vtkTransform()
+    t2.Translate(0.5, -1.0, 0.0)
+    t2.RotateY(20)
+    t2.RotateZ(45)
+    child = vis.showFrame(t2, "child frame", parent="Frame Demo")
+    child.properties.edit = True
+    child.addFrameProperties(undo_stack=undo_stack)
+    sync.addFrame(child, ignoreIncoming=True)
 
     def reset_frame():
         obj.copyFrame(vtk.vtkTransform())
@@ -44,9 +37,7 @@ def main():
     fields.mainToolbar.addWidget(button)
     button.clicked.connect(reset_frame)
 
-    # Make undo history visible to demonstrate frame edits in the stack
-    if hasattr(fields, "undoDock"):
-        fields.undoDock.show()
+    fields.undoDock.show()
 
     # Run the application
     return fields.app.start()

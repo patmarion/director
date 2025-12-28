@@ -139,7 +139,7 @@ class FrameProperties:
     def _record_transform_change(self, new_transform, description):
         new_copy = transformUtils.copyFrame(new_transform)
 
-        if self._undo_stack and not self._is_suspended():
+        if self._undo_stack is not None and not self._is_suspended():
             command = FramePropertyCommand(
                 self.frame,
                 self,

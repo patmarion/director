@@ -2,7 +2,7 @@ from qtpy.QtWidgets import QApplication
 
 from director.vtk_widget import VTKWidget
 
-app = QApplication()
+app = QApplication([])
 
 widget = VTKWidget()
 widget.initializeGrid()

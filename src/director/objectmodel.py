@@ -25,17 +25,14 @@ class ObjectModelItem(object):
     REMOVED_FROM_OBJECT_MODEL = "REMOVED_FROM_OBJECT_MODEL"
 
     def __getstate__(self):
-        # print 'getstate called on:', self
         d = dict(properties=self.properties)
         return d
 
     def __setstate__(self, state):
-        # print 'setstate called on:', self
         self._tree = None
         self.properties = state["properties"]
 
     def __init__(self, name, properties=None, icon=None):
-        # print 'init called on:', self
         self._tree = None
         self.actionDelegates = []
         self.callbacks = callbacks.CallbackRegistry([self.REMOVED_FROM_OBJECT_MODEL])
@@ -217,11 +214,11 @@ class ObjectModelTree(QObject):
             self._getObjectForItem(self._treeWidget.topLevelItem(i)) for i in range(self._treeWidget.topLevelItemCount)
         ]
 
-    def getActiveObject(self):
+    def getSelectedObject(self):
         item = self._getSelectedItem()
         return self._itemToObject[item] if item is not None else None
 
-    def setActiveObject(self, obj):
+    def setSelectedObject(self, obj):
         item = self._getItemForObject(obj)
         if item:
             tree = self.getTreeWidget()
@@ -229,6 +226,12 @@ class ObjectModelTree(QObject):
             tree.scrollToItem(item)
         else:
             self.clearSelection()
+
+    def getActiveObject(self):
+        return self.getSelectedObject()
+
+    def setActiveObject(self, obj):
+        self.setSelectedObject(obj)
 
     def clearSelection(self):
         self.getTreeWidget().setCurrentItem(None)
@@ -499,7 +502,15 @@ class ObjectModelTree(QObject):
     def disconnectObjectClicked(self, callbackId):
         self.callbacks.disconnect(callbackId)
 
-    def init(self, treeWidget, propertiesPanel):
+    def setPropertiesPanel(self, propertiesPanel):
+        self._propertiesPanel = propertiesPanel
+        propertiesPanel.clear()
+        obj = self.getActiveObject()
+        if obj:
+            propertiesPanel.connectProperties(obj.properties)
+
+    def init(self, treeWidget=None, propertiesPanel=None):
+        treeWidget = treeWidget or QtWidgets.QTreeWidget()
         self._treeWidget = treeWidget
         self._propertiesPanel = propertiesPanel
         # Note: propertiesPanel may be None initially and set later
@@ -546,8 +557,12 @@ def setActiveObject(obj):
     _t.setActiveObject(obj)
 
 
-getSelectedObject = getActiveObject
-setSelectedObject = setActiveObject
+def getSelectedObject():
+    return _t.getSelectedObject()
+
+
+def setSelectedObject(obj):
+    _t.setSelectedObject(obj)
 
 
 def clearSelection():
@@ -618,8 +633,6 @@ def init(objectTree=None, propertiesPanel=None):
             _t._propertiesPanel = propertiesPanel
             propertiesPanel.clear()
         return
-
-    objectTree = objectTree or QtWidgets.QTreeWidget()
 
     _t.init(objectTree, propertiesPanel)
 

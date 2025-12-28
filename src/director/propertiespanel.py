@@ -48,8 +48,11 @@ class PropertyEditor(QWidget):
     def updateFromPropertySet(self):
         """Update editor widget from PropertySet value."""
         self._updating = True
+        value = self.getValue()
         try:
-            self._updateWidget(self.getValue())
+            self._updateWidget(value)
+        except TypeError:
+            print(f"Error updating widget for {self.propertyName}: {value}")
         finally:
             self._updating = False
 
@@ -698,10 +701,14 @@ class ArrayElementEditor(PropertyEditor):
                 self.editor.setChecked(bool(value))
             finally:
                 self.editor.blockSignals(False)
-        elif isinstance(self.editor, (QSpinBox, QDoubleSpinBox)):
-            self.editor.setValue(float(value) if isinstance(value, (int, float)) else 0)
+        elif isinstance(self.editor, QSpinBox):
+            self.editor.setValue(int(value))
+        elif isinstance(self.editor, QDoubleSpinBox):
+            self.editor.setValue(float(value))
         elif isinstance(self.editor, QLineEdit):
             self.editor.setText(str(value))
+        else:
+            raise TypeError(f"Unsupported editor type: {type(self.editor)}")
 
     def _onChanged(self):
         """Handle editor value change."""

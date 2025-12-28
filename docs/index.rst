@@ -23,6 +23,36 @@ Core Dependencies
 *   **Qt** (via QtPy): The GUI framework. Supports PySide6, PySide2, PyQt6, and PyQt5.
 *   **Python/Numpy**: The core language and numerical processing library.
 
+Installation
+------------
+
+The quickest way to install is with pip from the github main branch:
+
+pip install director[extras,pyside] https://github.com/RobotLocomotion/director.git
+
+Then run the basic builtin application with:
+
+python -m director.main
+
+Note that the above command installs director with additional dependencies requested.
+If you install vanilla director you will get the full library but with a mininmal set of
+dependencies.  You must also install at least one Qt bindings library: PySide or PyQt.
+To get all additional dependencies plus a bindings library you can install [extras,pyside]
+or [extras,pyqt].  The extras option will install opencv, mujoco, qtconsole, and
+pyqtgraph, for example.
+
+
+Development with uv
+~~~~~~~~~~~~~~~~~~~
+
+You can git clone the director repo and then use `uv` to work locally.
+
+git clone https://github.com/RobotLocomotion/director.git
+cd director
+uv sync --all-extras
+uv run python -m director.main
+
+
 Examples
 --------
 

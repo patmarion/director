@@ -467,6 +467,20 @@ class PlotWidget(QtCore.QObject):
         finally:
             self.plot_widget.setUpdatesEnabled(True)
 
+    def _get_data_time_range(self) -> tuple[float, float]:
+        """Compute the min and max time offset from all plotted data."""
+        all_min = float("inf")
+        all_max = float("-inf")
+        for entry in self._plot_entries.values():
+            for series in entry.line_series:
+                x_data, _ = series.getData()
+                if x_data is not None and len(x_data) > 0:
+                    all_min = min(all_min, x_data[0])
+                    all_max = max(all_max, x_data[-1])
+        if all_min == float("inf"):
+            return 0.0, 0.0
+        return all_min, all_max
+
     def _update_vlines(self, time_offset_s):
         if not self._plots:
             return
@@ -474,9 +488,12 @@ class PlotWidget(QtCore.QObject):
         # This logic examines the axis x range and the total x extent of the data.
         # We implement some fancy auto scrolling logic to keep the playhead in a reasonable
         # location and auto scroll the plots when necessary.
-        min_time, max_time = self.time_slider.get_time_range()
-        min_time -= self.start_time_s
-        max_time -= self.start_time_s
+        if self.time_slider:
+            min_time, max_time = self.time_slider.get_time_range()
+            min_time -= self.start_time_s
+            max_time -= self.start_time_s
+        else:
+            min_time, max_time = self._get_data_time_range()
         current_vline_pos = self._plot_entries[self._x_link_source].vline.pos().x()
         direction = np.sign(time_offset_s - current_vline_pos)
         view_box = self._x_link_source.getViewBox()
