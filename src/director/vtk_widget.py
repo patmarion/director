@@ -64,9 +64,8 @@ class VTKWidget(QWidget):
         # closing this widget in pytest.  It's a unlimited recursion bug that
         # is trigger when calling __getattr__ during Finalize.
         def patched_finalize(self):
-            pass
-            # if "_RenderWindow" in self.__dict__:
-            #     self._RenderWindow.Finalize()
+            if "_RenderWindow" in self.__dict__:
+                self._RenderWindow.Finalize()
 
         QVTKRenderWindowInteractor.Finalize = patched_finalize
 
@@ -106,11 +105,10 @@ class VTKWidget(QWidget):
         # Render pending flag
         self._render_pending = False
 
-        # Setup render timer (60 FPS)
+        # Setup render timer
         self._render_timer = QTimer(self)
         self._render_timer.setSingleShot(True)
         self._render_timer.timeout.connect(self._on_render_timer)
-        # self._render_timer.start(int(1000 / 60))
 
         # Connect render events to update FPS counter
         self._render_window.AddObserver(vtk.vtkCommand.EndEvent, self._on_end_render)
@@ -130,9 +128,7 @@ class VTKWidget(QWidget):
             camera.SetViewUp(0.0, 0.0, 1.0)
 
         self._grid_obj = None
-
         self._view_behaviors = None
-
         self._renderer.ResetCamera()
 
     def initializeViewBehaviors(self):
@@ -440,3 +436,24 @@ class VTKWidget(QWidget):
     def _on_end_render(self, obj, event):
         """Handle end render event to update FPS counter."""
         self._fps_counter.update()
+
+    def closeEvent(self, event):
+        """Handle widget close event with proper cleanup."""
+        # Stop render timer first
+        print("VTKWidget.closeEvent", id(self))
+        if hasattr(self, "_render_timer"):
+            self._render_timer.stop()
+            try:
+                self._render_timer.timeout.disconnect(self._on_render_timer)
+            except (TypeError, RuntimeError):
+                pass
+
+        # Remove observer for render events
+        if hasattr(self, "_render_window") and self._render_window:
+            try:
+                self._render_window.RemoveObserver(self._on_end_render)
+            except:
+                pass
+
+        # Call parent closeEvent (VTK widget will clean itself up now that it's patched)
+        super().closeEvent(event)
