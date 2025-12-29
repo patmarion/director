@@ -2,6 +2,30 @@
 
 import numpy as np
 from qtpy import QtCore, QtGui, QtWidgets
+from qtpy.QtCore import QObject
+
+
+class EventFilterDelegate(QObject):
+    """A QObject that delegates eventFilter calls to a callback function.
+
+    This is useful when you need event filtering but don't want to inherit from QObject.
+
+    Example:
+        def handle_event(obj, event):
+            if event.type() == QtCore.QEvent.KeyPress:
+                return True
+            return False
+
+        self._event_filter = EventFilterDelegate(handle_event)
+        widget.installEventFilter(self._event_filter)
+    """
+
+    def __init__(self, callback):
+        super().__init__()
+        self._callback = callback
+
+    def eventFilter(self, obj, event):
+        return self._callback(obj, event)
 
 
 def addWidgetsToDict(widgets, d):
@@ -87,9 +111,9 @@ def installPyQtPatch():
     """Install PyQt patch to make QTreeWidgetItem hashable so that
     it can be used as a dictionary key.
     """
-    cls = QtWidgets.QTreeWidgetItem
-    if not hasattr(cls, "__hash__") or cls.__hash__ is None:
-        cls.__hash__ = lambda self: id(self)
+    for cls in [QtWidgets.QTreeWidgetItem, QtGui.QStandardItem]:
+        if not hasattr(cls, "__hash__") or cls.__hash__ is None:
+            cls.__hash__ = lambda self: id(self)
 
 
 class BlockSignals(object):

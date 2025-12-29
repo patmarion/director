@@ -86,8 +86,8 @@ class TimerCallback(object):
         """
         Internal timer callback method. Calls tick() and measures elapsed time.
         """
-        startTime = time.time()
-        self.elapsed = startTime - self.lastTickTime
+        self.tickTime = time.time()
+        self.elapsed = self.tickTime - self.lastTickTime
 
         try:
             result = self.tick()
@@ -96,8 +96,8 @@ class TimerCallback(object):
             raise
 
         if result is not False:
-            self.lastTickTime = startTime
+            self.lastTickTime = self.tickTime
             if self.useScheduledTimer:
-                self._schedule(time.time() - startTime)
+                self._schedule(time.time() - self.tickTime)
         else:
             self.stop()

@@ -8,10 +8,11 @@ import qtpy.QtWidgets as QtWidgets
 
 from director import callbacks, qtutils
 from director.flags import Flags
+from director.qtutils import EventFilterDelegate
 from director.timercallback import TimerCallback
 
 
-class ValueSlider(object):
+class ValueSlider:
     """Slider widget with double spin box and play/pause button."""
 
     events = Flags("VALUE_CHANGED")
@@ -60,8 +61,12 @@ class ValueSlider(object):
         self.callbacks = callbacks.CallbackRegistry(self.events._fields)
 
         # Event filter for direct slider clicking
-        self.eventFilter = SliderEventFilter(self)
-        self.slider.installEventFilter(self.eventFilter)
+        self._sliderEventFilter = EventFilterDelegate(self._handleSliderEvent)
+        self.slider.installEventFilter(self._sliderEventFilter)
+
+        # For optional keyboard shortcuts and mouse scrubber
+        self.shortcuts = []
+        self.mouseScrubber = None
 
     def _tick(self):
         """Timer callback for animation."""
@@ -115,6 +120,40 @@ class ValueSlider(object):
                 self.setValue(self.minValue)
             self.play()
 
+    def stepBackward(self):
+        """Step slider backward by single step."""
+        self.slider.setValue(self.slider.value() - self.slider.singleStep())
+
+    def stepForward(self):
+        """Step slider forward by single step."""
+        self.slider.setValue(self.slider.value() + self.slider.singleStep())
+
+    def jumpBackward(self):
+        """Jump slider backward by page step."""
+        self.slider.setValue(self.slider.value() - self.slider.pageStep())
+
+    def jumpForward(self):
+        """Jump slider forward by page step."""
+        self.slider.setValue(self.slider.value() + self.slider.pageStep())
+
+    def togglePlayForward(self):
+        """Toggle forward playback."""
+        isPlayingForward = self.animationTimer.isActive() and self.animationRateTarget > 0
+        self.setAnimationRate(np.abs(self.animationRateTarget))
+        if isPlayingForward:
+            self.pause()
+        else:
+            self.play()
+
+    def togglePlayReverse(self):
+        """Toggle reverse playback."""
+        isPlayingReverse = self.animationTimer.isActive() and self.animationRateTarget < 0
+        self.setAnimationRate(-1 * np.abs(self.animationRateTarget))
+        if isPlayingReverse:
+            self.pause()
+        else:
+            self.play()
+
     def setResolution(self, resolution):
         """Set slider resolution.
 
@@ -126,14 +165,17 @@ class ValueSlider(object):
             self.slider.setMaximum(resolution)
         self._syncSlider()
 
-    def setValueRange(self, minValue, maxValue):
+    def setValueRange(self, minValue, maxValue, newValue=None, notifyChange=True):
         """Set the value range.
 
         Args:
             minValue: Minimum value
             maxValue: Maximum value
+            newValue: Optional new value to set (defaults to current value clipped to range)
+            notifyChange: Whether to notify listeners if value changed (default True)
         """
-        newValue = np.clip(self._value, minValue, maxValue)
+        newValue = self._value if newValue is None else newValue
+        newValue = np.clip(newValue, minValue, maxValue)
         changed = newValue != self._value
         self.minValue = minValue
         self.maxValue = maxValue
@@ -143,7 +185,7 @@ class ValueSlider(object):
             self.spinbox.setMaximum(maxValue)
         self._syncSpinBox()
         self._syncSlider()
-        if changed:
+        if changed and notifyChange:
             self._notifyValueChanged()
 
     def getValue(self):
@@ -259,24 +301,49 @@ class ValueSlider(object):
         self.playButton.setIcon(icon)
         self.playButton.setToolTip(tooltip)
 
-
-class SliderEventFilter(QtCore.QObject):
-    """Event filter for direct slider clicking."""
-
-    def __init__(self, valueSlider):
-        """Initialize event filter.
+    def initMouseScrubber(self, widget):
+        """Initialize mouse scrubber for alt+drag scrubbing.
 
         Args:
-            valueSlider: ValueSlider instance
+            widget: Widget to install the mouse scrubber on
         """
-        super().__init__()
-        self.valueSlider = valueSlider
+        self.mouseScrubber = MouseScrubber(widget, self.slider)
 
-    def eventFilter(self, obj, event):
-        """Filter mouse events for direct slider clicking.
+    def initKeyboardShortcuts(self, widget):
+        """Initialize keyboard shortcuts for playback control.
 
         Args:
-            obj: Object receiving the event
+            widget: Widget to install shortcuts on
+
+        Shortcuts:
+            [: Step backward
+            ]: Step forward
+            shift+[: Jump backward
+            shift+]: Jump forward
+            space: Toggle forward playback
+            shift+space: Toggle reverse playback
+        """
+        import qtpy.QtGui as QtGui
+
+        commands = {
+            "[": self.stepBackward,
+            "]": self.stepForward,
+            "shift+[": self.jumpBackward,
+            "shift+]": self.jumpForward,
+            " ": self.togglePlayForward,
+            "shift+ ": self.togglePlayReverse,
+        }
+        self.shortcuts = []
+        for keySequence, func in commands.items():
+            shortcut = QtGui.QShortcut(QtGui.QKeySequence(keySequence), widget)
+            shortcut.activated.connect(func)
+            self.shortcuts.append(shortcut)
+
+    def _handleSliderEvent(self, obj, event):
+        """Handle mouse events for direct slider clicking.
+
+        Args:
+            obj: Slider receiving the event
             event: QEvent
 
         Returns:
@@ -286,18 +353,62 @@ class SliderEventFilter(QtCore.QObject):
             return False
         if event.type() == QtCore.QEvent.Type.MouseButtonPress:
             if event.button() == QtCore.Qt.MouseButton.LeftButton:
-                # Get mouse position
-                pos = event.pos()
-                x = pos.x()
+                x = event.pos().x()
                 val = QtWidgets.QStyle.sliderValueFromPosition(obj.minimum(), obj.maximum(), x, obj.width())
                 obj.setValue(val)
                 return True
         elif event.type() == QtCore.QEvent.Type.MouseMove:
             if event.buttons() & QtCore.Qt.MouseButton.LeftButton:
-                # Get mouse position
-                pos = event.pos()
-                x = pos.x()
+                x = event.pos().x()
                 val = QtWidgets.QStyle.sliderValueFromPosition(obj.minimum(), obj.maximum(), x, obj.width())
                 obj.setValue(val)
                 return True
+        return False
+
+
+class MouseScrubber:
+    """Event filter for mouse scrubbing with Alt+drag or '.' key held."""
+
+    def __init__(self, widget, slider):
+        """Initialize MouseScrubber.
+
+        Args:
+            widget: Widget to install the event filter on
+            slider: QSlider to control
+        """
+        self.slider = slider
+        self.keyState = {}
+        self.movePos = None
+        self.factor = 3.0
+        self.enabled = True
+        self._eventFilter = EventFilterDelegate(self._handleEvent)
+        widget.installEventFilter(self._eventFilter)
+
+    def _handleEvent(self, obj, event):
+        """Handle events for mouse scrubbing.
+
+        Args:
+            obj: Object receiving the event
+            event: QEvent
+
+        Returns:
+            False (never consumes events, just observes)
+        """
+        if not self.enabled:
+            return False
+        if event.type() == QtCore.QEvent.Type.HoverMove:
+            if self.movePos is None:
+                self.movePos = event.pos()
+            if self.keyState.get(".") or event.modifiers() == QtCore.Qt.KeyboardModifier.AltModifier:
+                delta = event.pos() - self.movePos
+                delta = delta.x()
+                self.slider.setValue(self.slider.value() + int(delta * self.slider.singleStep() * self.factor))
+            self.movePos = event.pos()
+            return False
+        if event.type() == QtCore.QEvent.Type.KeyPress:
+            if not event.isAutoRepeat():
+                self.keyState[event.text()] = True
+        elif event.type() == QtCore.QEvent.Type.KeyRelease:
+            if not event.isAutoRepeat():
+                self.keyState[event.text()] = False
         return False

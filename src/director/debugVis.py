@@ -97,13 +97,14 @@ class DebugData(object):
             polyData = applyTubeFilter(polyData, tubeRadius)
         self.addPolyData(polyData, color=None)
 
-    def addCircle(self, origin, normal, radius, color=[1, 1, 1]):
-        self.addCone(origin, normal, radius, height=0, color=color, fill=False)
+    def addCircle(self, origin, normal, radius, color=[1, 1, 1], fill=False):
+        self.addCone(origin, normal, radius, height=0, color=color, fill=fill)
 
     def addCone(self, origin, normal, radius, height, color=[1, 1, 1], fill=True):
+        normal = np.array(normal) / np.linalg.norm(normal)
         cone = vtk.vtkConeSource()
         cone.SetRadius(radius)
-        cone.SetCenter(origin)
+        cone.SetCenter(np.array(origin) + normal * height * 0.5)
         cone.SetDirection(normal)
         cone.SetHeight(height)
         cone.SetResolution(32)
@@ -132,9 +133,9 @@ class DebugData(object):
         normal = np.array(end) - np.array(start)
         normal = normal / np.linalg.norm(normal)
         if startHead:
-            start = np.array(start) + 0.5 * headLength * normal
+            start = np.array(start) + headLength * normal
         if endHead:
-            end = np.array(end) - 0.5 * headLength * normal
+            end = np.array(end) - headLength * normal
         self.addLine(start, end, radius=tubeRadius, color=color)
         if startHead:
             self.addCone(origin=start, normal=-normal, radius=headRadius, height=headLength, color=color, fill=True)

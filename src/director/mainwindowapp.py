@@ -358,12 +358,12 @@ class MainWindowAppFactory(object):
     def initObjectModel(self, fields):
         from director.propertiespanel import PropertiesPanel
 
-        # Create tree widget and properties panel
-        treeWidget = QtWidgets.QTreeWidget()
+        # Create tree view and properties panel
+        treeView = QtWidgets.QTreeView()
         propertiesPanel = PropertiesPanel()
 
         # Initialize object model with both widgets
-        om.init(treeWidget, propertiesPanel)
+        om.init(treeView, propertiesPanel)
 
         objectModel = om.getDefaultObjectModel()
         objectModel.getTreeWidget().setWindowTitle("Scene Browser")

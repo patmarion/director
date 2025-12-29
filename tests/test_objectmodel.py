@@ -1,20 +1,9 @@
 """Tests for objectmodel module."""
 
-from qtpy.QtWidgets import QTreeWidget
+from qtpy.QtWidgets import QTreeView
 
 from director.objectmodel import ObjectModelItem, ObjectModelTree
-
-
-class DummyPropertiesPanel:
-    """Dummy properties panel for testing."""
-
-    def clear(self):
-        """Clear the panel."""
-        pass
-
-    def setBrowserModeToWidget(self):
-        """Set browser mode to widget."""
-        pass
+from director.propertiespanel import PropertiesPanel
 
 
 def test_object_model_tree_construction(qapp):
@@ -24,15 +13,15 @@ def test_object_model_tree_construction(qapp):
 
 
 def test_object_model_tree_init(qapp):
-    """Test that ObjectModelTree can be initialized with QTreeWidget and dummy PropertiesPanel."""
+    """Test that ObjectModelTree can be initialized with QTreeView and dummy PropertiesPanel."""
     tree = ObjectModelTree()
-    tree_widget = QTreeWidget()
-    properties_panel = DummyPropertiesPanel()
+    tree_view = QTreeView()
 
     # Should not raise
-    tree.init(tree_widget, properties_panel)
+    properties_panel = PropertiesPanel()
+    tree.init(tree_view, properties_panel)
 
-    assert tree.getTreeWidget() == tree_widget
+    assert tree.getTreeView() == tree_view
     assert tree.getPropertiesPanel() == properties_panel
 
 
@@ -44,11 +33,8 @@ def test_object_model_tree_show(qapp):
     layout = QVBoxLayout(widget)
 
     tree = ObjectModelTree()
-    tree_widget = QTreeWidget()
-    properties_panel = DummyPropertiesPanel()
 
-    tree.init(tree_widget, properties_panel)
-    layout.addWidget(tree_widget)
+    layout.addWidget(tree.getTreeView())
 
     widget.show()
     assert widget.isVisible()
@@ -70,11 +56,9 @@ def test_object_model_add_and_show(qapp):
     layout = QVBoxLayout(widget)
 
     tree = ObjectModelTree()
-    tree_widget = QTreeWidget()
-    properties_panel = DummyPropertiesPanel()
 
-    tree.init(tree_widget, properties_panel)
-    layout.addWidget(tree_widget)
+    tree.init()
+    layout.addWidget(tree.getTreeView())
 
     # Create and add an item
     item = ObjectModelItem("Test Object")
@@ -91,27 +75,25 @@ def test_object_model_add_and_show(qapp):
 
 
 def test_object_model_property_change_updates_tree_item(qapp):
-    """Test that changing a property on an object updates the QTreeWidgetItem."""
+    """Test that changing a property on an object updates the QStandardItem."""
     tree = ObjectModelTree()
-    tree_widget = QTreeWidget()
-    properties_panel = DummyPropertiesPanel()
 
-    tree.init(tree_widget, properties_panel)
+    tree.init()
 
     # Create and add an item
     obj = ObjectModelItem("original name")
     tree.addToObjectModel(obj)
 
-    # Verify initial name is set correctly
-    tree_item = tree_widget.topLevelItem(0)
+    # Verify initial name is set correctly - access via itemModel
+    tree_item = tree.itemModel.item(0, 0)
     assert tree_item is not None
-    assert tree_item.text(0) == "original name"
+    assert tree_item.text() == "original name"
 
     # Change the name property using setProperty
     obj.setProperty("Name", "new name")
 
-    # Verify the tree widget item text has been updated
-    assert tree_item.text(0) == "new name"
+    # Verify the tree item text has been updated
+    assert tree_item.text() == "new name"
 
     # Also verify the property was actually changed
     assert obj.getProperty("Name") == "new name"
@@ -119,6 +101,6 @@ def test_object_model_property_change_updates_tree_item(qapp):
     # Test direct property access via properties attribute (using alternate name)
     obj.properties.name = "another name"
 
-    # Verify the tree widget item text has been updated again
-    assert tree_item.text(0) == "another name"
+    # Verify the tree item text has been updated again
+    assert tree_item.text() == "another name"
     assert obj.getProperty("Name") == "another name"

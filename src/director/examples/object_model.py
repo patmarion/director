@@ -30,7 +30,7 @@ model.setPropertiesPanel(panel)
 widget = QWidget()
 widget.setWindowTitle("Object Model")
 layout = QVBoxLayout(widget)
-layout.addWidget(model.getTreeWidget())
+layout.addWidget(model.getTreeView())
 layout.addWidget(model.getPropertiesPanel())
 widget.show()
 

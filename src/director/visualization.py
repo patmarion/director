@@ -1189,6 +1189,37 @@ def addChildFrame(obj, initialTransform=None):
     return frame
 
 
+def addObjectLabel(obj):
+    """Add a text label that follows an object's frame.
+
+    Args:
+        obj: PolyDataItem or FrameItem to add a label to
+
+    Returns:
+        The TextItem label
+    """
+    if isinstance(obj, FrameItem):
+        frame = obj
+    else:
+        frame = obj.getChildFrame()
+        if not frame:
+            frame = addChildFrame(obj)
+
+    def update(frame):
+        obj.textLabel.setProperty("World Position", list(frame.transform.GetPosition()))
+
+    obj.textLabel = TextItem("label", obj.getProperty("Name"))
+    obj.textLabel.setProperty("Coordinates", "World")
+    obj.textLabel.setProperty("Background Alpha", 0.3)
+    obj.textLabel.actor.SetPickable(False)
+    om.addToObjectModel(obj.textLabel, obj)
+    for view in obj.views:
+        obj.textLabel.addToView(view)
+    frame.connectFrameModified(update)
+    update(frame)
+    return obj.textLabel
+
+
 def showFrame(frame, name, view=None, parent="data", scale=0.35, visible=True, alpha=1.0, line_width=1):
     """Show a coordinate frame (vtkTransform) in the view."""
     if view is None:
@@ -1221,6 +1252,31 @@ def pickProp(displayPoint, view):
             return pickedPoint, pickedProp, pickedDataset
 
     return None, None, None
+
+
+def getRayFromDisplayPoint(view, displayPoint):
+    """Get a ray from a display point through the scene.
+
+    Given a view and an XY display point, returns two XYZ world points which
+    are the display point at the near/far clipping planes of the view.
+
+    Args:
+        view: VTKWidget view instance
+        displayPoint: (x, y) tuple in display coordinates
+
+    Returns:
+        Tuple of (worldPt1, worldPt2) as numpy arrays
+    """
+    worldPt1 = [0, 0, 0, 0]
+    worldPt2 = [0, 0, 0, 0]
+    renderer = view.renderer()
+
+    vtk.vtkInteractorObserver.ComputeDisplayToWorld(renderer, displayPoint[0], displayPoint[1], 0, worldPt1)
+    vtk.vtkInteractorObserver.ComputeDisplayToWorld(renderer, displayPoint[0], displayPoint[1], 1, worldPt2)
+
+    worldPt1 = np.array(worldPt1[:3])
+    worldPt2 = np.array(worldPt2[:3])
+    return worldPt1, worldPt2
 
 
 def pickPoint(displayPoint, view, obj=None, pickType="points", tolerance=0.01):

@@ -11,21 +11,103 @@ from director.timercallback import TimerCallback
 from director.vtk_widget import VTKWidget
 
 
+def _vtk_matrix_to_numpy(vtk_matrix):
+    """Convert a vtkMatrix4x4 to a numpy 4x4 array."""
+    m = np.zeros((4, 4), dtype=np.float32)
+    for i in range(4):
+        for j in range(4):
+            m[i, j] = vtk_matrix.GetElement(i, j)
+    return m
+
+
+def depth_buffer_to_depth_image(depth_buffer, color_buffer, camera):
+    """
+    Convert OpenGL depth buffer to depth image and point cloud.
+
+    This is a pure Python/numpy implementation of the C++ vtkDepthImageUtils::DepthBufferToDepthImage.
+
+    Args:
+        depth_buffer: vtkImageData containing the OpenGL depth buffer (z values in [0, 1])
+        color_buffer: vtkImageData containing the RGB color buffer
+        camera: vtkCamera used to render the scene
+
+    Returns:
+        depth_image: numpy array of depth values in camera space (positive distance from camera)
+        points: numpy array of 3D points in camera space, shape (N, 3)
+        colors: numpy array of RGB colors, shape (N, 3), dtype uint8
+    """
+    # Get image dimensions
+    dims = depth_buffer.GetDimensions()
+    width, height = dims[0], dims[1]
+    aspect_ratio = width / height
+
+    # Extract depth and color data as numpy arrays
+    depth_data = vnp.getNumpyImageFromVtk(depth_buffer, flip=False).astype(np.float32)
+    color_data = vnp.getNumpyImageFromVtk(color_buffer, flip=False)
+
+    # Get camera projection matrix and compute its inverse
+    projection_matrix = _vtk_matrix_to_numpy(camera.GetProjectionTransformMatrix(aspect_ratio, 0, 1))
+    viewport_to_camera = np.linalg.inv(projection_matrix)
+
+    # Create coordinate grids for all pixels
+    x_coords = np.arange(width, dtype=np.float32)
+    y_coords = np.arange(height, dtype=np.float32)
+    xx, yy = np.meshgrid(x_coords, y_coords)
+
+    # Flatten arrays for vectorized processing
+    xx_flat = xx.ravel()
+    yy_flat = yy.ravel()
+    z_flat = depth_data.ravel()
+
+    # Create mask for valid depth values (z != 1.0 indicates not background)
+    valid_mask = z_flat != 1.0
+
+    # Convert screen coordinates to normalized device coordinates [-1, 1]
+    ndc_x = 2.0 * xx_flat / width - 1.0
+    ndc_y = 2.0 * yy_flat / height - 1.0
+
+    # Build homogeneous coordinates in NDC space
+    ones = np.ones_like(z_flat)
+    pts_ndc = np.stack([ndc_x, ndc_y, z_flat, ones], axis=0)  # Shape: (4, N)
+
+    # Transform from NDC to camera space
+    pts_camera = viewport_to_camera @ pts_ndc  # Shape: (4, N)
+
+    # Perspective divide (homogeneous to Cartesian)
+    w = pts_camera[3, :]
+    pts_camera = pts_camera[:3, :] / w
+
+    # Compute depth as -z in camera space (camera looks along -z axis)
+    depth_values = -pts_camera[2, :]
+
+    # Set invalid depths to NaN
+    depth_image = depth_values.copy()
+    depth_image[~valid_mask] = np.nan
+    depth_image = depth_image.reshape(height, width)
+
+    # Extract valid points and colors
+    valid_points = pts_camera[:, valid_mask].T  # Shape: (N_valid, 3)
+    valid_colors = color_data.reshape(-1, 3)[valid_mask]  # Shape: (N_valid, 3)
+
+    return depth_image, valid_points.astype(np.float32), valid_colors
+
+
 def computeDepthImageAndPointCloud(depthBuffer, colorBuffer, camera):
     """
     Input args are an OpenGL depth buffer and color buffer as vtkImageData objects,
     and the vtkCamera instance that was used to render the scene.  The function returns
     returns a depth image and a point cloud as vtkImageData and vtkPolyData.
     """
-    depthImage = vtk.vtkImageData()
-    pts = vtk.vtkPoints()
-    ptColors = vtk.vtkUnsignedCharArray()
-    vtk.vtkDepthImageUtils.DepthBufferToDepthImage(depthBuffer, colorBuffer, camera, depthImage, pts, ptColors)
+    depth_image_np, points_np, colors_np = depth_buffer_to_depth_image(depthBuffer, colorBuffer, camera)
 
-    pts = vnp.numpy_support.vtk_to_numpy(pts.GetData())
-    polyData = vnp.numpyToPolyData(pts, createVertexCells=True)
-    ptColors.SetName("rgb")
-    polyData.GetPointData().AddArray(ptColors)
+    # Convert depth image to vtkImageData
+    depthImage = vnp.numpyToImageData(depth_image_np, flip=False, vtktype=vtk.VTK_FLOAT)
+
+    # Create polydata from points
+    polyData = vnp.numpyToPolyData(points_np, createVertexCells=True)
+
+    # Add colors to polydata
+    vnp.addNumpyToVtk(polyData, colors_np, "rgb")
 
     return depthImage, polyData
 
@@ -56,10 +138,13 @@ class DepthScanner:
 
         self.initDepthImageView()
         self.initPointCloudView()
+        self.initRenderObserver()
 
         self._block = False
         self.singleShotTimer = TimerCallback()
         self.singleShotTimer.callback = self.update
+        self.reRender = False
+        self.updateOnRender = True
         self._updateFunc = None
 
     def getDepthBufferImage(self):
@@ -98,28 +183,32 @@ class DepthScanner:
         self.imageView = imageview.ImageView()
         self.imageView.view.setWindowTitle("Depth image")
         self.imageView.setImage(self.imageMapToColors.GetOutput())
+        self.docks = []
 
     def initPointCloudView(self):
         self.pointCloudView = VTKWidget()
         self.pointCloudView.setWindowTitle("Pointcloud")
         self.pointCloudViewBehaviors = viewbehaviors.ViewBehaviors(self.pointCloudView)
 
+    def initRenderObserver(self):
+        if self.renderObserver:
+            return
+
+        def onEndRender(obj, event):
+            if self._block or not self.updateOnRender:
+                return
+            if not self.singleShotTimer.singleShotTimer.isActive():
+                self.singleShotTimer.singleShot(0)
+
+        self.renderObserver = self.view.renderWindow().AddObserver("EndEvent", onEndRender)
+
     def update(self):
-        if not self.renderObserver:
-
-            def onEndRender(obj, event):
-                if self._block:
-                    return
-                if not self.singleShotTimer.singleShotTimer.isActive():
-                    self.singleShotTimer.singleShot(0)
-
-            self.renderObserver = self.view.renderWindow().AddObserver("EndEvent", onEndRender)
-
         if not self.pointCloudView.isVisible() and not self.imageView.view.isVisible():
             return
 
         self._block = True
-        self.view.forceRender()
+        if self.reRender:
+            self.view.forceRender()
         self.updateBufferImages()
         self._block = False
 
@@ -149,6 +238,15 @@ class DepthScanner:
             dock = app.addWidgetToDock(view, QtCore.Qt.RightDockWidgetArea)
             dock.setMinimumWidth(300)
             dock.setMinimumHeight(300)
+            self.docks.append(dock)
+
+    def showDocks(self):
+        for dock in self.docks:
+            dock.setVisible(True)
+
+    def hideDocks(self):
+        for dock in self.docks:
+            dock.setVisible(False)
 
 
 def getCameraFrustumMesh(view, rayLength=1.0):
@@ -259,7 +357,7 @@ def main(globalsDict=None):
     from director import mainwindowapp
 
     app = mainwindowapp.construct()
-    app.gridObj.setProperty("Visible", True)
+    app.grid.setProperty("Visible", True)
     app.viewOptions.setProperty("Orientation widget", False)
     app.viewOptions.setProperty("View angle", 30)
     app.sceneBrowserDock.setVisible(False)
@@ -293,12 +391,7 @@ def main(globalsDict=None):
 
     addTestData()
 
-    # xvfb command
-    # /usr/bin/Xvfb  :99 -ac -screen 0 1280x1024x16
-
-    if globalsDict is not None:
-        globalsDict.update(dict(app=app, view=view, depthScanner=depthScanner))
-
+    app._add_fields(depthScanner=depthScanner)
     app.app.start(restoreWindow=False)
 
 
