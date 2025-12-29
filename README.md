@@ -1,58 +1,84 @@
-# Director 2.0
+# Director
 
-A robotics interface and visualization framework with Python, VTK, and Qt.
+A robotics interface and visualization framework built with Python, VTK, and Qt.
 
 ## Overview
 
-Director 2.0 is a port and refactor of Director using:
-- **VTK** for 3D visualization
-- **QtPy** for Qt abstraction layer (supporting PySide6/PySide2)
-- **PySide6** as the Qt backend
+Director is a Python-centric environment for developing interactive 3D applications,
+with a focus on robotics visualization and control. Key features include:
 
-The previous version of Director was a core c++ library with a cmake build system
-and used the more niche PythonQt c++ library (not to be confused with PyQt) as the
-main Qt binding system.  It was a burden to maintain the build system and upgrade
-the c++ dependencies.  This new version is pure python and dependencies are more
-simply managed with uv/pip.  The Qt bindings are now provided by QtPy which is
-an abstraction supporting either PySide or PyQt.  The port requires minor rewrites
-to most modules to update certain API differences from PythonQt.
+- **VTK** for 3D visualization and high-performance rendering
+- **QtPy** for Qt abstraction layer (supporting PySide6/PySide2/PyQt6/PyQt5)
+- **Numpy** for numerical computing and array math
 
 ## Installation
+
+### Installation with pip
+
+You can install Director from GitHub with pip:
+
+```bash
+pip install "director[extras,pyside] @ git+https://github.com/patmarion/director.git"
+```
+
+The optional dependencies are specified inside the square brackets. You must choose a Qt bindings
+library: `pyside` or `pyqt`. The `extras` group installs additional common dependencies to provide
+a fully featured application experience.
+
+Next, launch the main application with:
+
+```bash
+python -m director.main
+```
+
+You can browse and launch more examples with:
+
+```bash
+python -m director.examples
+```
 
 ### System Dependencies (Linux)
 
 While most application functionality is provided by Qt and managed by installing the
-python bindings PySide or PyQt, there may be certain system libraries required to provide
-additional capabilities, in particular related to X11 on Linux.  To ensure you aren't
-missing certain requirements please start with an apt install:
+Python bindings PySide or PyQt, there may be certain system libraries required to provide
+additional capabilities, particularly related to X11 on Linux. To ensure you aren't
+missing certain requirements, start with an apt install:
 
 ```bash
 sudo apt-get install libxcb-cursor0
 ```
 
-### Python Dependencies
+### Development with uv
 
-This project manages it dependencies and runtime with `uv`.  If you need to install uv then
-you can install it from the official source with their install script:
+If you want to run Director locally from source code, you can manage the project dependencies
+with the `uv` tool. If you need to install uv, you can install it from the official source
+with their install script:
 
 ```bash
 # See https://docs.astral.sh/uv/getting-started/installation/
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-With `uv` installed then the most basic starting point is:
+With `uv` installed, use `uv sync` to install dependencies:
 
 ```bash
-uv run python -m director.hello_world
+uv sync --extra dev
 ```
 
-Or you can install just the package dependencies:
+The `dev` extra will install a full set of dependencies for a fully featured Director application.
+Next, launch the main application with:
+
 ```bash
-# Sync dependencies from pyproject.toml
-uv sync # optionally, request a specific python version: --python 3.10.19
+uv run python -m director.main
 ```
 
-Using uv sync will create a virtual environment as an initial step.  You can also
+Browse and run examples with:
+
+```bash
+uv run python -m director.examples
+```
+
+Using `uv sync` will create a virtual environment as an initial step. You can also
 directly create the virtual environment:
 
 ```bash
@@ -60,24 +86,25 @@ directly create the virtual environment:
 uv venv  # optionally, request a specific python version: --python 3.10.19
 
 # Install dependencies
-uv sync
+uv sync --extra dev
 
 # Activate the environment
 source .venv/bin/activate
 
-# Run hello world
-python -m director.hello_world
+# Run main application
+python -m director.main
 ```
 
-Besides runtime dependencies you may want to install additional development and test
-dependencies:
+Running `uv sync` without additional arguments will install a core set of dependencies, which is
+intentionally defined as a minimal set so that downstream users can choose which Qt bindings library
+they want to use in their project. That means the minimal set does not specify PySide or PyQt, and
+Director will fail to launch without at least one installed. Some examples:
 
 ```bash
-uv sync --all-extras
+uv sync --extra pyside  # install minimal deps + pyside
+uv sync --extra pyqt    # install minimal deps + pyqt
+uv sync --extra dev     # installs pyside, plus opencv, mujoco, qtconsole, pyqtgraph, and docs & test deps
 ```
-
-The `uv run` command automatically uses the virtual environment and ensures all dependencies
-are available.
 
 ## Running Tests
 
@@ -125,11 +152,25 @@ director/
 ├── README.md               # This file
 ├── src/
 │   └── director/
-│       ├── __init__.py     # Package initialization
-│       └── <source files>
-├── examples/
-│   └── <example files>
+│       ├── <source files>
+│       └── examples/
+│           └── <example files>
 ├── tests/
-    ├── __init__.py
-    └── <test files>
+│   └── <test files>
+└── docs/
+    └── <documentation files>
 ```
+
+## Version History
+
+### Director 2.0 (Current)
+
+The current version of Director is a pure Python implementation using QtPy as the Qt bindings
+abstraction layer. Dependencies are managed with standard Python tools like uv and pip.
+
+### Director 1.0
+
+The original Director was a C++ library with a CMake build system. It used the PythonQt C++
+library (not to be confused with PyQt) for Qt bindings. While functional, maintaining the C++
+build system and upgrading dependencies became burdensome. Director 2.0 is a rewrite
+in pure Python, requiring only minor API adjustments from the original PythonQt bindings.

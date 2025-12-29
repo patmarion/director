@@ -4,8 +4,8 @@ Overview
 Introduction
 ------------
 
-Director is a robotics interface and visualization framework built on top of VTK and Qt.
-It provides a python-centric environment for developing interactive 3D applications, with
+Director is a robotics interface and visualization framework built with Python, VTK, and Qt.
+It provides a Python-centric environment for developing interactive 3D applications, with
 a focus on robotics visualization and control.
 
 Key Features
@@ -26,31 +26,37 @@ Core Dependencies
 Installation
 ------------
 
-The quickest way to install is with pip from the github main branch:
+The quickest way to install is with pip from the GitHub main branch:
 
-pip install director[extras,pyside] https://github.com/RobotLocomotion/director.git
+.. code-block:: bash
+
+    pip install "director[extras,pyside] @ git+https://github.com/patmarion/director.git"
 
 Then run the basic builtin application with:
 
-python -m director.main
+.. code-block:: bash
 
-Note that the above command installs director with additional dependencies requested.
-If you install vanilla director you will get the full library but with a mininmal set of
-dependencies.  You must also install at least one Qt bindings library: PySide or PyQt.
-To get all additional dependencies plus a bindings library you can install [extras,pyside]
-or [extras,pyqt].  The extras option will install opencv, mujoco, qtconsole, and
+    python -m director.main
+
+Note that the above command installs Director with additional dependencies requested.
+If you install vanilla Director you will get the full library but with a minimal set of
+dependencies. You must also install at least one Qt bindings library: PySide or PyQt.
+To get all additional dependencies plus a bindings library you can install ``[extras,pyside]``
+or ``[extras,pyqt]``. The extras option will install opencv, mujoco, qtconsole, and
 pyqtgraph, for example.
 
 
 Development with uv
 ~~~~~~~~~~~~~~~~~~~
 
-You can git clone the director repo and then use `uv` to work locally.
+You can git clone the Director repo and then use ``uv`` to work locally.
 
-git clone https://github.com/RobotLocomotion/director.git
-cd director
-uv sync --all-extras
-uv run python -m director.main
+.. code-block:: bash
+
+    git clone https://github.com/patmarion/director.git
+    cd director
+    uv sync --extra dev
+    uv run python -m director.main
 
 
 Examples
@@ -86,4 +92,3 @@ Loading and displaying a VTK file:
    examples
    tutorial
    generated/api
-

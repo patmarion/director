@@ -33,7 +33,7 @@ def test_object_model_tree_show(qapp):
     layout = QVBoxLayout(widget)
 
     tree = ObjectModelTree()
-
+    tree.init()
     layout.addWidget(tree.getTreeView())
 
     widget.show()
