@@ -49,7 +49,7 @@ test = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-director = ["assets/*.png"]
+director = ["assets/*.png", "assets/*.ui"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
