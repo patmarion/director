@@ -1,0 +1,58 @@
+name: Deploy Docs to GitHub Pages
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: 'Buildkite Build Number'
+        required: true
+      artifact_filename:
+        description: 'Artifact Filename'
+        required: true
+        default: docs.tar.gz
+      bk_organization:
+        description: 'Buildkite Organization'
+        required: true
+        default: pat-marion
+      bk_pipeline:
+        description: 'Buildkite Pipeline'
+        required: true
+        default: director
+
+jobs:
+  deploy-pages:
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Download Buildkite Artifacts
+        env:
+          BK_TOKEN: ${{ secrets.BUILDKITE_READ_ARTIFACTS_TOKEN }}
+        run: |
+          # 1. Get the JSON list of artifacts
+          # 2. Use jq to find the 'download_url' for the artifact
+          # 3. Download the artifact
+          # 4. Extract the artifact to the site-content directory
+          set -ex
+
+          ORGANIZATION=${{ github.event.inputs.bk_organization }}
+          PIPELINE=${{ github.event.inputs.bk_pipeline }}
+          ARTIFACT_FILENAME=${{ github.event.inputs.artifact_filename }}
+          BUILD_NUMBER=${{ github.event.inputs.build_number }}
+
+          LIST_URL="https://api.buildkite.com/v2/organizations/$ORGANIZATION/pipelines/$PIPELINE/builds/$BUILD_NUMBER/artifacts"
+          
+          DOWNLOAD_URL=$(curl -H "Authorization: Bearer $BK_TOKEN" -s "$LIST_URL" | \
+            jq -r ".[] | select(.filename==\"$ARTIFACT_FILENAME\") | .download_url")
+
+          curl -L -H "Authorization: Bearer $BK_TOKEN" -o $ARTIFACT_FILENAME "$DOWNLOAD_URL"
+          mkdir site-content
+          tar -zxf $ARTIFACT_FILENAME -C site-content
+
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './site-content'
+
+      - name: Deploy
+        uses: actions/deploy-pages@v4
