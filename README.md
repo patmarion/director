@@ -5,53 +5,45 @@ A robotics interface and visualization framework built with Python, VTK, and Qt.
 ## Overview
 
 Director is a Python-centric environment for developing interactive 3D applications,
-with a focus on robotics visualization and control. Key features include:
+with a focus on robotics data visualization.
+
+Key dependencies:
 
 - **VTK** for 3D visualization and high-performance rendering
 - **QtPy** for Qt abstraction layer (supporting PySide6/PySide2/PyQt6/PyQt5)
-- **Numpy** for numerical computing and array math
+- **Numpy** for numerical computing and matrix math
 
-## Installation
+## Quick Start
 
-### Installation with pip
-
-You can install Director from GitHub with pip:
+Install Director from GitHub with pip:
 
 ```bash
-pip install "director[extras,pyside] @ git+https://github.com/patmarion/director.git"
+pip install "director[pyside,extras] @ git+https://github.com/patmarion/director.git"
 ```
 
 The optional dependencies are specified inside the square brackets. You must choose a Qt bindings
 library: `pyside` or `pyqt`. The `extras` group installs additional common dependencies to provide
-a fully featured application experience.
+a full featured set of application components.
 
-Next, launch the main application with:
+Launch the main application:
 
 ```bash
 python -m director.main
 ```
 
-You can browse and launch more examples with:
+Browse and launch more examples:
 
 ```bash
 python -m director.examples
 ```
 
-### System Dependencies (Linux)
+> [!NOTE]
+> On Linux, if you encounter display or X11-related errors, see [System Dependencies](#system-dependencies-linux) below.
 
-While most application functionality is provided by Qt and managed by installing the
-Python bindings PySide or PyQt, there may be certain system libraries required to provide
-additional capabilities, particularly related to X11 on Linux. To ensure you aren't
-missing certain requirements, start with an apt install:
+## Development Setup
 
-```bash
-sudo apt-get install libxcb-cursor0
-```
-
-### Development with uv
-
-If you want to run Director locally from source code, you can manage the project dependencies
-with the `uv` tool. If you need to install uv, you can install it from the official source
+If you want to run Director locally from source code you can manage the project dependencies
+with the `uv` tool. If you need to install uv you can install it from the official source
 with their install script:
 
 ```bash
@@ -65,8 +57,8 @@ With `uv` installed, use `uv sync` to install dependencies:
 uv sync --extra dev
 ```
 
-The `dev` extra will install a full set of dependencies for a fully featured Director application.
-Next, launch the main application with:
+The `dev` extra will install a full set of dependencies to run all available application components.
+Launch the main application with:
 
 ```bash
 uv run python -m director.main
@@ -78,8 +70,8 @@ Browse and run examples with:
 uv run python -m director.examples
 ```
 
-Using `uv sync` will create a virtual environment as an initial step. You can also
-directly create the virtual environment:
+Using `uv` will create a virtual environment as an initial step. You can also
+explicitly initialize the virtual environment:
 
 ```bash
 # Create a virtual environment (in `.venv` by default)
@@ -91,19 +83,30 @@ uv sync --extra dev
 # Activate the environment
 source .venv/bin/activate
 
-# Run main application
+# Run main application without `uv run`
 python -m director.main
 ```
 
-Running `uv sync` without additional arguments will install a core set of dependencies, which is
+Running `uv sync` without additional arguments will install a core set of dependencies which is
 intentionally defined as a minimal set so that downstream users can choose which Qt bindings library
-they want to use in their project. That means the minimal set does not specify PySide or PyQt, and
-Director will fail to launch without at least one installed. Some examples:
+they want to use in their project. That means the minimal set does not specify PySide or PyQt and
+Director will fail to launch without at least one installed. So typically you must pass one
+or more `--extra <name>` args to uv sync. For example:
 
 ```bash
 uv sync --extra pyside  # install minimal deps + pyside
 uv sync --extra pyqt    # install minimal deps + pyqt
 uv sync --extra dev     # installs pyside, plus opencv, mujoco, qtconsole, pyqtgraph, and docs & test deps
+uv sync --extra pyside --extra qtconsole --extra pyqtgraph  # just a few selected extras
+```
+
+## System Dependencies (Linux)
+
+On Linux, certain system libraries may be required for Qt functionality, particularly
+related to X11. If you encounter display-related errors, install the following:
+
+```bash
+sudo apt-get install libxcb-cursor0
 ```
 
 ## Running Tests
@@ -113,7 +116,7 @@ To run the test suite:
 ```bash
 uv run pytest
 
-# or, source the virtual environment to run directly
+# or, source the virtual environment to run pytest directly
 source .venv/bin/activate
 pytest
 ```
@@ -124,24 +127,34 @@ Or run with verbose output:
 uv run pytest -v
 ```
 
+## CI Testing
+
+[![Build status](https://badge.buildkite.com/cdfb045f914125717c09beafac6fcbb1931f43ef622afb726c.svg?branch=main)](https://buildkite.com/pat-marion/director)
+
+This project uses [Buildkite](https://buildkite.com/pat-marion/director) for continuous integration.
+The pipeline configuration is defined in [`buildkite/pipeline.yml`](buildkite/pipeline.yml).
+
 ## Documentation
 
-To build the documentation (including API docs):
+Documentation is generated with Sphinx via [`docs/manage_docs.py`](docs/manage_docs.py).
+For convenience, bash wrapper scripts are provided:
+
+Build the documentation:
 
 ```bash
-uv run ./manage_docs.py build
+docs/build.sh
 ```
 
-To view the generated documentation in your browser:
+View the documentation in your browser:
 
 ```bash
-uv run ./manage_docs.py view
+docs/view.sh
 ```
 
-To clean build artifacts:
+Clean build artifacts:
 
 ```bash
-uv run ./manage_docs.py clean
+docs/clean.sh
 ```
 
 ## Project Structure
@@ -149,7 +162,9 @@ uv run ./manage_docs.py clean
 ```
 director/
 ├── pyproject.toml          # Project configuration and dependencies
+├── uv.lock                 # Locked dependency versions
 ├── README.md               # This file
+├── LICENSE.txt             # BSD-3-Clause license
 ├── src/
 │   └── director/
 │       ├── <source files>
@@ -157,8 +172,10 @@ director/
 │           └── <example files>
 ├── tests/
 │   └── <test files>
-└── docs/
-    └── <documentation files>
+├── docs/
+│   └── <documentation files>
+└── buildkite/
+    └── pipeline.yml        # CI pipeline configuration
 ```
 
 ## Version History
