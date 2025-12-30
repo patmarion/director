@@ -22,8 +22,6 @@ html_title = "Director Documentation"
 html_permalinks_icon = "#"
 # html_logo = "_static/logo.png"
 
-pygments_style = "monokai"
-pygments_dark_style = "monokai"
 
 html_sidebars = {
     "**": [
