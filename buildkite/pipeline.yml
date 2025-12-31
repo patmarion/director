@@ -81,6 +81,11 @@ steps:
       GITHUB_REF: main
     command: |
       set -ex
+      if [[ "$BUILDKITE_PIPELINE_SLUG" != "$${GITHUB_REPO_NAME}" ]]; then
+        echo "Skipping GitHub deploy trigger for pipeline: $BUILDKITE_PIPELINE_SLUG"
+        exit 0
+      fi
+
       curl -L -X POST \
         -H "Accept: application/vnd.github+json" \
         -H "Authorization: Bearer $${GH_ACTIONS_TOKEN}" \
