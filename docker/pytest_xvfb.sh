@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
+# run tests from the root of the repository
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
 FAILED=0
 
 for PYTHON_VERSION in 3.10.19 3.12.12; do

@@ -310,7 +310,7 @@ def _needs_recreate(name: str, desired: DesiredContainerConfig) -> bool:
 
 def cmd_build(args: argparse.Namespace) -> None:
     image = ImageRef(name=args.image_name, tag=args.tag)
-    _run(["docker", "build", "-t", image.full, str(_docker_dir())])
+    _run(["docker", "build", "--load", "-t", image.full, str(_docker_dir())])
 
 
 def cmd_run(args: argparse.Namespace) -> None:
