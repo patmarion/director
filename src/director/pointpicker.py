@@ -196,7 +196,7 @@ class ImagePointPicker(QtCore.QObject):
                 self.showCursor = False
                 self.hideCursor()
 
-        if event.modifiers() != QtCore.Qt.ShiftModifier:
+        if hasattr(event, "modifiers") and event.modifiers() != QtCore.Qt.ShiftModifier:
             self.showCursor = False
             if self.annotationObj:
                 self.hoverPos = None

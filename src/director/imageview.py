@@ -46,6 +46,7 @@ class ImageView:
     def setBackgroundColor(self, color):
         self.view.renderer().SetBackground(color)
         self.view.renderer().SetBackground2(color)
+        self.view.render()
 
     def getImagePixel(self, displayPoint, restrictToImageDimensions=True):
         worldPoint = [0.0, 0.0, 0.0, 0.0]

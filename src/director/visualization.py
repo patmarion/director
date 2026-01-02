@@ -1381,6 +1381,15 @@ def findPickedObject(displayPoint, view):
     return obj, pickedPoint
 
 
+def mapMousePosition(widget, mouseEvent):
+    """Given a QWidget and a QMouseEvent return the (x, y) mouse position
+    with the Y coordinate flipped (widget.height - mouse.y) to follow the
+    vtk convention having y=0 at the bottom.
+    """
+    mousePosition = mouseEvent.pos()
+    return mousePosition.x(), widget.height() - mousePosition.y()
+
+
 class GridItem(PolyDataItem):
     """Grid item for displaying a reference grid in the 3D view."""
 
