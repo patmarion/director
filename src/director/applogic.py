@@ -1,9 +1,23 @@
 """Application logic utilities (simplified from original Director)."""
 
-from qtpy.QtWidgets import QApplication, QMessageBox
+from qtpy.QtGui import QKeySequence, QShortcut
+from qtpy.QtWidgets import QApplication, QMainWindow, QMessageBox, QMenu
 
 # Global variable to store the current render view
 _defaultRenderView = None
+
+_mainWindow = None
+_defaultRenderView = None
+
+
+def getMainWindow():
+    global _mainWindow
+    if _mainWindow is None:
+        for widget in QApplication.topLevelWidgets():
+            if isinstance(widget, QMainWindow):
+                _mainWindow = widget
+                break
+    return _mainWindow
 
 
 def setCurrentRenderView(view):
@@ -91,9 +105,6 @@ def boolPrompt(title, message, parent=None):
 
 def addShortcut(widget, keySequence, func):
     """Add a keyboard shortcut to a widget."""
-    from qtpy.QtGui import QKeySequence
-    from qtpy.QtWidgets import QShortcut
-
     shortcut = QShortcut(QKeySequence(keySequence), widget)
     shortcut.activated.connect(func)
     return shortcut
@@ -126,19 +137,47 @@ class ActionToggleHelper:
         self.action.setChecked(newState)
 
 
-def MenuActionToggleHelper(menuName, actionName, getValue, setValue):
+def findMenu(menuTitle, mainWindow=None):
     """
-    Add a toggle action to a menu.
-
-    Args:
-        menuName: Name of the menu (e.g., 'Tools')
-        actionName: Name of the action
-        getValue: Function that returns current state (bool)
-        setValue: Function that sets state (takes bool)
-
-    Note: This is a simplified version. The menu must be accessible via getMainWindow().
+    Finds a QMenu within the main window by its title.
+    Ported from the Director-specific logic to use qtpy's findChildren.
     """
-    # This requires access to the main window's menu
-    # For now, this is a stub that would need the main window instance
-    # In practice, this should be called from MainWindowApp context
-    pass  # TODO: Implement if needed
+    mainWindow = mainWindow or getMainWindow()
+    if not mainWindow:
+        return None
+
+    menus = mainWindow.findChildren(QMenu)
+    for menu in menus:
+        title = str(menu.title())
+        # Handle Qt's mnemonic ampersands (e.g., "&File" -> "File")
+        if title.startswith('&'):
+            title = title[1:]
+        if title == menuTitle:
+            return menu
+    return None
+
+
+def addMenuAction(menuTitle, actionName):
+    """
+    Finds a menu and adds a new action to it.
+    Uses the robust findMenu logic to ensure the action is placed correctly.
+    """
+    menu = findMenu(menuTitle)
+    if not menu:
+        # Optionally create the menu if it doesn't exist
+        mw = getMainWindow()
+        menu = mw.menuBar().addMenu(menuTitle)
+
+    return menu.addAction(actionName)
+
+
+class MenuActionToggleHelper(ActionToggleHelper):
+    """
+    Adds a toggleable action to a specific menu and manages its state.
+    """
+
+    def __init__(self, menuName, actionName, getValue, setValue):
+        # Create the action in the requested menu
+        self.action = addMenuAction(menuName, actionName)
+        # Initialize the base toggle logic (checkable, signals, etc.)
+        super(MenuActionToggleHelper, self).__init__(self.action, getValue, setValue)

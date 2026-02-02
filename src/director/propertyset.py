@@ -184,6 +184,9 @@ class PropertySet(object):
         attributes = self._attributes[propertyName]
         return attributes[propertyAttribute]
 
+    def getPropertyAttributes(self, propertyName):
+        return self._attributes[propertyName]
+
     def setPropertyAttribute(self, propertyName, propertyAttribute, value):
         attributes = self._attributes[propertyName]
         if attributes[propertyAttribute] != value:
