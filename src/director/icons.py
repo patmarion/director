@@ -12,6 +12,7 @@ class Icons(object):
     LightBulb = "light_bulb.png"
     Python = "python_logo.png"
     ResetCamera = "reset_camera.png"
+    Robot = "robot_icon.png"
     CameraRotate = "camera_mode.png"
     Chart = "chart.png"
     Empty = ""
