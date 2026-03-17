@@ -65,6 +65,11 @@ class PlotObjItem(om.ObjectModelItem):
         self.addProperty("Y Units", "")
         self.addProperty("Visible", True)
 
+        self.style_names = ["Line", "Points", "Line + Points"]
+        self.addProperty("Style", 0, attributes=om.PropertyAttributes(enumNames=self.style_names))
+        self.addProperty("Line Width", 2, attributes=om.PropertyAttributes(minimum=1, maximum=10))
+        self.addProperty("Point Size", 3, attributes=om.PropertyAttributes(minimum=1, maximum=20))
+
         self.colormap_names = [
             "Pastel1",
             "Pastel2",
@@ -103,6 +108,16 @@ class PlotObjItem(om.ObjectModelItem):
                 dock.setVisible(self.getProperty(propertyName))
         elif propertyName == "Colormap":
             self._update_series_colors()
+        elif propertyName in ["Style", "Line Width", "Point Size"]:
+            self._propagate_to_all_series(propertyName)
+
+    def _propagate_to_all_series(self, property_name):
+        entry = self.plot_widget._plot_entries.get(self.plot_item)
+        if not entry:
+            return
+        value = self.getProperty(property_name)
+        for series_item in entry.series_items.values():
+            series_item.setProperty(property_name, value)
 
     def _update_series_colors(self):
         cmap_idx = self.getProperty("Colormap")
@@ -469,6 +484,32 @@ class PlotWidget(QtCore.QObject):
                     entry.series_items[line_series] = series_item
                     self.object_model.addToObjectModel(series_item, parentObj=entry.object_item)
 
+    def rescale_y_to_visible_x(self, plot_item: pg.PlotItem, padding: float = 0.05):
+        """Rescale Y axis to fit all data within the currently visible X range."""
+        entry = self._plot_entries.get(plot_item)
+        if not entry or not entry.line_series:
+            return
+
+        view_box = plot_item.getViewBox()
+        x_min, x_max = view_box.viewRange()[0]
+
+        y_min = float("inf")
+        y_max = float("-inf")
+
+        for series in entry.line_series:
+            x_data, y_data = series.getData()
+            if x_data is None or len(x_data) == 0:
+                continue
+            mask = (x_data >= x_min) & (x_data <= x_max)
+            if not np.any(mask):
+                continue
+            visible_y = y_data[mask]
+            y_min = min(y_min, float(np.nanmin(visible_y)))
+            y_max = max(y_max, float(np.nanmax(visible_y)))
+
+        if y_min < y_max:
+            plot_item.setYRange(y_min, y_max, padding=padding)
+
     def add_horizontal_lines(
         self,
         plot_item: pg.PlotItem,
@@ -765,39 +806,15 @@ class PlotInteractionViewBox(pg.ViewBox):
         return best_item
 
     def _set_series_style(self, series: pg.PlotDataItem, style: str):
-        # Attempt to recover the base color from current settings
-        # Preference: current pen -> current symbol pen -> default blue
-        color = "b"
-        current_pen = series.opts.get("pen")
-        if current_pen is not None:
-            color = current_pen.color() if hasattr(current_pen, "color") else pg.mkPen(current_pen).color()
-        else:
-            current_symbol_pen = series.opts.get("symbolPen")
-            if current_symbol_pen is not None:
-                color = (
-                    current_symbol_pen.color()
-                    if hasattr(current_symbol_pen, "color")
-                    else pg.mkPen(current_symbol_pen).color()
-                )
+        style_map = {"line": 0, "points": 1, "both": 2}
+        style_idx = style_map.get(style, 0)
 
-        pen = pg.mkPen(color, width=2)
-        brush = pg.mkBrush(color)
-
-        if style == "line":
-            series.setPen(pen)
-            series.setSymbol(None)
-        elif style == "points":
-            series.setPen(None)
-            series.setSymbol("o")
-            series.setSymbolPen(pen)
-            series.setSymbolBrush(brush)
-            series.setSymbolSize(2)
-        elif style == "both":
-            series.setPen(pen)
-            series.setSymbol("o")
-            series.setSymbolPen(pen)
-            series.setSymbolBrush(brush)
-            series.setSymbolSize(4)
+        entry = self._plot_widget._plot_entries.get(self._plot_item)
+        if entry:
+            series_item = entry.series_items.get(series)
+            if series_item:
+                series_item.setProperty("Style", style_idx)
+                return
 
     def _customize_context_menu(self, menu):
         # Helper to recursively find and hide
@@ -832,37 +849,61 @@ class PlotInteractionViewBox(pg.ViewBox):
         menu.addAction(clear_hline_text, self._on_clear_hlines)
 
         menu.addSeparator()
+        menu.addAction("Rescale Y to Visible Data", self._on_rescale_y_visible)
+
+        menu.addSeparator()
         menu.addAction("Set Title...", self._on_set_title)
         menu.addAction("Set Y Label...", self._on_set_ylabel)
         menu.addAction("Set Y Units...", self._on_set_yunits)
 
+    def _get_plot_obj_item(self) -> "PlotObjItem | None":
+        entry = self._plot_widget._plot_entries.get(self._plot_item)
+        return entry.object_item if entry else None
+
     def _on_set_title(self):
-        if self._plot_item:
-            text, ok = QtWidgets.QInputDialog.getText(
-                None, "Set Plot Title", "Title:", text=self._plot_item.titleLabel.text
-            )
-            if ok:
-                # self._plot_item.setTitle(text)
-                # avoid setting empty string because it will hide the dock title bar
-                self._plot_widget._plot_docks[self._plot_item].setTitle(text or " ")
+        if not self._plot_item:
+            return
+        obj_item = self._get_plot_obj_item()
+        current = obj_item.getProperty("Title") if obj_item else ""
+        text, ok = QtWidgets.QInputDialog.getText(
+            None, "Set Plot Title", "Title:", text=current or ""
+        )
+        if ok:
+            if obj_item:
+                obj_item.setProperty("Title", text or " ")
+            else:
+                self._plot_widget.set_plot_title(self._plot_item, text)
 
     def _on_set_ylabel(self):
-        if self._plot_item:
-            axis = self._plot_item.getAxis("left")
-            text, ok = QtWidgets.QInputDialog.getText(None, "Set Y Label", "Label:", text=axis.labelText)
-            if ok:
-                axis.setLabel(text=text, units=axis.labelUnits)
+        if not self._plot_item:
+            return
+        obj_item = self._get_plot_obj_item()
+        current = obj_item.getProperty("Y Label") if obj_item else self._plot_item.getAxis("left").labelText
+        text, ok = QtWidgets.QInputDialog.getText(None, "Set Y Label", "Label:", text=current or "")
+        if ok:
+            if obj_item:
+                obj_item.setProperty("Y Label", text)
+            else:
+                self._plot_item.setLabel("left", text=text)
 
     def _on_set_yunits(self):
-        if self._plot_item:
-            axis = self._plot_item.getAxis("left")
-            text, ok = QtWidgets.QInputDialog.getText(None, "Set Y Units", "Units:", text=axis.labelUnits)
-            if ok:
-                axis.setLabel(text=axis.labelText, units=text)
+        if not self._plot_item:
+            return
+        obj_item = self._get_plot_obj_item()
+        current = obj_item.getProperty("Y Units") if obj_item else self._plot_item.getAxis("left").labelUnits
+        text, ok = QtWidgets.QInputDialog.getText(None, "Set Y Units", "Units:", text=current or "")
+        if ok:
+            if obj_item:
+                obj_item.setProperty("Y Units", text)
+            else:
+                self._plot_item.setLabel("left", units=text)
 
     def _toggle_legend(self, checked):
         if self._plot_item.legend:
             self._plot_item.legend.setVisible(checked)
+
+    def _on_rescale_y_visible(self):
+        self._plot_widget.rescale_y_to_visible_x(self._plot_item)
 
     def _on_add_hline(self):
         self._plot_widget.add_horizontal_line_dialog(self._plot_item)
@@ -885,16 +926,8 @@ class PlotInteractionViewBox(pg.ViewBox):
 
     def mouseClickEvent(self, ev):
         if ev.button() == QtCore.Qt.MouseButton.LeftButton:
-            if ev.modifiers() & QtCore.Qt.KeyboardModifier.ShiftModifier:
-                # Manually compute Y range from children bounds
-                bounds = self.childrenBounds()
-                if bounds is not None:
-                    y_bounds = bounds[1]
-                    if y_bounds is not None and y_bounds[0] is not None and y_bounds[1] is not None:
-                        self.setYRange(y_bounds[0], y_bounds[1], padding=0.05)
-
-                self.enableAutoRange(pg.ViewBox.YAxis, True)
-                self.enableAutoRange(pg.ViewBox.XAxis, False)
+            if ev.modifiers() & QtCore.Qt.KeyboardModifier.ShiftModifier and ev.double():
+                self._plot_widget.rescale_y_to_visible_x(self._plot_item)
             elif ev.double():
                 self.enableAutoRange(pg.ViewBox.XYAxes, True)
                 self.autoRange()
