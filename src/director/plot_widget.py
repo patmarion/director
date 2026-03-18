@@ -865,9 +865,7 @@ class PlotInteractionViewBox(pg.ViewBox):
             return
         obj_item = self._get_plot_obj_item()
         current = obj_item.getProperty("Title") if obj_item else ""
-        text, ok = QtWidgets.QInputDialog.getText(
-            None, "Set Plot Title", "Title:", text=current or ""
-        )
+        text, ok = QtWidgets.QInputDialog.getText(None, "Set Plot Title", "Title:", text=current or "")
         if ok:
             if obj_item:
                 obj_item.setProperty("Title", text or " ")
