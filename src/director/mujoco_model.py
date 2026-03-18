@@ -7,7 +7,6 @@ kinematics, and visualize the model geometry in Director using PolyDataItem obje
 import copy
 import math
 import os
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -21,275 +20,91 @@ from director import objectmodel as om
 from director import visualization as vis
 
 
-class MuJoCoMeshResolver:
+class MujocoMeshResolver:
     """
-    Resolves mesh names to absolute file paths by parsing the MJCF XML file.
+    Resolves mesh names to file paths and provides source geom transforms.
 
-    Parses the <asset> section of the MJCF XML to extract mesh definitions
-    and builds a mapping from mesh names to absolute file paths.
+    Uses MjSpec to inspect the parsed-but-not-compiled model so that:
+    - Mesh file paths are resolved using modelfiledir + compiler meshdir.
+    - Geom transforms reflect the original XML pos/quat/euler values, not the
+      compiled values (MuJoCo re-centers mesh vertices during compilation and
+      adjusts geom poses to compensate).
+    - Include directives are handled automatically by MjSpec.
     """
 
     def __init__(self):
-        """
-        Initialize the mesh resolver.
+        self.mesh_name_to_file: dict[str, str] = {}
+        # Source (pre-compilation) body-to-geom transforms keyed by geom index.
+        self.geom_source_transforms: dict[int, np.ndarray] = {}
 
-        Args:
-            model: MuJoCo model object
-            xml_path: Path to the original MJCF XML file
-        """
-        self.mesh_name_to_file = {}
-        self.mesh_name_to_material = {}  # Map mesh names to their material names
-        self.geom_name_to_element = {}
-        self.material_name_to_rgba = {}
-        self.angle_unit = "radian"  # Default MuJoCo angle unit
-        self.euler_seq = "xyz"  # Default MuJoCo euler sequence
-
-    def add_xml_path(self, xml_path: str):
-        for path in self.find_all_xml_includes(xml_path):
-            self._parse_xml(path)
-
-    def find_all_xml_includes(self, xml_path: str):
-        """
-        Find all XML files included (directly or indirectly) from the given XML file.
-
-        Recursively parses the XML file and all included files to build a complete
-        list of all XML paths that are part of the model.
-
-        Args:
-            xml_path: Path to the root MJCF XML file
-
-        Returns:
-            List of all XML file paths (the root file plus all includes)
-        """
-        visited = set()
-        all_xml_paths = []
-
-        def _find_includes_recursive(current_xml_path: str):
-            """Recursive helper to find all includes."""
-            # Normalize the path to handle absolute paths and resolve symlinks
-            current_xml_path = os.path.abspath(os.path.normpath(current_xml_path))
-
-            # Avoid infinite loops from circular includes
-            if current_xml_path in visited:
-                return
-
-            # Mark as visited and add to results
-            visited.add(current_xml_path)
-            all_xml_paths.append(current_xml_path)
-
-            # Parse the XML file
-            try:
-                xml_dir = os.path.dirname(current_xml_path)
-                tree = ET.parse(current_xml_path)
-                root = tree.getroot()
-
-                # Find all <include> elements
-                for include_elem in root.findall(".//include"):
-                    file_attr = include_elem.get("file")
-                    if not file_attr:
-                        continue
-
-                    # Resolve the include path
-                    if os.path.isabs(file_attr):
-                        include_path = os.path.normpath(file_attr)
-                    else:
-                        # Resolve relative to the current XML file's directory
-                        include_path = os.path.join(xml_dir, file_attr)
-                        include_path = os.path.normpath(include_path)
-
-                    # Recursively process the included file
-                    if os.path.exists(include_path):
-                        _find_includes_recursive(include_path)
-                    else:
-                        print(f"Warning: Include file not found: {include_path} (referenced from {current_xml_path})")
-            except ET.ParseError as e:
-                print(f"Warning: Failed to parse XML file {current_xml_path}: {e}")
-            except Exception as e:
-                print(f"Warning: Error processing XML file {current_xml_path}: {e}")
-
-        # Start recursion from the root XML file
-        _find_includes_recursive(xml_path)
-
-        return all_xml_paths
-
-    def _parse_xml(self, xml_path: str):
-        """Parse the MJCF XML file to extract mesh definitions and geom elements."""
-        try:
-            xml_dir = os.path.dirname(xml_path)
-            tree = ET.parse(xml_path)
-            root = tree.getroot()
-
-            # Find the <compiler> tag and check for meshdir and angle attributes
-            compiler = root.find("compiler")
-            meshdir = xml_dir  # Default to xml_dir
-            if compiler is not None:
-                meshdir_attr = compiler.get("meshdir")
-                if meshdir_attr:
-                    # Resolve meshdir path relative to xml_dir
-                    if os.path.isabs(meshdir_attr):
-                        meshdir = meshdir_attr
-                    else:
-                        meshdir = os.path.join(xml_dir, meshdir_attr)
-                    meshdir = os.path.normpath(meshdir)
-
-                # Get angle unit (default is "radian")
-                angle_attr = compiler.get("angle")
-                if angle_attr:
-                    self.angle_unit = angle_attr.lower()
-
-                # Get euler sequence (default is "xyz")
-                eulerseq_attr = compiler.get("eulerseq")
-                if eulerseq_attr:
-                    self.euler_seq = eulerseq_attr.lower()
-
-            # Find the <asset> tag
-            asset = root.find("asset")
-            if asset is not None:
-                # Find all <mesh> elements within <asset>
-                for mesh_elem in asset.findall("mesh"):
-                    mesh_name = mesh_elem.get("name")
-                    mesh_file = mesh_elem.get("file")
-
-                    if mesh_name and mesh_file:
-                        # Resolve relative path to absolute path
-                        if os.path.isabs(mesh_file):
-                            abs_path = mesh_file
-                        else:
-                            # Join with meshdir (which is always set)
-                            abs_path = os.path.join(meshdir, mesh_file)
-                        abs_path = os.path.normpath(abs_path)
-                        self.mesh_name_to_file[mesh_name] = abs_path
-
-                    # Store mesh's material attribute if present
-                    if mesh_name:
-                        mesh_material = mesh_elem.get("material")
-                        if mesh_material:
-                            self.mesh_name_to_material[mesh_name] = mesh_material
-
-                # Find all <material> elements within <asset>
-                for material_elem in asset.findall("material"):
-                    material_name = material_elem.get("name")
-                    rgba_str = material_elem.get("rgba")
-
-                    if material_name and rgba_str:
-                        # Parse rgba string (e.g., "0.033 0.033 0.033 1")
-                        rgba_values = [float(x) for x in rgba_str.split()]
-                        if len(rgba_values) == 4:
-                            self.material_name_to_rgba[material_name] = rgba_values
-                        else:
-                            print(f"Warning: Invalid rgba attribute for material '{material_name}': {rgba_str}")
-
-            # Find all <geom> elements throughout the XML tree
-            for geom_elem in root.iter("geom"):
-                geom_name = geom_elem.get("name")
-                if geom_name:
-                    self.geom_name_to_element[geom_name] = geom_elem
-        except Exception as e:
-            print(f"Warning: Failed to parse XML for mesh resolution: {e}")
+    def load_from_spec(self, spec) -> None:
+        """Populate mesh file paths and geom source transforms from an MjSpec."""
+        self._build_mesh_file_map(spec)
+        self._build_geom_source_transforms(spec)
 
     def resolve_mesh_file(self, mesh_name: str) -> str | None:
-        """
-        Resolve a mesh name to its absolute file path.
-
-        Args:
-            mesh_name: Name of the mesh as defined in the MJCF XML
-
-        Returns:
-            Absolute path to the mesh file, or None if not found
-        """
+        """Resolve a mesh name to its absolute file path, or None if not found."""
         return self.mesh_name_to_file.get(mesh_name)
 
-    def get_material_rgba(self, material_name: str) -> list[float] | None:
-        """
-        Get the RGBA color values for a material by name.
+    def get_geom_source_transform(self, geom_id: int) -> np.ndarray | None:
+        """Return the source (pre-compilation) body-to-geom transform."""
+        return self.geom_source_transforms.get(geom_id)
 
-        Args:
-            material_name: Name of the material as defined in the MJCF XML
-
-        Returns:
-            List of 4 floats [R, G, B, A] in range [0-1], or None if material not found
-        """
-        return self.material_name_to_rgba.get(material_name)
-
-    def get_geom_transform(self, geom_name: str) -> np.ndarray | None:
-        """
-        Get the transform from parent body to geom as a 4x4 matrix.
-
-        The transform is built from the pos and either euler or quat attributes of the geom element.
-        The euler angles are interpreted according to the compiler angle and eulerseq settings.
-        Quaternions are parsed as "w x y z" format (MuJoCo standard).
-
-        Args:
-            geom_name: Name of the geom as defined in the MJCF XML
-
-        Returns:
-            4x4 numpy array representing parent_T_geom transform, or None if geom not found
-
-        Raises:
-            ValueError: If both euler and quat attributes are specified
-        """
-        geom_elem = self.geom_name_to_element.get(geom_name)
-        if geom_elem is None:
-            return None
-
-        # Get pos attribute (default to "0 0 0")
-        pos_str = geom_elem.get("pos", "0 0 0")
-        pos_values = [float(x) for x in pos_str.split()]
-        if len(pos_values) != 3:
-            print(f"Warning: Invalid pos attribute for geom '{geom_name}': {pos_str}")
-            pos_values = [0.0, 0.0, 0.0]
-        pos = np.array(pos_values)
-
-        # Check for both euler and quat (error if both are specified)
-        has_euler = geom_elem.get("euler") is not None
-        has_quat = geom_elem.get("quat") is not None
-
-        if has_euler and has_quat:
-            raise ValueError(
-                f"Geom '{geom_name}' has both 'euler' and 'quat' attributes specified. "
-                "Only one orientation specification is allowed."
-            )
-
-        # Get rotation from quat or euler
-        if has_quat:
-            # Parse quat as "w x y z" (MuJoCo format)
-            quat_str = geom_elem.get("quat")
-            quat_values = [float(x) for x in quat_str.split()]
-            if len(quat_values) != 4:
-                print(f"Warning: Invalid quat attribute for geom '{geom_name}': {quat_str}")
-                quat_values = [1.0, 0.0, 0.0, 0.0]  # Identity quaternion [w, x, y, z]
-
-            # Convert from MuJoCo format (w x y z) to SciPy format (x y z w)
-            quat_wxyz = np.array(quat_values)
-            quat_xyzw = np.array([quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]])
-
-            # Convert quaternion to rotation matrix
-            rotation = Rotation.from_quat(quat_xyzw)
-            rot_matrix = rotation.as_matrix()
+    def _build_mesh_file_map(self, spec) -> None:
+        """Resolve mesh file paths using spec.modelfiledir and compiler meshdir."""
+        base_dir = spec.modelfiledir
+        meshdir = spec.compiler.meshdir
+        if meshdir:
+            if os.path.isabs(meshdir):
+                resolved_meshdir = meshdir
+            else:
+                resolved_meshdir = os.path.normpath(os.path.join(base_dir, meshdir))
         else:
-            # Get euler attribute (default to "0 0 0")
-            euler_str = geom_elem.get("euler", "0 0 0")
-            euler_values = [float(x) for x in euler_str.split()]
-            if len(euler_values) != 3:
-                print(f"Warning: Invalid euler attribute for geom '{geom_name}': {euler_str}")
-                euler_values = [0.0, 0.0, 0.0]
-            euler = np.array(euler_values)
+            resolved_meshdir = base_dir
 
-            # Convert euler angles to radians if needed
-            if self.angle_unit == "degree":
-                euler = np.deg2rad(euler)
+        for mesh in spec.meshes:
+            if not mesh.name or not mesh.file:
+                continue
+            if os.path.isabs(mesh.file):
+                abs_path = mesh.file
+            else:
+                abs_path = os.path.join(resolved_meshdir, mesh.file)
+            self.mesh_name_to_file[mesh.name] = os.path.normpath(abs_path)
 
-            # Convert euler angles to rotation matrix
-            # Use the euler sequence from compiler settings (defaults to 'xyz')
-            rotation = Rotation.from_euler(self.euler_seq, euler)
-            rot_matrix = rotation.as_matrix()
+    def _build_geom_source_transforms(self, spec) -> None:
+        """
+        Build source transforms from MjSpec for every geom.
 
-        # Build 4x4 transformation matrix
-        transform_matrix = np.eye(4)
-        transform_matrix[:3, :3] = rot_matrix
-        transform_matrix[:3, 3] = pos
+        MjSpec preserves the original XML pos/quat/euler values before MuJoCo's
+        compilation step.  Iteration order of spec.geoms matches compiled-model
+        geom indices.
+        """
+        is_degree = bool(spec.compiler.degree)
+        euler_seq_raw = spec.compiler.eulerseq
+        euler_seq = "".join(list(euler_seq_raw)) if euler_seq_raw else "xyz"
+        # MuJoCo euler sequences use intrinsic (body-fixed) axes; scipy uses
+        # the opposite letter case for intrinsic vs extrinsic.
+        scipy_euler_seq = euler_seq.swapcase()
 
-        return transform_matrix
+        for geom_id, geom in enumerate(spec.geoms):
+            pos = np.array(geom.pos)
+            orientation_type = geom.alt.type
+
+            if orientation_type == mujoco.mjtOrientation.mjORIENTATION_EULER:
+                euler_vals = np.array(geom.alt.euler)
+                if is_degree:
+                    euler_vals = np.deg2rad(euler_vals)
+                rot = Rotation.from_euler(scipy_euler_seq, euler_vals)
+            else:
+                # Covers explicit quat AND the default identity case.
+                quat_wxyz = np.array(geom.quat)
+                quat_xyzw = [quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]]
+                rot = Rotation.from_quat(quat_xyzw)
+
+            transform = np.eye(4)
+            transform[:3, :3] = rot.as_matrix()
+            transform[:3, 3] = pos
+            self.geom_source_transforms[geom_id] = transform
 
 
 def mj_matrix_to_vtk_transform(matrix):
@@ -487,6 +302,29 @@ def compute_site_poses(model, data):
     return site_poses
 
 
+_MUJOCO_DEFAULT_GEOM_RGBA = np.array([0.5, 0.5, 0.5, 1.0])
+
+
+def resolve_geom_rgba(model, geom_id) -> list[float]:
+    """
+    Resolve the effective RGBA color for a geom using MuJoCo's compiled material system.
+
+    MuJoCo resolves the full material chain during compilation: geom material > mesh material.
+    An explicit geom rgba (differing from the default) overrides any material.
+    """
+    geom_rgba = model.geom_rgba[geom_id]
+
+    if not np.allclose(geom_rgba, _MUJOCO_DEFAULT_GEOM_RGBA):
+        return [float(geom_rgba[i]) for i in range(4)]
+
+    mat_id = model.geom_matid[geom_id]
+    if mat_id >= 0:
+        mat_rgba = model.mat_rgba[mat_id]
+        return [float(mat_rgba[i]) for i in range(4)]
+
+    return [float(geom_rgba[i]) for i in range(4)]
+
+
 def get_geom_pose_in_body(model, geom_id):
     """
     Get the pose of a geom relative to its parent body.
@@ -641,7 +479,7 @@ def load_geom_mesh(model, geom_id, mesh_resolver):
         model: MuJoCo model object
         geom_id: Geom ID
         model_dir: Directory containing mesh files (optional, deprecated - use mesh_resolver instead)
-        mesh_resolver: MuJoCoMeshResolver instance for resolving mesh file paths (optional)
+        mesh_resolver: MujocoMeshResolver instance for resolving mesh file paths (optional)
 
     Returns:
         vtkPolyData: Mesh geometry, or None if geom cannot be loaded
@@ -727,7 +565,7 @@ def visualize_mujoco_model(model_folder, model, body_to_geom, mesh_resolver, sho
     Args:
         model: MuJoCo model object
         body_to_geom: Dictionary mapping body IDs to geom IDs
-        mesh_resolver: MuJoCoMeshResolver instance for resolving mesh file paths (optional)
+        mesh_resolver: MujocoMeshResolver instance for resolving mesh file paths (optional)
 
     Returns:
         ObjectModelItem: Folder containing the model, robot, and body frames
@@ -817,14 +655,14 @@ def visualize_mujoco_model(model_folder, model, body_to_geom, mesh_resolver, sho
 
                 group_folder = group_folders[group_key]
 
-                # Get geom type
                 geom_type = model.geom_type[geom_id]
 
-                # Compute geom pose in world frame
-                # For mesh geoms, ignore geom_pose_in_body (mesh transformations are already applied)
-                # For other geoms, apply geom_pose_in_body
+                # For mesh geoms use the source (pre-compilation) transform
+                # because we load native mesh files whose vertices have not
+                # been re-centered by MuJoCo.  For primitives the compiled
+                # transform is correct.
                 if geom_type == mujoco.mjtGeom.mjGEOM_MESH:
-                    geom_pose_in_body = geom_pose_in_body = mesh_resolver.get_geom_transform(geom_name)
+                    geom_pose_in_body = mesh_resolver.get_geom_source_transform(geom_id)
                 else:
                     geom_pose_in_body = get_geom_pose_in_body(model, geom_id)
 
@@ -837,56 +675,11 @@ def visualize_mujoco_model(model_folder, model, body_to_geom, mesh_resolver, sho
                         geom_polydata, mj_matrix_to_vtk_transform(geom_pose_in_body)
                     )
 
-                # Get geom color and alpha from MuJoCo
-                # Priority order (per MuJoCo documentation):
-                # 1. Geom's material attribute
-                # 2. Mesh's material attribute (if geom references a mesh)
-                # 3. Geom's rgba attribute
-                # 4. Fall back to model.geom_rgba
-                geom_rgba = None
-                geom_elem = mesh_resolver.geom_name_to_element.get(geom_name)
-
-                # First: Check if geom has a material attribute
-                if geom_elem is not None:
-                    material_name = geom_elem.get("material")
-
-                    if material_name == "groundplane":
-                        material_name = None  # Todo, add a handler for this builtin material
-                    if material_name:
-                        # Look up material rgba from mesh_resolver
-                        geom_rgba = mesh_resolver.get_material_rgba(material_name)
-                        if geom_rgba is None:
-                            print(f"Warning: Material '{material_name}' not found for geom '{geom_name}'")
-
-                # Second: If no geom material, check mesh's material (if geom references a mesh)
-                if geom_rgba is None and geom_type == mujoco.mjtGeom.mjGEOM_MESH:
-                    mesh_id = model.geom_dataid[geom_id]
-                    if mesh_id >= 0 and mesh_id < model.nmesh:
-                        mesh_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MESH, mesh_id)
-                        if mesh_name:
-                            mesh_material_name = mesh_resolver.mesh_name_to_material.get(mesh_name)
-                            if mesh_material_name:
-                                geom_rgba = mesh_resolver.get_material_rgba(mesh_material_name)
-                                if geom_rgba is None:
-                                    print(
-                                        f"Warning: Material '{mesh_material_name}' from mesh '{mesh_name}' not found for geom '{geom_name}'"
-                                    )
-
-                # Third: If no material found, check for rgba attribute on geom
-                if geom_rgba is None and geom_elem is not None:
-                    rgba_str = geom_elem.get("rgba")
-                    if rgba_str:
-                        rgba_values = [float(x) for x in rgba_str.split()]
-                        if len(rgba_values) == 4:
-                            geom_rgba = rgba_values
-
-                # Fourth: Fall back to MuJoCo model's geom_rgba if no XML attribute found
-                if geom_rgba is None:
-                    geom_rgba = model.geom_rgba[geom_id]
-
-                # Convert to Python list for compatibility
-                geom_color = [float(geom_rgba[i]) for i in range(3)]  # RGB components [0-1]
-                geom_alpha = float(geom_rgba[3])  # Alpha component [0-1]
+                # Resolve color via MuJoCo's compiled material system
+                # (handles geom rgba, geom material, and mesh material inheritance)
+                geom_rgba = resolve_geom_rgba(model, geom_id)
+                geom_color = geom_rgba[:3]
+                geom_alpha = geom_rgba[3]
 
                 # Create PolyDataItem for the geometry, adding it to the group folder
                 obj = vis.showPolyData(
@@ -983,11 +776,12 @@ class MujocoRobotModel:
 
         self.xml_path = os.path.abspath(xml_path)
         self.default_folder_name = default_folder_name
-        self.model = mujoco.MjModel.from_xml_path(xml_path)
+        self.spec = mujoco.MjSpec.from_file(xml_path)
+        self.model = self.spec.compile()
         self.data = mujoco.MjData(self.model)
         self.kin_cache = {}
-        self.mesh_resolver = MuJoCoMeshResolver()
-        self.mesh_resolver.add_xml_path(self.xml_path)
+        self.mesh_resolver = MujocoMeshResolver()
+        self.mesh_resolver.load_from_spec(self.spec)
         self.body_to_geom = build_body_to_geom_mapping(self.model)
         self._create_joint_properties_item()
 
