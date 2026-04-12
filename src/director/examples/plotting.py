@@ -1,9 +1,8 @@
 """Example demonstrating PlotWidget with sin waves and random points."""
 
 import numpy as np
-import pyqtgraph as pg
 from qtpy import QtCore
-from qtpy.QtWidgets import QApplication, QSplitter
+from qtpy.QtWidgets import QApplication, QDockWidget, QMainWindow, QSplitter
 
 from director.objectmodel import ObjectModelTree
 from director.plot_widget import PlotWidget
@@ -13,12 +12,8 @@ from director.propertiespanel import PropertiesPanel
 def connect_to_object_model(plot_widget):
     model = ObjectModelTree()
     model.init(propertiesPanel=PropertiesPanel())
-    splitter = QSplitter(QtCore.Qt.Vertical)
-    splitter.addWidget(model.treeView)
-    splitter.addWidget(model.getPropertiesPanel())
-    splitter.show()
-    model.splitter = splitter  # store to avoid garbage collection
     plot_widget.set_object_model(model)
+    return model
 
 
 def main():
@@ -27,7 +22,7 @@ def main():
     plot_widget = PlotWidget()
 
     # Optional, use the object model to show plot objects and properties
-    connect_to_object_model(plot_widget)
+    model = connect_to_object_model(plot_widget)
 
     # Generate time array
     t = np.linspace(0, 4 * np.pi, 500)
@@ -63,28 +58,29 @@ def main():
         ],
     )
 
-    # Set the second plot's series to points-only style
-    entry = plot_widget._plot_entries[plot2]
-    for series in entry.line_series:
-        # Get the current color from the pen
-        current_pen = series.opts.get("pen")
-        color = pg.mkPen(current_pen).color() if current_pen else pg.mkColor("w")
-        pen = pg.mkPen(color, width=2)
-        brush = pg.mkBrush(color)
-
-        # Set to points only
-        series.setPen(None)
-        series.setSymbol("o")
-        series.setSymbolPen(pen)
-        series.setSymbolBrush(brush)
-        series.setSymbolSize(5)
+    # Use the high-level plot item to apply the same style to all series.
+    plot2_item = plot_widget.get_plot_object_item(plot2)
+    if plot2_item is not None:
+        plot2_item.setProperty("Style", plot2_item.style_names.index("Points"))
+        plot2_item.setProperty("Line Width", 2)
+        plot2_item.setProperty("Point Size", 5)
 
     plot_widget.add_horizontal_lines(plot2, [1.0, -1.0, 0.0])
 
-    widget = plot_widget.plot_widget
-    widget.setWindowTitle("PlotWidget Example")
-    widget.resize(800, 600)
-    widget.show()
+    window = QMainWindow()
+    window.setWindowTitle("PlotWidget Example")
+    window.resize(1200, 800)
+    window.setCentralWidget(plot_widget.plot_widget)
+
+    left_panel = QSplitter(QtCore.Qt.Vertical)
+    left_panel.addWidget(model.treeView)
+    left_panel.addWidget(model.getPropertiesPanel())
+
+    properties_dock = QDockWidget("Properties", window)
+    properties_dock.setObjectName("PropertiesDock")
+    properties_dock.setWidget(left_panel)
+    window.addDockWidget(QtCore.Qt.LeftDockWidgetArea, properties_dock)
+    window.show()
 
     app.exec_()
 

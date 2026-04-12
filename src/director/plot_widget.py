@@ -362,6 +362,10 @@ class PlotWidget(QtCore.QObject):
     def get_plots(self) -> list[pg.PlotItem]:
         return list(self._plots)
 
+    def get_plot_object_item(self, plot_item: pg.PlotItem) -> PlotObjItem | None:
+        entry = self._plot_entries.get(plot_item)
+        return entry.object_item if entry else None
+
     def get_series_names(self, plot_item: pg.PlotItem) -> list[str]:
         entry = self._plot_entries.get(plot_item)
         if not entry:
