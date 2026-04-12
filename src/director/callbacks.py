@@ -1,11 +1,11 @@
-import types
 from weakref import ref
+import types
 
-"""
+'''
 CallbackRegistry is a class taken from matplotlib.cbook.
 
 http://sourceforge.net/p/matplotlib/code/HEAD/tree/trunk/matplotlib/lib/matplotlib/cbook.py
-"""
+'''
 
 
 class CallbackRegistry:
@@ -50,129 +50,135 @@ class CallbackRegistry:
     """
 
     def __init__(self, signals):
-        """
-        *signals* a sequence of signal names, or None if not providing
-        any validation on connect.
-        """
-        self.signals = set(signals) if signals is not None else None
-        # mapping from signal to a set of proxy objects for callbacks
+        '*signals* is a sequence of valid signals'
+        self.signals = set()
         self.callbacks = dict()
-        # proxy objects for callbacks (so we can use weak references)
-        self._proxy_objs = dict()
+        for s in signals:
+            self.addSignal(s)
+        self._cid = 0
 
-    def __del__(self):
-        # Just in case there are any lingering references
-        self.disconnect_all()
+    def _check_signal(self, s):
+        'make sure *s* is a valid signal or raise a ValueError'
+        if s not in self.signals:
+            signals = list(self.signals)
+            signals.sort()
+            raise ValueError('Unknown signal "%s"; valid signals are %s' % (s, signals))
 
-    def connect(self, signal, func):
+    def addSignal(self, sig):
+        if sig not in self.signals:
+            self.signals.add(sig)
+            self.callbacks[sig] = dict()
+
+    def connect(self, s, func):
         """
-        Register *func* to be called when signal *signal* is generated.
-        Returns the id of the callback for disconnection.
-
-        *signal* can be a signal name or list of signal names, or None.
+        register *func* to be called when a signal *s* is generated
+        func will be called
         """
-        if signal is None:
-            signals = []
-        elif isinstance(signal, list):
-            signals = signal
-        else:
-            signals = [signal]
-        callback_ids = []
-        for sig in signals:
-            if self.signals is not None and sig not in self.signals:
-                raise ValueError("Unknown signal: %s" % sig)
-            if sig not in self.callbacks:
-                self.callbacks[sig] = set()
-            if func not in self._proxy_objs:
-                self._proxy_objs[func] = self._BoundMethodProxy(func)
-            proxy = self._proxy_objs[func]
-            self.callbacks[sig].add(proxy)
-            callback_ids.append((sig, id(proxy)))
-        # return the id of the proxy object, not the function itself
-        return callback_ids[0] if len(callback_ids) == 1 else callback_ids
+        self._check_signal(s)
+        proxy = BoundMethodProxy(func)
+        for cid, callback in list(self.callbacks[s].items()):
+            if callback.inst is not None and callback.inst() is None:
+                del self.callbacks[s][cid]
+            elif callback == proxy:
+                return cid
+        self._cid += 1
+        self.callbacks[s][self._cid] = proxy
+        return self._cid
 
-    def disconnect(self, callback_ids):
+    def disconnect(self, cid):
         """
-        Disconnect the callback registered with callback id *callback_ids*.
+        disconnect the callback registered with callback id *cid*
         """
-        if not isinstance(callback_ids, list):
-            callback_ids = [callback_ids]
-        for callback_id in callback_ids:
-            if isinstance(callback_id, tuple):
-                signal, proxy_id = callback_id
-            else:
-                # Assume it's a single signal callback id
-                signal, proxy_id = callback_id
-            if signal in self.callbacks:
-                for proxy in list(self.callbacks[signal]):
-                    if id(proxy) == proxy_id:
-                        self.callbacks[signal].discard(proxy)
-                        break
-
-    def disconnect_all(self):
-        """Disconnect all callbacks registered in this registry."""
-        self.callbacks.clear()
-        self._proxy_objs.clear()
-
-    def process(self, signal, *args, **kwargs):
-        """
-        Process signal *signal*.
-
-        All functions registered to receive this signal will be called
-        with *args* and **kwargs*.
-        """
-        if signal not in self.callbacks:
-            return
-        # don't iterate directly over the set in case callbacks disconnect
-        # during iteration
-        for proxy in list(self.callbacks[signal]):
-            # wrap in try/except so if a callback function throws we'll
-            # be able to remove the dead proxy
+        for eventname, callbackd in list(self.callbacks.items()):
             try:
+                del callbackd[cid]
+            except KeyError:
+                continue
+            else:
+                return
+
+    def process(self, s, *args, **kwargs):
+        """
+        process signal *s*.  All of the functions registered to receive
+        callbacks on *s* will be called with `*args` and `**kwargs`
+        """
+        self._check_signal(s)
+        for cid, proxy in list(self.callbacks[s].items()):
+            if proxy.inst is not None and proxy.inst() is None:
+                del self.callbacks[s][cid]
+            else:
                 proxy(*args, **kwargs)
-            except ReferenceError:
-                self.callbacks[signal].discard(proxy)
 
-    class _BoundMethodProxy(object):
+    def getCallbacks(self, s):
         """
-        Our proxy objects need to be hashable and weak-referenceable.
-        Based on code from Peter Parente's "Mindtrove" blog:
-        http://mindtrove.info/articles/python-weak-references/
+        return callbacks registered to signal *s*.
         """
-
-        def __init__(self, callback):
-            if isinstance(callback, types.MethodType):
-                # callback is bound method
-                self._obj = ref(callback.__self__)
-                self._func = callback.__func__
-                self._class = callback.__self__.__class__
+        self._check_signal(s)
+        callbacks = []
+        for cid, proxy in list(self.callbacks[s].items()):
+            if proxy.inst is not None and proxy.inst() is None:
+                del self.callbacks[s][cid]
             else:
-                # callback is a regular function or callable
-                self._obj = None
-                self._func = callback
-                self._class = None
+                callbacks.append(proxy)
+        return callbacks
 
-        def __call__(self, *args, **kwargs):
-            if self._obj is not None:
-                # bound method
-                obj = self._obj()
-                if obj is None:
-                    raise ReferenceError
-                return self._func(obj, *args, **kwargs)
-            else:
-                # regular function
-                return self._func(*args, **kwargs)
 
-        def __eq__(self, other):
-            if isinstance(other, CallbackRegistry._BoundMethodProxy):
-                if self._obj is not None and other._obj is not None:
-                    return self._func == other._func and self._obj() == other._obj()
-                elif self._obj is None and other._obj is None:
-                    return self._func == other._func
+class BoundMethodProxy(object):
+    '''
+    Our own proxy object which enables weak references to bound and unbound
+    methods and arbitrary callables. Pulls information about the function,
+    class, and instance out of a bound method. Stores a weak reference to the
+    instance to support garbage collection.
+
+    @organization: IBM Corporation
+    @copyright: Copyright (c) 2005, 2006 IBM Corporation
+    @license: The BSD License
+
+    Minor bugfixes by Michael Droettboom
+    '''
+
+    def __init__(self, cb):
+        try:
+            try:
+                self.inst = ref(cb.__self__)
+            except TypeError:
+                self.inst = None
+            self.func = cb.__func__
+            self.klass = cb.__self__.__class__
+        except AttributeError:
+            self.inst = None
+            self.func = cb
+            self.klass = None
+
+    def __call__(self, *args, **kwargs):
+        '''
+        Proxy for a call to the weak referenced object. Take
+        arbitrary params to pass to the callable.
+
+        Raises `ReferenceError`: When the weak reference refers to
+        a dead object
+        '''
+        if self.inst is not None and self.inst() is None:
+            raise ReferenceError
+        elif self.inst is not None:
+            mtd = types.MethodType(self.func, self.inst())
+        else:
+            mtd = self.func
+        return mtd(*args, **kwargs)
+
+    def __eq__(self, other):
+        '''
+        Compare the held function and instance with that held by
+        another proxy.
+        '''
+        if not isinstance(other, BoundMethodProxy):
             return False
+        if self.inst is None:
+            return self.func == other.func and other.inst is None
+        return self.func == other.func and self.inst() == other.inst()
 
-        def __ne__(self, other):
-            return not self == other
-
-        def __hash__(self):
-            return id(self._func)
+    def __ne__(self, other):
+        '''
+        Inverse of __eq__.
+        '''
+        return not self.__eq__(other)
