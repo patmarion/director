@@ -31,8 +31,14 @@ qtconsole = [
 ]
 
 # Qt bindings
-pyside = ["PySide6"]
-pyqt = ["PyQt6"]
+pyside = [
+    "PySide6<=6.9; sys_platform == 'darwin'",
+    "PySide6; sys_platform != 'darwin'",
+]
+pyqt = [
+    "PyQt6<=6.9; sys_platform == 'darwin'",
+    "PyQt6; sys_platform != 'darwin'",
+]
 
 # Dev, docs, test
 dev = [ "director[extras,pyside,docs,test]"]
