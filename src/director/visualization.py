@@ -153,6 +153,19 @@ class MatplotlibColormaps:
         return f
 
 
+@functools.lru_cache(maxsize=128)
+def getColorMap(name, scalarRange, reverse=False, discretize=0):
+    """Compatibility wrapper for the legacy colormap helper API."""
+    scalar_range_tuple = tuple(scalarRange) if scalarRange is not None else None
+    return MatplotlibColormaps.getColormapAsVTK(
+        name,
+        scalar_range_tuple,
+        numColors=256,
+        reverse=reverse,
+        discretize=discretize,
+    )
+
+
 class PolyDataItem(om.ObjectModelItem):
     defaultScalarRangeMap = {
         # 'intensity' : (400, 4000),
