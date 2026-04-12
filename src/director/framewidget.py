@@ -239,6 +239,8 @@ class FrameWidget(ViewEventFilter):
         self.axisPolys = []
         self.ringPolys = []
         self.pickTolerance = 0.001
+        self._translateAxisEnabled = [True, True, True]
+        self._rotateAxisEnabled = [True, True, True]
         self._buildActors()
 
         # Setup picker
@@ -693,9 +695,29 @@ class FrameWidget(ViewEventFilter):
     def setEnabled(self, enabled):
         """Enable or disable the widget."""
         self._enabled = enabled
-        for actor in self.axisActors + self.ringActors:
-            actor.SetVisibility(enabled)
+        for i, actor in enumerate(self.axisActors):
+            actor.SetVisibility(enabled and self._translateAxisEnabled[i])
+        for i, actor in enumerate(self.ringActors):
+            actor.SetVisibility(enabled and self._rotateAxisEnabled[i])
         self.view.render()
+
+    def setTranslateAxisEnabled(self, axisId, enabled):
+        """Enable or disable translation along a specific axis (0=X, 1=Y, 2=Z)."""
+        self._translateAxisEnabled[axisId] = enabled
+        self.axisActors[axisId].SetVisibility(self._enabled and enabled)
+        if enabled:
+            self.picker.AddPickList(self.axisActors[axisId])
+        else:
+            self.picker.DeletePickList(self.axisActors[axisId])
+
+    def setRotateAxisEnabled(self, axisId, enabled):
+        """Enable or disable rotation about / in-plane interaction for a specific axis (0=X, 1=Y, 2=Z)."""
+        self._rotateAxisEnabled[axisId] = enabled
+        self.ringActors[axisId].SetVisibility(self._enabled and enabled)
+        if enabled:
+            self.picker.AddPickList(self.ringActors[axisId])
+        else:
+            self.picker.DeletePickList(self.ringActors[axisId])
 
     def setScale(self, scale):
         """Update the scale and rebuild actors."""
@@ -717,16 +739,23 @@ class FrameWidget(ViewEventFilter):
         self._buildActors()
 
         # Re-add actors to renderer
-        for actor in self.axisActors + self.ringActors:
-            actor.SetVisibility(self._enabled)
+        for i, actor in enumerate(self.axisActors):
+            actor.SetVisibility(self._enabled and self._translateAxisEnabled[i])
+            renderer.AddActor(actor)
+        for i, actor in enumerate(self.ringActors):
+            actor.SetVisibility(self._enabled and self._rotateAxisEnabled[i])
             renderer.AddActor(actor)
 
-        # Update picker
+        # Update picker (respecting per-axis enabled state)
         self.picker = vtk.vtkCellPicker()
         self.picker.SetTolerance(self.pickTolerance)
         self.picker.PickFromListOn()
-        for actor in self.axisActors + self.ringActors:
-            self.picker.AddPickList(actor)
+        for i, actor in enumerate(self.axisActors):
+            if self._translateAxisEnabled[i]:
+                self.picker.AddPickList(actor)
+        for i, actor in enumerate(self.ringActors):
+            if self._rotateAxisEnabled[i]:
+                self.picker.AddPickList(actor)
 
         # Render
         self.view.render()

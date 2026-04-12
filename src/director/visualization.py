@@ -961,6 +961,8 @@ class FrameItem(PolyDataItem):
         self._frameSync = None
         self._frameTrace = None
         self._frameProperties = None
+        self._translateAxisEnabled = [True, True, True]
+        self._rotateAxisEnabled = [True, True, True]
 
         self.actor.SetUserTransform(transform)
 
@@ -1061,6 +1063,10 @@ class FrameItem(PolyDataItem):
                 scale = self.getProperty("Scale")
                 # Set callback to trigger FrameModified signal when transform changes
                 self.frameWidget = FrameWidget(view, self.transform, scale=scale)
+                for axisId, enabled in enumerate(self._translateAxisEnabled):
+                    self.frameWidget.setTranslateAxisEnabled(axisId, enabled)
+                for axisId, enabled in enumerate(self._rotateAxisEnabled):
+                    self.frameWidget.setRotateAxisEnabled(axisId, enabled)
             # Ensure widget is enabled and visible (regardless of whether it was just created)
             self.frameWidget.setEnabled(True)
             self.frameWidget.view.render()
@@ -1080,6 +1086,18 @@ class FrameItem(PolyDataItem):
         if not self._frameProperties:
             self._frameProperties = FrameProperties(self, undo_stack=undo_stack)
         return self._frameProperties
+
+    def setTranslateAxisEnabled(self, axisId, enabled):
+        """Enable or disable translation along a specific frame axis."""
+        self._translateAxisEnabled[axisId] = enabled
+        if self.frameWidget:
+            self.frameWidget.setTranslateAxisEnabled(axisId, enabled)
+
+    def setRotateAxisEnabled(self, axisId, enabled):
+        """Enable or disable rotation / planar interaction for a specific frame axis."""
+        self._rotateAxisEnabled[axisId] = enabled
+        if self.frameWidget:
+            self.frameWidget.setRotateAxisEnabled(axisId, enabled)
 
     def hasDataSet(self, dataSet):
         return dataSet == self.transform
