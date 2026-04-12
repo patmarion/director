@@ -8,6 +8,7 @@ from qtpy.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QPushButton,
     QSlider,
@@ -59,6 +60,29 @@ class PropertyEditor(QWidget):
     def _updateWidget(self, value):
         """Override in subclasses to update the widget."""
         pass
+
+
+class LabelEditor(PropertyEditor):
+    """Read-only label editor for display-only property values."""
+
+    def __init__(self, propertySet, propertyName, parent=None):
+        super().__init__(propertySet, propertyName, parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.label = QLabel(self)
+        self.label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        layout.addWidget(self.label)
+
+        self.updateFromPropertySet()
+
+    def _updateWidget(self, value):
+        attributes = self.propertySet._attributes.get(self.propertyName)
+        if attributes and attributes.enumNames and isinstance(value, int) and 0 <= value < len(attributes.enumNames):
+            text = attributes.enumNames[value]
+        else:
+            text = "" if value is None else str(value)
+        self.label.setText(text)
 
 
 class BoolEditor(PropertyEditor):
@@ -822,37 +846,53 @@ class PropertiesPanel(QWidget):
         self.propertyToItem[propertyName] = item
         self.itemToProperty[item] = propertyName
 
-        # Create appropriate editor
+        self._installEditor(item, propertyName)
+        parent_item.setExpanded(True)
+
+    def _installEditor(self, item, propertyName):
         value = self.propertySet.getProperty(propertyName)
         attributes = self.propertySet._attributes.get(propertyName)
-
         editor = self._createEditor(propertyName, value, attributes)
 
-        # Special handling for arrays (but not colors - colors are handled separately)
         is_array = isinstance(value, (list, tuple)) and len(value) > 0
         is_color = "color" in propertyName.lower() and isinstance(value, (list, tuple)) and len(value) == 3
 
-        if is_array and not is_color:
-            # Array editor doesn't create a widget for itself, it manages children
-            # Expand if list has 6 or fewer elements
-            expanded_by_default = len(value) <= 6
-            array_editor = ArrayEditor(self.propertySet, propertyName, item, expanded_by_default=expanded_by_default)
-            self.itemToEditor[item] = array_editor
-        elif is_color:
-            # Color should be expandable like arrays
-            color_editor = ColorArrayEditor(self.propertySet, propertyName, item)
-            self.itemToEditor[item] = color_editor
-        elif editor:
+        if editor is not None:
             self.tree.setItemWidget(item, 1, editor)
             self.itemToEditor[item] = editor
-
-        parent_item.setExpanded(True)
+        elif is_array and not is_color:
+            expanded_by_default = len(value) <= 6
+            self.itemToEditor[item] = ArrayEditor(
+                self.propertySet, propertyName, item, expanded_by_default=expanded_by_default
+            )
+        elif is_color:
+            self.itemToEditor[item] = ColorArrayEditor(self.propertySet, propertyName, item)
 
         item.setHidden(bool(attributes.hidden))
         self._applyDocstringTooltip(item, self.itemToEditor.get(item), attributes)
 
+    def _clearItemEditor(self, item):
+        widget = self.tree.itemWidget(item, 1)
+        if widget is not None:
+            self.tree.removeItemWidget(item, 1)
+            widget.deleteLater()
+
+        self.itemToEditor.pop(item, None)
+
+        while item.childCount():
+            child = item.child(0)
+            self._clearItemEditor(child)
+            item.removeChild(child)
+
+    def _rebuildEditor(self, propertyName):
+        item = self.propertyToItem[propertyName]
+        self._clearItemEditor(item)
+        self._installEditor(item, propertyName)
+
     def _createEditor(self, propertyName, value, attributes):
         """Create an appropriate editor widget for a property."""
+        if attributes and (attributes.readOnly or attributes.hidden):
+            return LabelEditor(self.propertySet, propertyName)
         if isinstance(value, bool):
             return BoolEditor(self.propertySet, propertyName)
         elif isinstance(value, int):
@@ -869,8 +909,8 @@ class PropertiesPanel(QWidget):
             # Arrays and colors are handled specially in _addProperty
             return None
         else:
-            # Fallback: string editor
-            return StringEditor(self.propertySet, propertyName)
+            # Unsupported value types are display-only.
+            return LabelEditor(self.propertySet, propertyName)
 
     def _applyDocstringTooltip(self, item, editor, attributes):
         """Apply docstring tooltip to item and editor widgets."""
@@ -926,35 +966,8 @@ class PropertiesPanel(QWidget):
             item = self.propertyToItem[propertyName]
             editor = self.itemToEditor.get(item)
 
-            # Handle 'hidden' attribute: show/hide the row
-            if attributeName == "hidden":
-                attributes = propertySet._attributes.get(propertyName)
-                if attributes and hasattr(item, "setHidden"):  # Qt API: QTreeWidgetItem.setHidden(bool)
-                    item.setHidden(bool(attributes.hidden))
-
-            # Handle 'readOnly' attribute: set editor enabled/disabled or swap for label
-            elif attributeName == "readOnly":
-                attributes = propertySet._attributes.get(propertyName)
-                read_only = attributes.readOnly if attributes else False
-                if item in self.itemToEditor:
-                    editor = self.itemToEditor[item]
-                    if hasattr(editor, "setEnabled"):
-                        # Try disabling/enabling the editor widget itself
-                        try:
-                            editor.setEnabled(not read_only)
-                        except Exception:
-                            pass
-                    elif read_only:
-                        # Fallback: replace with a label showing value
-                        from qtpy.QtWidgets import QLabel
-
-                        value = propertySet.getProperty(propertyName)
-                        label = QLabel(str(value), self.tree)
-                        self.tree.setItemWidget(item, 1, label)
-                        self.itemToEditor[item] = label
-                    else:
-                        # If not readOnly and previously swapped with a label, try to restore editor
-                        self._onPropertyChanged(propertySet, propertyName)
+            if attributeName in ("hidden", "readOnly"):
+                self._rebuildEditor(propertyName)
                 return
             elif attributeName == "docstring":
                 attributes = propertySet._attributes.get(propertyName)
@@ -963,20 +976,7 @@ class PropertiesPanel(QWidget):
                 return
 
             elif attributeName == "enumNames":
-                if isinstance(editor, EnumEditor):
-                    # For enum properties, if enumNames changed, recreate the editor
-                    # Recreate the editor with new enum values
-                    value = propertySet.getProperty(propertyName)
-                    attributes = propertySet._attributes.get(propertyName)
-
-                    # Remove old editor
-                    self.tree.setItemWidget(item, 1, None)
-                    del self.itemToEditor[item]
-
-                    # Create new editor
-                    new_editor = EnumEditor(self.propertySet, propertyName)
-                    self.tree.setItemWidget(item, 1, new_editor)
-                    self.itemToEditor[item] = new_editor
+                self._rebuildEditor(propertyName)
             elif hasattr(editor, "updateFromPropertySet"):
                 # For other attributes, just update the existing editor
                 editor.updateFromPropertySet()

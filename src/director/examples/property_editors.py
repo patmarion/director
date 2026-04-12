@@ -66,6 +66,72 @@ def main():
     props.addProperty("bool", True, attributes=PropertyAttributes(docstring="Enable or disable the feature."))
     props.addProperty("str", "value", attributes=PropertyAttributes(docstring="Free-form text value."))
     props.addProperty("color", [1.0, 0.5, 0.0])
+    props.addProperty(
+        "debug payload",
+        {"checksum": "0xdeadbeef", "valid": True},
+        attributes=PropertyAttributes(
+            readOnly=True,
+            hidden=True,
+            docstring="Hidden properties can stay out of the UI until you choose to reveal them.",
+        ),
+    )
+
+    # Read-only property examples with a live toggle for the readOnly attribute
+    props.addProperty(
+        "read-only/use label editors",
+        True,
+        attributes=PropertyAttributes(
+            docstring="Toggle this checkbox to switch the read-only demo properties between labels and editable widgets."
+        ),
+    )
+    props.addProperty(
+        "read-only/int value",
+        7,
+        attributes=PropertyAttributes(
+            readOnly=True,
+            minimum=0,
+            maximum=20,
+            singleStep=1,
+            docstring="Read-only integer rendered as a label until the toggle is disabled.",
+        ),
+    )
+    props.addProperty(
+        "read-only/double list",
+        [0.25, 1.5, 2.75],
+        attributes=PropertyAttributes(
+            readOnly=True,
+            decimals=3,
+            minimum=-10,
+            maximum=10,
+            singleStep=0.125,
+            docstring="Read-only list of doubles. Disable the toggle above to edit each element.",
+        ),
+    )
+    props.addProperty(
+        "read-only/string value",
+        "Label mode",
+        attributes=PropertyAttributes(
+            readOnly=True,
+            docstring="Read-only string rendered as a label until the toggle is disabled.",
+        ),
+    )
+    props.addProperty(
+        "read-only/enum value",
+        2,
+        attributes=PropertyAttributes(
+            readOnly=True,
+            enumNames=["Low", "Medium", "High", "Ultra"],
+            docstring="Read-only enums now show their label instead of the stored integer index.",
+        ),
+    )
+    props.addProperty(
+        "read-only/opaque dict",
+        {"source": "demo", "frame_count": 2},
+        attributes=PropertyAttributes(
+            readOnly=True,
+            docstring="Opaque values like dicts always use labels because the panel has no editor widget for them.",
+        ),
+    )
 
     # Nested properties
     props.addProperty("nest1/prop1", 42, attributes=PropertyAttributes(docstring="Nested integer property."))
@@ -84,6 +150,21 @@ def main():
 
     panel2 = PropertiesPanel()
     panel2.connectProperties(props)
+
+    read_only_demo_properties = [
+        "read-only/int value",
+        "read-only/double list",
+        "read-only/string value",
+        "read-only/enum value",
+        "read-only/opaque dict",
+    ]
+
+    def update_read_only_demo(use_label_editors):
+        for property_name in read_only_demo_properties:
+            props.setPropertyAttribute(property_name, "readOnly", bool(use_label_editors))
+
+    props.connectPropertyValueChanged("read-only/use label editors", update_read_only_demo)
+    update_read_only_demo(props.getProperty("read-only/use label editors"))
 
     # Create a widget to hold both panels side by side
     splitter = QSplitter()
@@ -105,17 +186,26 @@ def main():
     print("  - Enum properties with enumNames (combo boxes)")
     print("  - Properties with sliders (when range <= 1000)")
     print("  - Nested properties with attributes")
+    print("  - Read-only values rendered as labels")
+    print("  - A read-only/ group with a live checkbox that toggles label/edit mode")
+    print("  - Hidden properties that can be revealed later")
     print("  - Properties with docstring tooltips (hover the label/value)")
     print("")
     print("You can also edit properties programmatically in Python:")
     print("  props.double_precise = 3.14159")
     print("  props.enum_choice = 2")
+    print("  props.setProperty('read-only/use label editors', False)")
+    print("  props.setProperty('read-only/string value', 'Editable mode')")
+    print("  props.setProperty('read-only/enum value', 1)  # label mode shows 'Medium'")
     print()
     print("Test property removal:")
     print("  props.removeProperty('str')  # Should disappear from both panels")
     print()
     print("Test attribute changes (enumNames):")
     print("  props.setPropertyAttribute('enum_choice', 'enumNames', ['New A', 'New B', 'New C'])")
+    print("  props.setPropertyAttribute('debug payload', 'hidden', False)")
+    print("  props.setPropertyAttribute('double_precise', 'readOnly', True)")
+    print("  # The dict demo remains a label even when readOnly is False.")
     print("  props.color = [0.0, 1.0, 0.5]")
     print("  props.bool = False")
 

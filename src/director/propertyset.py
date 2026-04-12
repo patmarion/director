@@ -91,6 +91,7 @@ class PropertySet(object):
         self._properties = OrderedDict()
         self._attributes = {}
         self._alternateNames = {}
+        self._normalizedEditableValues = {}
 
     def propertyNames(self):
         return list(self._properties.keys())
@@ -147,6 +148,7 @@ class PropertySet(object):
         del self._properties[propertyName]
         del self._attributes[propertyName]
         del self._alternateNames[cleanPropertyName(propertyName)]
+        del self._normalizedEditableValues[propertyName]
         self.callbacks.process(self.PROPERTY_REMOVED_SIGNAL, self, propertyName)
 
     def addProperty(self, propertyName, propertyValue, attributes=None, index=None):
@@ -164,6 +166,7 @@ class PropertySet(object):
         self._properties[propertyName] = propertyValue
         self._attributes[propertyName] = attrs
         self._alternateNames[alternateName] = propertyName
+        self._normalizedEditableValues[propertyName] = copy.deepcopy(propertyValue)
         if index is not None:
             self.setPropertyIndex(propertyName, index)
         self.callbacks.process(self.PROPERTY_ADDED_SIGNAL, self, propertyName)
@@ -179,13 +182,16 @@ class PropertySet(object):
     def setProperty(self, propertyName, propertyValue):
         previousValue = self._properties[propertyName]
         attrs = self._attributes[propertyName]
-        propertyValue = self._normalize_property_value(
-            propertyName, propertyValue, existing_value=previousValue, attributes=attrs
-        )
+        if not attrs.readOnly:
+            propertyValue = self._normalize_property_value(
+                propertyName, propertyValue, existing_value=previousValue, attributes=attrs
+            )
         if propertyValue == previousValue:
             return
 
         self._properties[propertyName] = propertyValue
+        if not attrs.readOnly:
+            self._normalizedEditableValues[propertyName] = copy.deepcopy(propertyValue)
         self.callbacks.process(self.PROPERTY_CHANGED_SIGNAL, self, propertyName)
 
     def getPropertyAttribute(self, propertyName, propertyAttribute):
@@ -198,7 +204,28 @@ class PropertySet(object):
     def setPropertyAttribute(self, propertyName, propertyAttribute, value):
         attributes = self._attributes[propertyName]
         if attributes[propertyAttribute] != value:
+            property_changed = False
+            if propertyAttribute == "readOnly" and attributes.readOnly and not value:
+                current_value = self._properties[propertyName]
+                template_value = self._normalizedEditableValues[propertyName]
+                normalized_value = self._normalize_property_value(
+                    propertyName,
+                    current_value,
+                    existing_value=template_value,
+                    attributes=attributes,
+                )
+                if not self._values_match(current_value, normalized_value):
+                    print(
+                        f"[PropertySet] Normalized '{propertyName}' while disabling readOnly: "
+                        f"{current_value!r} -> {normalized_value!r}"
+                    )
+                    self._properties[propertyName] = normalized_value
+                    property_changed = True
+                self._normalizedEditableValues[propertyName] = copy.deepcopy(normalized_value)
+
             attributes[propertyAttribute] = value
+            if property_changed:
+                self.callbacks.process(self.PROPERTY_CHANGED_SIGNAL, self, propertyName)
             self.callbacks.process(self.PROPERTY_ATTRIBUTE_CHANGED_SIGNAL, self, propertyName, propertyAttribute)
 
     def __getattribute__(self, name):
@@ -217,7 +244,13 @@ class PropertySet(object):
         # We need to check this carefully to avoid infinite recursion
 
         # Check if this is a protected/private attribute or an internal attribute
-        if name.startswith("_") or name in ["callbacks", "_properties", "_attributes", "_alternateNames"]:
+        if name.startswith("_") or name in [
+            "callbacks",
+            "_properties",
+            "_attributes",
+            "_alternateNames",
+            "_normalizedEditableValues",
+        ]:
             object.__setattr__(self, name, value)
             return
 
@@ -420,3 +453,13 @@ class PropertySet(object):
                 raise ValueError(f"Property '{propertyName}' enum value '{value}' invalid.")
             return enum_names.index(value)
         raise ValueError(f"Property '{propertyName}' enum expects str or int value.")
+
+    @staticmethod
+    def _values_match(lhs: Any, rhs: Any) -> bool:
+        if type(lhs) is not type(rhs):
+            return False
+        try:
+            result = lhs == rhs
+        except (TypeError, ValueError):
+            return False
+        return isinstance(result, bool) and result

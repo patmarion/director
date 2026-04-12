@@ -153,3 +153,38 @@ def test_enum_properties_accept_string_and_int():
 
     with pytest.raises(ValueError):
         props.setProperty("Surface Mode", "Invalid")
+
+
+def test_read_only_properties_accept_opaque_updates():
+    props = PropertySet()
+    props.addProperty("Metadata", "initial", attributes=PropertyAttributes(readOnly=True))
+
+    payload = {"source": "demo", "count": 3}
+    props.setProperty("Metadata", payload)
+
+    assert props.getProperty("Metadata") == payload
+
+
+def test_disabling_read_only_normalizes_current_value_and_warns(capsys):
+    props = PropertySet()
+    props.addProperty("Scalar", 1.5, attributes=PropertyAttributes(readOnly=True))
+
+    props.setProperty("Scalar", 2)
+    assert props.getProperty("Scalar") == 2
+    assert isinstance(props.getProperty("Scalar"), int)
+
+    props.setPropertyAttribute("Scalar", "readOnly", False)
+
+    assert props.getProperty("Scalar") == 2.0
+    assert isinstance(props.getProperty("Scalar"), float)
+    assert "Normalized 'Scalar' while disabling readOnly" in capsys.readouterr().out
+
+
+def test_disabling_read_only_keeps_compatible_value_without_warning(capsys):
+    props = PropertySet()
+    props.addProperty("Metadata", {"source": "demo"}, attributes=PropertyAttributes(readOnly=True))
+
+    props.setPropertyAttribute("Metadata", "readOnly", False)
+
+    assert props.getProperty("Metadata") == {"source": "demo"}
+    assert capsys.readouterr().out == ""
