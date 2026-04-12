@@ -9,7 +9,7 @@ import numpy as np
 import director.applogic as app
 import director.objectmodel as om
 import director.vtkAll as vtk
-from director import callbacks, filterUtils
+from director import filterUtils
 from director import vtkNumpy as vnp
 from director.debugVis import DebugData
 from director.fieldcontainer import FieldContainer
@@ -981,8 +981,8 @@ class FrameItem(PolyDataItem):
         self.properties.setPropertyIndex("Edit", 0)
         self.properties.setPropertyIndex("Scale", 1)
 
-        # Initialize callbacks with FrameModified signal
-        self.callbacks = callbacks.CallbackRegistry(["FrameModified"])
+        # Add callbacks and vtk observer to signal frame modifications
+        self.callbacks.addSignal("FrameModified")
         self.observerTag = self.transform.AddObserver("ModifiedEvent", self.onTransformModified)
         self._updateAxesGeometry()
 

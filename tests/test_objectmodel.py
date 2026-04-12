@@ -1,9 +1,11 @@
 """Tests for objectmodel module."""
 
+import vtk
 from qtpy.QtWidgets import QTreeView
 
 from director.objectmodel import ObjectModelItem, ObjectModelTree
 from director.propertiespanel import PropertiesPanel
+from director.visualization import FrameItem
 
 
 def test_object_model_tree_construction(qapp):
@@ -104,3 +106,19 @@ def test_object_model_property_change_updates_tree_item(qapp):
     # Verify the tree item text has been updated again
     assert tree_item.text() == "another name"
     assert obj.getProperty("Name") == "another name"
+
+
+def test_frame_item_inherits_removed_from_object_model_callback(qapp):
+    """Test object removed callback on a derived ObjectModelItems class."""
+    tree = ObjectModelTree()
+    tree.init()
+
+    frame_item = FrameItem("test frame", vtk.vtkTransform(), view=None)
+    removed_events = []
+
+    frame_item.connectRemovedFromObjectModel(lambda object_tree, obj: removed_events.append((object_tree, obj)))
+
+    tree.addToObjectModel(frame_item)
+    tree.removeFromObjectModel(frame_item)
+
+    assert removed_events == [(tree, frame_item)]
