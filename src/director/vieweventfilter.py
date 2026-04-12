@@ -4,6 +4,8 @@ import vtk
 from qtpy.QtCore import QEvent, QObject, QPoint, Qt
 from qtpy.QtGui import QCursor
 
+from director.vtk_widget import get_qt_mouse_event_position
+
 
 class ViewEventFilter(QObject):
     """Event filter for VTK views using Qt event filtering."""
@@ -102,20 +104,16 @@ class ViewEventFilter(QObject):
         return False
 
     def getMousePositionInView(self, event):
-        """Get mouse position in view coordinates."""
-        mousePosition = event.pos()
-        widget = self.view.vtkWidget()
-        if widget:
-            return mousePosition.x(), widget.height() - mousePosition.y()
-        return mousePosition.x(), mousePosition.y()
+        """Get the mouse position in VTK display coordinates."""
+        return self.view.logicalToDisplayCoordinates(get_qt_mouse_event_position(event))
 
     def getCursorDisplayPosition(self):
-        """Get cursor display position."""
+        """Get the cursor position in VTK display coordinates."""
         vtk_widget = self.view.vtkWidget()
         if not vtk_widget:
             return (0, 0)
         cursorPos = vtk_widget.mapFromGlobal(QCursor.pos())
-        return cursorPos.x(), vtk_widget.height() - cursorPos.y()
+        return self.view.logicalToDisplayCoordinates((cursorPos.x(), cursorPos.y()))
 
     def onMouseWheel(self, event):
         """Override in subclass for mouse wheel events. Return True to consume event."""

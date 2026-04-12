@@ -8,6 +8,73 @@ from qtpy.QtCore import QTimer
 from qtpy.QtWidgets import QVBoxLayout, QWidget
 
 
+def get_qt_mouse_event_position(mouse_event):
+    """Return a mouse event position in QWidget logical pixels.
+
+    Qt mouse events delivered by `QVTKRenderWindowInteractor` use QWidget logical
+    coordinates with a top-left origin. VTK picking and display-coordinate APIs
+    use physical pixels with a bottom-left origin, so callers should typically
+    convert through `logical_to_display_coordinates()` before passing the result
+    to VTK.
+    """
+    if hasattr(mouse_event, "position"):
+        position = mouse_event.position()
+    else:
+        position = mouse_event.pos()
+
+    return position.x(), position.y()
+
+
+def _get_display_size(widget, render_window=None):
+    """Return the VTK display size in physical pixels."""
+    if render_window is not None:
+        width, height = render_window.GetSize()
+        if width > 0 and height > 0:
+            return int(width), int(height)
+
+    scale = widget.devicePixelRatioF()
+    return int(round(widget.width() * scale)), int(round(widget.height() * scale))
+
+
+def logical_to_display_coordinates(widget, logical_xy, render_window=None):
+    """Map QWidget logical coordinates to VTK display coordinates.
+
+    Args:
+        widget: The Qt widget receiving mouse events.
+        logical_xy: `(x, y)` in QWidget logical pixels with a top-left origin.
+        render_window: Optional VTK render window for authoritative physical size.
+
+    Returns:
+        `(x, y)` in VTK display coordinates: physical pixels with a bottom-left
+        origin, suitable for `picker.Pick()` and `ComputeDisplayToWorld()`.
+    """
+    scale = widget.devicePixelRatioF()
+    x = int(round(logical_xy[0] * scale))
+    y = int(round(logical_xy[1] * scale))
+    _, height = _get_display_size(widget, render_window)
+    return x, height - y
+
+
+def display_to_logical_coordinates(widget, display_xy, render_window=None):
+    """Map VTK display coordinates to QWidget logical coordinates.
+
+    Args:
+        widget: The Qt widget used for placement or event mapping.
+        display_xy: `(x, y)` in VTK display coordinates: physical pixels with a
+            bottom-left origin.
+        render_window: Optional VTK render window for authoritative physical size.
+
+    Returns:
+        `(x, y)` in QWidget logical pixels with a top-left origin, suitable for
+        Qt APIs such as `mapToGlobal()`.
+    """
+    scale = widget.devicePixelRatioF()
+    _, height = _get_display_size(widget, render_window)
+    x = int(round(display_xy[0] / scale))
+    y = int(round((height - display_xy[1]) / scale))
+    return x, y
+
+
 class FPSCounter:
     """Exponential moving average FPS counter."""
 
@@ -369,7 +436,8 @@ class VTKWidget(QWidget):
         """
         Compute a world ray from a display point.
         Args:
-            display_xy: Display point [x, y] in pixel coordinates, (0, 0) is the top left corner of the view
+            display_xy: Display point [x, y] in QWidget logical pixels with a
+                top-left origin.
         Returns:
             world_pt1: World point 1 [x, y, z], lies at the camera origin
             world_pt2: World point 2 [x, y, z], lies on the view plane 1m from the camera origin
@@ -377,8 +445,7 @@ class VTKWidget(QWidget):
         world_pt1 = [0.0, 0.0, 0.0, 0.0]
         world_pt2 = [0.0, 0.0, 0.0, 0.0]
         renderer = self.renderer()
-        # flip y coordinate from orgin at top-left to vtk's origin at bottom-left.
-        display_xy = (display_xy[0], self.height() - display_xy[1])
+        display_xy = self.logicalToDisplayCoordinates(display_xy)
         vtk.vtkInteractorObserver.ComputeDisplayToWorld(renderer, display_xy[0], display_xy[1], 0, world_pt1)
         vtk.vtkInteractorObserver.ComputeDisplayToWorld(renderer, display_xy[0], display_xy[1], 1, world_pt2)
         return world_pt1[:3], world_pt2[:3]
@@ -389,13 +456,30 @@ class VTKWidget(QWidget):
         Args:
             world_xyz: World point [x, y, z]
         Returns:
-            display_xy: Display point [x, y] in pixel coordinates, (0, 0) is the top left corner of the view
+            display_xy: Display point [x, y] in QWidget logical pixels with a
+                top-left origin.
         """
         display_point = [0.0, 0.0, 0.0]
         vtk.vtkInteractorObserver.ComputeWorldToDisplay(self.renderer(), *world_xyz, display_point)
-        # flip y coordinate to origin at top-left from vtk's origin at bottom-left.
-        display_point = (display_point[0], self.height() - display_point[1])
-        return display_point[:2]
+        return self.displayToLogicalCoordinates(display_point[:2])
+
+    def logicalToDisplayCoordinates(self, logical_xy):
+        """Convert QWidget logical coordinates to VTK display coordinates.
+
+        This is the preferred API for translating Qt mouse positions into the
+        coordinate system expected by VTK picking and display/world conversion
+        routines, especially on HiDPI displays where Qt and VTK use different
+        pixel units.
+        """
+        return logical_to_display_coordinates(self.vtkWidget(), logical_xy, self.renderWindow())
+
+    def displayToLogicalCoordinates(self, display_xy):
+        """Convert VTK display coordinates to QWidget logical coordinates.
+
+        Use this when a position originated in VTK display space but must be
+        passed back to Qt APIs such as `mapToGlobal()`.
+        """
+        return display_to_logical_coordinates(self.vtkWidget(), display_xy, self.renderWindow())
 
     def _setup_orientation_marker(self):
         """Setup the orientation marker widget."""

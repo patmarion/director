@@ -19,6 +19,7 @@ from director.frame_trace import FrameTraceVisualizer
 from director.gridSource import makeGridPolyData
 from director.shallowCopy import shallowCopy
 from director.viewbounds import computeViewBoundsNoGrid
+from director.vtk_widget import get_qt_mouse_event_position, logical_to_display_coordinates
 
 try:
     import matplotlib
@@ -1419,12 +1420,17 @@ def updateFramePickTolerances(view, tolerance=None):
 
 
 def mapMousePosition(widget, mouseEvent):
-    """Given a QWidget and a QMouseEvent return the (x, y) mouse position
-    with the Y coordinate flipped (widget.height - mouse.y) to follow the
-    vtk convention having y=0 at the bottom.
+    """Return a mouse position in VTK display coordinates.
+
+    Args:
+        widget: The Qt widget receiving the event.
+        mouseEvent: A Qt mouse event in QWidget logical coordinates.
+
+    Returns:
+        `(x, y)` in VTK display coordinates: physical pixels with a bottom-left
+        origin. This keeps pick operations aligned on HiDPI displays.
     """
-    mousePosition = mouseEvent.pos()
-    return mousePosition.x(), widget.height() - mousePosition.y()
+    return logical_to_display_coordinates(widget, get_qt_mouse_event_position(mouseEvent))
 
 
 class SphereItem(PolyDataItem):

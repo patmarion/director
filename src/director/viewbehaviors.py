@@ -69,8 +69,10 @@ def showRightClickMenu(displayPoint, view):
     # Convert to widget coordinates (Qt uses top-left origin)
     vtk_widget = view.vtkWidget()
     if vtk_widget:
-        # displayPoint is in VTK coordinates (bottom-left origin), convert to Qt coordinates
-        qtPoint = QtCore.QPoint(int(displayPoint[0]), vtk_widget.height() - int(displayPoint[1]))
+        # Convert the VTK display coordinate back to a Qt logical position so
+        # the menu opens under the cursor on HiDPI displays.
+        qt_x, qt_y = view.displayToLogicalCoordinates(displayPoint)
+        qtPoint = QtCore.QPoint(qt_x, qt_y)
         globalPos = vtk_widget.mapToGlobal(qtPoint)
     else:
         globalPos = QtCore.QPoint(int(displayPoint[0]), int(displayPoint[1]))
