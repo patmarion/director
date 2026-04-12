@@ -1841,6 +1841,14 @@ class TextItem(om.ObjectModelItem):
         if view:
             self.addToView(view)
 
+    def setPosition3D(self, position):
+        self.properties.world_position = position
+        self.properties.coordinates = "World"
+
+    def setPosition2D(self, position):
+        self.properties.position = position
+        self.properties.coordinates = "Screen"
+
     def addToView(self, view):
         if view in self.views:
             return
