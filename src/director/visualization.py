@@ -233,10 +233,10 @@ class PolyDataItem(om.ObjectModelItem):
                 view.vtk_widget.render()
 
     def hasDataSet(self, dataSet):
-        return dataSet == self.polyData
+        return dataSet is self.polyData
 
     def hasActor(self, actor):
-        return actor == self.actor
+        return actor is self.actor
 
     def setPolyData(self, polyData):
         self.polyData = polyData
@@ -729,10 +729,10 @@ class Image2DItem(om.ObjectModelItem):
         self.actor.GetMapper().GetInput().GetPoints().Modified()
 
     def hasDataSet(self, dataSet):
-        return dataSet == self.image or dataSet == self.actor.GetMapper().GetInput()
+        return dataSet is self.image or dataSet is self.actor.GetMapper().GetInput()
 
     def hasActor(self, actor):
-        return actor == self.actor
+        return actor is self.actor
 
     def setImage(self, image):
         self.image = image
@@ -1100,12 +1100,12 @@ class FrameItem(PolyDataItem):
             self.frameWidget.setRotateAxisEnabled(axisId, enabled)
 
     def hasDataSet(self, dataSet):
-        return dataSet == self.transform
+        return dataSet is self.transform
 
     def hasActor(self, actor):
         has_actor = False
         if self.frameWidget:
-            has_actor = actor in self.frameWidget.getActors()
+            has_actor = any(actor is frame_actor for frame_actor in self.frameWidget.getActors())
         return has_actor or PolyDataItem.hasActor(self, actor)
 
     def addToView(self, view):

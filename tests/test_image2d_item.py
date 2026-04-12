@@ -91,15 +91,13 @@ def test_image2d_item_set_image(qapp):
     assert item.image == image2
 
 
-def test_image2d_item_has_dataset(qapp):
+def test_image2d_item_has_dataset():
     """Test hasDataSet method."""
-    widget = VTKWidget()
-
     image = vtk.vtkImageData()
     image.SetDimensions(50, 50, 1)
     image.AllocateScalars(vtk.VTK_UNSIGNED_CHAR, 3)
 
-    item = Image2DItem("test_image", image, widget)
+    item = Image2DItem("test_image", image, None)
 
     assert item.hasDataSet(image) == True
 
