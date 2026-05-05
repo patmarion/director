@@ -91,4 +91,5 @@ Loading and displaying a VTK file:
    self
    examples
    tutorial
+   jupyter_kernel
    generated/api

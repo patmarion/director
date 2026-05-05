@@ -2,6 +2,8 @@
 
 import os
 
+from qtpy.QtWidgets import QApplication
+
 try:
     from qtconsole.inprocess import QtInProcessKernelManager
     from qtconsole.rich_jupyter_widget import RichJupyterWidget
@@ -9,8 +11,6 @@ try:
     QTCONSOLE_AVAILABLE = True
 except ImportError:
     QTCONSOLE_AVAILABLE = False
-
-from qtpy.QtWidgets import QApplication
 
 
 class PythonConsoleWidget:

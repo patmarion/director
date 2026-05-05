@@ -43,6 +43,7 @@ class MainWindowApp(object):
         # Python console dock widget (initialized by component factory)
         self.python_console_dock = None
         self.python_console = None
+        self.jupyter_kernel = None
 
         self.quitAction = self.fileMenu.addAction("&Quit")
         self.quitAction.setShortcut(QtGui.QKeySequence("Ctrl+Q"))
@@ -301,6 +302,15 @@ class MainWindowApp(object):
         self._saveWindowConnection = self.applicationInstance().aboutToQuit.connect(self._saveCustomWindowState)
 
 
+def _get_application_namespace(fields):
+    variables = dict(fields.globalsDict)
+    variables["fields"] = fields
+    variables["view"] = fields.view
+    variables["quit"] = fields.app.quit
+    variables["exit"] = fields.app.exit
+    return variables
+
+
 class MainWindowAppFactory(object):
     def getComponents(self):
         components = {
@@ -314,14 +324,15 @@ class MainWindowAppFactory(object):
             "ViewBehaviors": ["View"],
             "Grid": ["View", "ObjectModel"],
             "PythonConsole": ["Globals", "GlobalModules"],
+            "JupyterKernel": ["PythonConsole", "CommandLineArgs"],
             "OpenMeshDataHandler": ["MainWindow", "CommandLineArgs"],
             "OutputConsole": ["MainWindow"],
-            "MainWindow": ["View", "ObjectModel", "PythonConsole"],
+            "MainWindow": ["View", "ObjectModel", "PythonConsole", "JupyterKernel"],
             "MeasurementPanel": ["MainWindow"],
             "SignalHandlers": ["MainWindow"],
             "AdjustedClippingRange": ["View"],
             "StartupRender": ["View", "MainWindow"],
-            "RunScriptFunction": ["Globals", "PythonConsole", "CommandLineArgs"],
+            "RunScriptFunction": ["Globals", "PythonConsole", "JupyterKernel", "CommandLineArgs"],
             "ScriptLoader": ["CommandLineArgs", "RunScriptFunction"],
             "ProfilerTool": ["MainWindow"],
             "ScreenRecorder": ["MainWindow", "View", "MainToolBar"],
@@ -470,6 +481,8 @@ class MainWindowAppFactory(object):
         if windowIcon:
             app.mainWindow.setWindowIcon(QtGui.QIcon(windowIcon))
 
+        app.jupyter_kernel = fields.jupyter_kernel
+
         # Create Python console dock if console widget is available
         if fields.pythonConsoleWidget:
             pythonConsoleDock = app.addWidgetToDock(
@@ -520,16 +533,37 @@ class MainWindowAppFactory(object):
 
         def register_application_fields(fields):
             script_context.push_variables(fields=fields)
+            variables = _get_application_namespace(fields)
             if console_widget_manager:
-                variables = dict(fields.globalsDict)
-                variables["fields"] = fields
-                variables["view"] = fields.view
-                variables["quit"] = fields.app.quit
-                variables["exit"] = fields.app.exit
                 console_widget_manager.push_variables(variables)
 
         return FieldContainer(
-            pythonConsoleWidget=console_widget_manager, register_application_fields=register_application_fields
+            pythonConsoleWidget=console_widget_manager,
+            register_application_fields=register_application_fields,
+        )
+
+    def initJupyterKernel(self, fields):
+        """Initialize the externally connectable Jupyter kernel."""
+        from director.jupyter_kernel import DirectorJupyterKernel
+
+        jupyter_kernel = None
+        command_line_args = fields.command_line_args
+        if getattr(command_line_args, "jupyter_kernel", False):
+            jupyter_kernel = DirectorJupyterKernel(
+                connection_file=getattr(command_line_args, "jupyter_connection_file", None)
+            )
+
+        register_python_console_fields = fields.register_application_fields
+
+        def register_application_fields(fields):
+            register_python_console_fields(fields)
+            if jupyter_kernel:
+                variables = _get_application_namespace(fields)
+                jupyter_kernel.push_variables(variables)
+
+        return FieldContainer(
+            jupyter_kernel=jupyter_kernel,
+            register_application_fields=register_application_fields,
         )
 
     def initMainToolBar(self, fields):
@@ -633,6 +667,12 @@ class MainWindowAppFactory(object):
         return FieldContainer(globalsDict=globalsDict)
 
     def initRunScriptFunction(self, fields):
+        def push_variables(variables):
+            if fields.pythonConsoleWidget:
+                fields.pythonConsoleWidget.push_variables(variables)
+            if fields.jupyter_kernel:
+                fields.jupyter_kernel.push_variables(variables)
+
         def runScript(filename, commandLineArgs=None):
             commandLineArgs = commandLineArgs or []
             args = dict(__file__=filename, _argv=[filename] + commandLineArgs, __name__="__main__")
@@ -644,7 +684,7 @@ class MainWindowAppFactory(object):
                 del args["__name__"]
                 del args["__file__"]
                 del args["_argv"]
-                fields.pythonConsoleWidget.push_variables(args)
+                push_variables(args)
 
         def runModule(moduleName):
             if not moduleName:
@@ -653,7 +693,7 @@ class MainWindowAppFactory(object):
             try:
                 args = runpy.run_module(moduleName, run_name="__main__", alter_sys=True)
             finally:
-                fields.pythonConsoleWidget.push_variables(args)
+                push_variables(args)
 
         return FieldContainer(runScript=runScript, runModule=runModule)
 

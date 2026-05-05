@@ -63,6 +63,17 @@ def add_standard_args(parser):
     parser.add_argument("--interactive", action="store_true", help="enable interactive testing mode")
 
     parser.add_argument(
+        "--jupyter-kernel",
+        action="store_true",
+        help="start a Jupyter kernel inside Director for external clients",
+    )
+    parser.add_argument(
+        "--jupyter-connection-file",
+        type=str,
+        help="connection file path for the Director-hosted Jupyter kernel",
+    )
+
+    parser.add_argument(
         "--auto-quit", action="store_true", help="automatically quit the application after starting, used for testing"
     )
     return parser
