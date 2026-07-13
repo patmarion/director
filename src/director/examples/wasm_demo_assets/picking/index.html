@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>director.wasm – Picking demo</title>
+    <style>
+        :root {
+            font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+            color: rgba(255, 255, 255, 0.87);
+            background-color: #242424;
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            display: flex;
+            align-items: baseline;
+            gap: 24px;
+            padding: 8px 16px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            font-size: 13px;
+        }
+
+        header .hint {
+            color: #94a3b8;
+        }
+
+        header .readout {
+            color: #cbd5e1;
+        }
+
+        header .readout b {
+            color: #38bdf8;
+            font-weight: 600;
+        }
+
+        #app {
+            width: 100%;
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+
+        #loading-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(to top, #262a36, #3e4454);
+            z-index: 100;
+            transition: opacity 0.4s ease;
+        }
+
+        #loading-overlay.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #loading-overlay .spinner {
+            width: 28px;
+            height: 28px;
+            border: 3px solid rgba(255, 255, 255, 0.4);
+            border-top-color: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 12px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        #loading-overlay .loading-text {
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.85);
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <span class="hint">Hover highlights · left-click selects · right-click opens the object menu</span>
+        <span class="readout">Hover: <b id="hover-name">–</b></span>
+        <span class="readout">Selected: <b id="selected-name">–</b></span>
+    </header>
+    <div id="app">
+        <div id="loading-overlay">
+            <div class="spinner"></div>
+            <span class="loading-text">Loading 3D view…</span>
+        </div>
+    </div>
+
+    <script type="module">
+        // Picking demo: hover glow + click-to-select built on viewer.pickAtEvent,
+        // the browser analog of director's draw_shapes ObjectPickingEventFilter.
+        // Every pick is a real VTK hardware pick executed inside the WASM
+        // runtime; the right-click object menu comes from the viewer itself.
+        import { createViewer } from "/vtk-viewer/viewer.js";
+
+        const HOVER_AMBIENT = 0.15;     // subtle glow (draw_shapes uses 0.4 -- too hot here)
+        const HOVER_PICK_INTERVAL_MS = 50; // hardware picks re-render, so throttle
+        const CLICK_DRAG_TOLERANCE_PX = 3;
+        // Objects that stay pickable (click select, right-click menu) but are
+        // too dominant on screen for a hover glow.
+        const HOVER_SKIP = new Set(["ground"]);
+
+        const overlay = document.getElementById("loading-overlay");
+        const container = document.getElementById("app");
+        const hoverName = document.getElementById("hover-name");
+        const selectedName = document.getElementById("selected-name");
+
+        try {
+            const viewer = await createViewer({
+                container,
+                cacheNamespace: "director-wasm-picking",
+                infoUrl: "/api/info",
+                statusUrl: (id) => `/api/status/${id}`,
+                stateUrl: (id) => `/api/state/${id}`,
+                blobUrl: (hash) => `/api/blob/${hash}`,
+                panels: { scene: true },
+            });
+            window.viewer = viewer; // for interactive debugging
+
+            const { model, session } = viewer;
+
+            // ── Hover: glow the object under the cursor ─────────────────
+            let hovered = null; // SceneItem with the ambient bump applied
+            let lastHoverPickMs = 0;
+
+            const setHovered = (item) => {
+                if (item === hovered) return;
+                if (hovered) session.setAmbient(hovered.ids.propertyId, 0);
+                if (item) session.setAmbient(item.ids.propertyId, HOVER_AMBIENT);
+                hovered = item;
+                hoverName.textContent = item ? item.name : "–";
+            };
+
+            container.addEventListener("pointermove", (event) => {
+                // Skip while a button is down: that's a camera drag, and mixing
+                // pick renders into it would fight the interactor.
+                if (event.buttons !== 0) return;
+                const now = performance.now();
+                if (now - lastHoverPickMs < HOVER_PICK_INTERVAL_MS) return;
+                lastHoverPickMs = now;
+                const picked = viewer.pickAtEvent(event);
+                const item = picked && !HOVER_SKIP.has(picked.item.key) ? picked.item : null;
+                setHovered(item);
+            });
+            container.addEventListener("pointerleave", () => setHovered(null));
+
+            // ── Left click: select in the scene panel ───────────────────
+            // Release within a small tolerance of the press counts as a click;
+            // anything longer was a camera drag (same rule as the context menu).
+            let leftDownPos = null;
+            container.addEventListener("pointerdown", (event) => {
+                if (event.button === 0) leftDownPos = { x: event.clientX, y: event.clientY };
+            });
+            container.addEventListener("pointerup", (event) => {
+                if (event.button !== 0 || !leftDownPos) return;
+                const moved = Math.hypot(event.clientX - leftDownPos.x, event.clientY - leftDownPos.y);
+                leftDownPos = null;
+                if (moved > CLICK_DRAG_TOLERANCE_PX) return;
+                const picked = viewer.pickAtEvent(event);
+                if (picked) model.setSelection(picked.item.key);
+            });
+
+            model.on("selectionChanged", (item) => {
+                selectedName.textContent = item ? item.name : "–";
+            });
+
+            overlay.classList.add("fade-out");
+            setTimeout(() => overlay.remove(), 500);
+        } catch (err) {
+            overlay.querySelector(".loading-text").textContent = `Error: ${err.message}`;
+            overlay.querySelector(".spinner").style.display = "none";
+            console.error("[wasm-picking]", err);
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>director.wasm – Iframe embed demo</title>
+    <style>
+        :root {
+            font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+            color: #cbd5e1;
+            background-color: #0f172a;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            padding: 14px 24px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 18px;
+            color: #e2e8f0;
+        }
+
+        header p {
+            margin: 4px 0 0;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        main {
+            flex: 1;
+            display: flex;
+            gap: 16px;
+            padding: 16px 24px;
+            align-items: flex-start;
+        }
+
+        /* A half-width, fixed-aspect-ratio card lets the viewer sit alongside
+           other page content. The canvas follows changes to the card size. */
+        .viewer-card {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            overflow: hidden;
+            transition: width 0.3s ease;
+        }
+
+        .viewer-card.wide {
+            width: 75%;
+        }
+
+        .viewer-card .card-title {
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+        }
+
+        /* The iframe keeps the viewer canvas in its own document while the host
+           page lays it out like any other element. */
+        .viewer-card iframe {
+            width: 100%;
+            aspect-ratio: 16 / 10;
+            border: 0;
+            background: #262a36;
+            display: block;
+        }
+
+        aside {
+            flex: 1;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 14px 18px;
+            font-size: 14px;
+            line-height: 1.55;
+        }
+
+        aside h2 {
+            font-size: 14px;
+            margin: 0 0 8px;
+            color: #e2e8f0;
+        }
+
+        aside code {
+            background: #1e293b;
+            border-radius: 4px;
+            padding: 1px 5px;
+            font-size: 12.5px;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0 16px;
+        }
+
+        .controls button {
+            cursor: pointer;
+            background: #1e293b;
+            color: #e2e8f0;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+
+        .controls button:hover {
+            background: #334155;
+        }
+
+        .controls .swatch {
+            width: 34px;
+            padding: 6px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Iframe embed demo</h1>
+        <p>A regular page that embeds the vtk-wasm 3D viewer as one element among others.</p>
+    </header>
+
+    <main>
+        <div class="viewer-card" id="viewer-card">
+            <div class="card-title">Live 3D view (iframe, fixed 16:10 aspect)</div>
+            <iframe id="viewer-frame" src="/viewer.html" title="3D viewer" allow="fullscreen"></iframe>
+        </div>
+
+        <aside>
+            <h2>Host-page controls</h2>
+            <p>
+                These buttons live <em>outside</em> the iframe and act on the
+                embedded view: resizing the card (the viewer's ResizeObserver
+                follows), reloading the iframe, and sending commands into the
+                viewer with <code>postMessage</code>.
+            </p>
+            <div class="controls">
+                <button id="resize-btn">Toggle size 50% / 75%</button>
+                <button id="refresh-btn">Refresh view</button>
+                <button class="swatch" data-bottom="0.149,0.165,0.212" data-top="0.243,0.267,0.329"
+                    style="background:#3e4454" title="Default background"></button>
+                <button class="swatch" data-bottom="0.05,0.12,0.20" data-top="0.16,0.35,0.52"
+                    style="background:#29597f" title="Blue background"></button>
+                <button class="swatch" data-bottom="0.13,0.07,0.16" data-top="0.35,0.18,0.40"
+                    style="background:#592e66" title="Purple background"></button>
+                <button class="swatch" data-bottom="0.95,0.95,0.95" data-top="1.0,1.0,1.0"
+                    style="background:#f2f2f2" title="Light background"></button>
+            </div>
+
+            <h2>Why an iframe?</h2>
+            <p>
+                The viewer runs in an iframe so its canvas can size independently
+                of the host page. The host can then lay out, resize, and message
+                the viewer like any other embedded component.
+            </p>
+            <p>
+                The floating panels are hidden by default for a clean embed;
+                right-click inside the 3D view to toggle the scene panel or the
+                debug info panel.
+            </p>
+        </aside>
+    </main>
+
+    <script>
+        const card = document.getElementById("viewer-card");
+        const frame = document.getElementById("viewer-frame");
+
+        document.getElementById("resize-btn").addEventListener("click", () => {
+            card.classList.toggle("wide");
+        });
+
+        document.getElementById("refresh-btn").addEventListener("click", () => {
+            frame.contentWindow.location.reload();
+        });
+
+        // Send the selected background colors to the embedded viewer.
+        for (const swatch of document.querySelectorAll(".swatch")) {
+            swatch.addEventListener("click", () => {
+                const parse = (text) => text.split(",").map(Number);
+                frame.contentWindow.postMessage({
+                    type: "set-background",
+                    bottom: parse(swatch.dataset.bottom),
+                    top: parse(swatch.dataset.top),
+                }, window.location.origin);
+            });
+        }
+    </script>
+</body>
+
+</html>

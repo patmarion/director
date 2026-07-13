@@ -18,7 +18,11 @@ dependencies = [
 
 [project.optional-dependencies]
 
-# Extra dependencies
+# Extra dependencies. The wasm extra is intentionally not part of this
+# meta-group: it pulls in a web server stack (fastapi/uvicorn) that only
+# browser-viewer consumers need, so they must request director[wasm]
+# explicitly. The wasm static assets ship in every wheel regardless
+# (package-data is fixed at build time and cannot vary by extra).
 extras = ["director[mujoco,opencv,plot,qtconsole]"]
 mujoco = ["mujoco"]
 opencv = ["opencv-python"]
@@ -28,6 +32,16 @@ plot = [
 ]
 qtconsole = [
     "qtconsole",
+]
+# Browser-based vtk-wasm demos (director.wasm + director/examples/wasm_*)
+# uvicorn[standard] pulls in the websockets library the pose stream needs.
+# vtk >= 9.6.1 is required because older VTK WASM runtimes (vtkWasmSceneManager)
+# lack the sceneManager.set() direct-update API the pose stream relies on.
+wasm = [
+    "fastapi",
+    "httpx",
+    "uvicorn[standard]",
+    "vtk>=9.6.1",
 ]
 
 # Qt bindings
@@ -40,8 +54,9 @@ pyqt = [
     "PyQt6; sys_platform != 'darwin'",
 ]
 
-# Dev, docs, test
-dev = [ "director[extras,pyside,docs,test]"]
+# Dev, docs, test (wasm included so the wasm examples and tests work in dev
+# environments even though the extras meta-group excludes it)
+dev = [ "director[extras,pyside,docs,test,wasm]"]
 docs = [
     "furo",
     "sphinx",
@@ -55,7 +70,12 @@ test = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-director = ["assets/*.png", "assets/*.ui"]
+director = [
+    "assets/*.png",
+    "assets/*.ui",
+    "wasm/viewer_assets/*",
+    "examples/wasm_demo_assets/*/*.html",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
