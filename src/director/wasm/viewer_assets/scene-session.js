@@ -41,11 +41,35 @@ export class SceneSession {
     this.stats = { stateHit: 0, stateNet: 0, blobHit: 0, blobNet: 0 };
   }
 
+  /**
+   * Verify the WASM runtime is actually being served before handing the URL
+   * to RemoteSession.load, which swallows fetch failures and only errors much
+   * later with a misleading "WASM module is not loaded yet". The probe also
+   * triggers the server's lazy runtime download, so its 503 body (e.g.
+   * "download from Kitware failed") is the real cause and worth surfacing.
+   */
+  async _assertRuntimeAvailable(wasmUrl) {
+    // New VTK naming first, then the pre-9.5.20250531 legacy naming.
+    for (const name of ["vtkWebAssembly.mjs", "vtkWasmSceneManager.mjs"]) {
+      const resp = await fetch(`${wasmUrl}/${name}`, { method: "HEAD" });
+      if (resp.ok) return;
+      if (resp.status !== 404) {
+        // The server's error body (e.g. "download from Kitware failed") is
+        // the real cause, so prefer it over a generic message.
+        const body = await fetch(`${wasmUrl}/${name}`);
+        const detail = await body.text();
+        throw new Error(detail || `VTK WASM runtime request failed: HTTP ${body.status}`);
+      }
+    }
+    throw new Error(`VTK WASM runtime not available: no runtime files at ${wasmUrl}`);
+  }
+
   /** Import the RemoteSession module, bind cache-aware network, load the WASM. */
   async load({ wasmUrl, renderWindowId, sceneVersion }) {
     this.renderWindowId = renderWindowId;
     this.sceneVersion = sceneVersion || "v0";
 
+    await this._assertRuntimeAvailable(wasmUrl);
     const mod = await import(this._remoteModuleUrl);
     const RemoteSession = mod.RemoteSession;
     this.session = new RemoteSession();

@@ -8,6 +8,7 @@ import json
 import threading
 from unittest import mock
 
+import httpx
 import pytest
 import vtk
 
@@ -186,21 +187,35 @@ class TestWasmApp:
 
         from director.wasm import create_wasm_app
 
-        # Serve an empty directory instead of downloading the real WASM runtime
-        # tarball; these tests exercise the protocol, not the WASM assets.
-        fake_wasm_dir = tmp_path_factory.mktemp("wasm-files")
-        with mock.patch("director.wasm.server.ensure_wasm_files", return_value=fake_wasm_dir):
+        # Serve a pre-seeded fake cache instead of downloading the real WASM
+        # runtime tarball; the ".extracted" marker makes ensure_wasm_files
+        # short-circuit without touching the network. The patches must stay
+        # active while requests run: the runtime resolves lazily on the first
+        # request, not at app creation.
+        from director.wasm.wasm_assets import VTK_VERSION
+
+        fake_cache_root = tmp_path_factory.mktemp("wasm-cache")
+        fake_wasm_dir = fake_cache_root / VTK_VERSION
+        fake_wasm_dir.mkdir()
+        (fake_wasm_dir / "vtkWebAssembly.mjs").write_text("// fake runtime\n")
+        (fake_wasm_dir / ".extracted").touch()
+        with (
+            mock.patch("director.wasm.server.DEFAULT_WASM_CACHE_ROOT", fake_cache_root),
+            mock.patch("director.wasm.wasm_assets.DEFAULT_WASM_CACHE_ROOT", fake_cache_root),
+        ):
             scene = _build_test_scene()
             app = create_wasm_app(scene, pose_source=_FixedPoseSource())
-        with TestClient(app) as test_client:
-            yield test_client
+            with TestClient(app) as test_client:
+                yield test_client
 
     def test_info_endpoint(self, client):
+        from director.wasm import VTK_VERSION
+
         info = client.get("/api/info").json()
         assert info["render_window_id"] > 0
         assert info["renderer_id"] > 0
         assert info["interactor_id"] > 0
-        assert info["wasm_url"] == "/vtk-wasm-files"
+        assert info["wasm_url"] == f"/vtk-viewer/wasm-runtime/{VTK_VERSION}"
         assert info["scene_version"]
         assert len(info["objects"]) == 2
 
@@ -209,6 +224,14 @@ class TestWasmApp:
         resp = client.get("/vtk-viewer/viewer.js")
         assert resp.status_code == 200
         assert resp.headers["cache-control"] == "no-cache"
+
+    def test_wasm_runtime_is_cached_forever(self, client):
+        """The runtime URL embeds the VTK version, so its bytes never change
+        at that URL and browsers may cache them without revalidation."""
+        wasm_url = client.get("/api/info").json()["wasm_url"]
+        resp = client.get(f"{wasm_url}/vtkWebAssembly.mjs")
+        assert resp.status_code == 200
+        assert resp.headers["cache-control"] == "public, max-age=31536000, immutable"
 
     def test_state_and_blob_endpoints(self, client):
         info = client.get("/api/info").json()
@@ -234,3 +257,51 @@ class TestWasmApp:
 
         with pytest.raises(RuntimeError, match="finalize"):
             create_wasm_app(WasmScene())
+
+
+class TestWasmRuntimeStaticFiles:
+    def test_download_failure_returns_503_then_recovers(self, tmp_path):
+        """A failed Kitware download must degrade to 503 on the runtime URL
+        only (the viewer reports load failure, the app stays up) and the next
+        request must retry rather than caching the failure."""
+        fastapi = pytest.importorskip("fastapi")
+        from fastapi.testclient import TestClient
+
+        from director.wasm.server import WasmRuntimeStaticFiles
+        from director.wasm.wasm_assets import VTK_VERSION
+
+        app = fastapi.FastAPI()
+        app.mount("/wasm", WasmRuntimeStaticFiles(cache_root=tmp_path), name="wasm")
+        client = TestClient(app)
+
+        with mock.patch(
+            "director.wasm.server.ensure_wasm_files",
+            side_effect=httpx.ConnectError("kitware unreachable"),
+        ):
+            resp = client.get("/wasm/vtkWebAssembly.mjs")
+        assert resp.status_code == 503
+        assert "unavailable" in resp.text
+
+        # Simulate the download succeeding on a later attempt. The mount
+        # pre-creates the (empty) versioned directory, hence exist_ok.
+        wasm_dir = tmp_path / VTK_VERSION
+        wasm_dir.mkdir(exist_ok=True)
+        (wasm_dir / "vtkWebAssembly.mjs").write_text("// runtime\n")
+        (wasm_dir / ".extracted").touch()
+        resp = client.get("/wasm/vtkWebAssembly.mjs")
+        assert resp.status_code == 200
+        assert resp.headers["cache-control"] == "public, max-age=31536000, immutable"
+
+
+class TestEnsureWasmFiles:
+    def test_cache_root_override_short_circuits_on_marker(self, tmp_path):
+        """A pre-seeded cache (e.g. baked into a deployment image) must be
+        used as-is without any network access."""
+        from director.wasm.wasm_assets import VTK_VERSION, ensure_wasm_files
+
+        wasm_dir = tmp_path / VTK_VERSION
+        wasm_dir.mkdir()
+        (wasm_dir / ".extracted").touch()
+        with mock.patch("director.wasm.wasm_assets.httpx.get") as fake_get:
+            assert ensure_wasm_files(cache_root=tmp_path) == wasm_dir
+        fake_get.assert_not_called()

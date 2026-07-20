@@ -97,7 +97,8 @@
             overlay.classList.add("fade-out");
             setTimeout(() => overlay.remove(), 500);
         } catch (err) {
-            overlay.querySelector(".loading-text").textContent = `Error: ${err.message}`;
+            // User-facing: keep it simple; the cause is in the console.
+            overlay.querySelector(".loading-text").textContent = "Failed to load 3D view";
             overlay.querySelector(".spinner").style.display = "none";
             console.error("[wasm-cone]", err);
         }

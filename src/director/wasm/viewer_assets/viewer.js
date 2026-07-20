@@ -49,35 +49,49 @@ export async function createViewer(config) {
   debug.setVisible(config.panels?.debug ?? false);
   container.appendChild(debug.el);
 
-  debug.setStatus("Fetching scene info…");
-  const info = await (await fetch(infoUrl)).json();
-  debug.setSceneInfo({
-    sceneVersion: info.scene_version,
-    objectCount: (info.objects || []).length,
-  });
+  // Startup failures (backend down, WASM runtime download failed on the
+  // server, bad scene) must reject loudly so host pages can replace their
+  // loading UI with an error instead of spinning forever.
+  let session;
+  let info;
+  try {
+    debug.setStatus("Fetching scene info…");
+    const infoResp = await fetch(infoUrl);
+    if (!infoResp.ok) {
+      throw new Error(`scene info request failed (HTTP ${infoResp.status})`);
+    }
+    info = await infoResp.json();
+    debug.setSceneInfo({
+      sceneVersion: info.scene_version,
+      objectCount: (info.objects || []).length,
+    });
 
-  const session = new SceneSession({
-    remoteModuleUrl: config.remoteModuleUrl,
-    cache,
-    cacheNamespace: config.cacheNamespace || "scene",
-    fetchStateRaw: (id) => fetch(stateUrl(id)).then((r) => r.text()),
-    fetchBlobRaw: (hash) =>
-      fetch(blobUrl(hash))
-        .then((r) => r.arrayBuffer())
-        .then((b) => new Uint8Array(b)),
-    fetchStatusRaw: (id) => fetch(statusUrl(id)).then((r) => r.json()),
-    onStats: (s) => debug.setCache(s),
-  });
+    session = new SceneSession({
+      remoteModuleUrl: config.remoteModuleUrl,
+      cache,
+      cacheNamespace: config.cacheNamespace || "scene",
+      fetchStateRaw: (id) => fetch(stateUrl(id)).then((r) => r.text()),
+      fetchBlobRaw: (hash) =>
+        fetch(blobUrl(hash))
+          .then((r) => r.arrayBuffer())
+          .then((b) => new Uint8Array(b)),
+      fetchStatusRaw: (id) => fetch(statusUrl(id)).then((r) => r.json()),
+      onStats: (s) => debug.setCache(s),
+    });
 
-  debug.setStatus("Loading WASM runtime…");
-  await session.load({
-    wasmUrl: info.wasm_url,
-    renderWindowId: info.render_window_id,
-    sceneVersion: info.scene_version,
-  });
+    debug.setStatus("Loading WASM runtime…");
+    await session.load({
+      wasmUrl: info.wasm_url,
+      renderWindowId: info.render_window_id,
+      sceneVersion: info.scene_version,
+    });
 
-  debug.setStatus("Importing scene (one-time)…");
-  await session.importScene(container);
+    debug.setStatus("Importing scene (one-time)…");
+    await session.importScene(container);
+  } catch (err) {
+    debug.setStatus(`Failed to load: ${err.message}`, true);
+    throw err;
+  }
 
   // Build the object model + panels from the backend metadata tree.
   const model = new SceneModel(info.objects || []);

@@ -22,30 +22,36 @@ _WASM_TARBALL_URL = (
     f"vtk-wasm32-emscripten/{VTK_VERSION}/"
     f"vtk-{VTK_VERSION}-wasm32-emscripten.tar.gz"
 )
-WASM_CACHE_DIR = Path.home() / ".cache" / "vtk-wasm" / VTK_VERSION
+DEFAULT_WASM_CACHE_ROOT = Path.home() / ".cache" / "vtk-wasm"
+WASM_CACHE_DIR = DEFAULT_WASM_CACHE_ROOT / VTK_VERSION
 
 
-def ensure_wasm_files() -> Path:
-    """Download and extract VTK WASM files to a local cache directory.
+def ensure_wasm_files(cache_root: Path | None = None) -> Path:
+    """Download and extract VTK WASM files to a per-version cache directory.
+
+    ``cache_root`` overrides where the cache lives (a ``{VTK_VERSION}``
+    subdirectory is always appended, since the runtime must match the server's
+    VTK version); the default follows the XDG cache convention.
 
     The @kitware/vtk-wasm npm package's tarball extraction only recognizes the
     new file naming (vtkWebAssembly.mjs), but VTK < 9.5.20250531 ships with the
     old naming (vtkWasmSceneManager.mjs). Serving the extracted files from a
     directory URL lets the client-side loader's legacy fallback find them.
     """
-    marker = WASM_CACHE_DIR / ".extracted"
+    cache_dir = (cache_root or DEFAULT_WASM_CACHE_ROOT) / VTK_VERSION
+    marker = cache_dir / ".extracted"
     if marker.exists():
-        return WASM_CACHE_DIR
+        return cache_dir
 
-    WASM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
     log.info(f"Downloading VTK WASM tarball: {_WASM_TARBALL_URL}")
     resp = httpx.get(_WASM_TARBALL_URL, follow_redirects=True, timeout=60)
     resp.raise_for_status()
 
     with tarfile.open(fileobj=io.BytesIO(resp.content), mode="r:gz") as tf:
-        tf.extractall(WASM_CACHE_DIR, filter="data")
+        tf.extractall(cache_dir, filter="data")
 
     marker.touch()
-    files = [f.name for f in WASM_CACHE_DIR.iterdir()]
-    log.info(f"Extracted VTK WASM files to {WASM_CACHE_DIR}: {files}")
-    return WASM_CACHE_DIR
+    files = [f.name for f in cache_dir.iterdir()]
+    log.info(f"Extracted VTK WASM files to {cache_dir}: {files}")
+    return cache_dir
