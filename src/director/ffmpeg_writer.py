@@ -1,12 +1,15 @@
-"""FFMpegWriter class for encoding video from numpy RGB frames."""
+"""FFMpegWriter class for encoding video from numpy RGB/RGBA frames."""
 
 import subprocess
 
 import numpy as np
 
+# Bytes-per-pixel for the supported raw input pixel formats.
+INPUT_PIX_FMT_CHANNELS = {"rgb24": 3, "rgba": 4}
+
 
 class FFMpegWriter:
-    """Writer for encoding video files using ffmpeg from numpy RGB frames."""
+    """Writer for encoding video files using ffmpeg from numpy RGB/RGBA frames."""
 
     def __init__(
         self,
@@ -15,9 +18,13 @@ class FFMpegWriter:
         height: int,
         framerate: float = 30.0,
         vcodec: str = "libx264",
-        preset: str = "slow",
-        crf: int = 18,
+        preset: str | None = "slow",
+        crf: int | None = 18,
         pix_fmt_output: str = "yuv420p",
+        pix_fmt_input: str = "rgb24",
+        video_filter: str | None = None,
+        vcodec_profile: str | None = None,
+        extra_output_args: list[str] | None = None,
     ):
         """
         Initialize FFMpegWriter.
@@ -28,21 +35,32 @@ class FFMpegWriter:
             height: Video height in pixels
             framerate: Frame rate in fps (default: 30.0)
             vcodec: Video codec (default: 'libx264')
-            preset: Encoding preset (default: 'slow')
-            crf: Constant Rate Factor, lower is higher quality (default: 18)
+            preset: Encoding preset, or None for codecs without one (default: 'slow')
+            crf: Constant Rate Factor, lower is higher quality, or None for codecs
+                without one (default: 18)
             pix_fmt_output: Output pixel format (default: 'yuv420p')
+            pix_fmt_input: Raw input pixel format, 'rgb24' or 'rgba' (default: 'rgb24')
+            video_filter: Optional ffmpeg -vf filter graph applied before encoding
+            vcodec_profile: Optional codec profile (-profile:v), e.g. '4444' for prores_ks
+            extra_output_args: Optional additional codec-specific output arguments,
+                e.g. ['-deadline', 'realtime'] for libvpx-vp9
         """
+        if pix_fmt_input not in INPUT_PIX_FMT_CHANNELS:
+            raise ValueError(
+                f"Unsupported pix_fmt_input '{pix_fmt_input}', expected one of {sorted(INPUT_PIX_FMT_CHANNELS)}"
+            )
         self.filename = filename
         self.width = width
         self.height = height
         self.framerate = framerate
+        self.channels = INPUT_PIX_FMT_CHANNELS[pix_fmt_input]
         self.process = None
         self._closed = False
 
         # Build ffmpeg command
-        # Input: raw RGB frames from stdin
+        # Input: raw RGB/RGBA frames from stdin
         # -f rawvideo: raw video format
-        # -pix_fmt rgb24: input pixel format (RGB, 3 bytes per pixel)
+        # -pix_fmt: input pixel format (rgb24 = 3 bytes/pixel, rgba = 4 bytes/pixel)
         # -s WIDTHxHEIGHT: video size
         # -r FRAMERATE: frame rate
         # -i -: read from stdin
@@ -52,24 +70,27 @@ class FFMpegWriter:
             "-f",
             "rawvideo",
             "-pix_fmt",
-            "rgb24",
+            pix_fmt_input,
             "-s",
             f"{width}x{height}",
             "-r",
             str(framerate),
             "-i",
             "-",  # Read from stdin
-            # Output encoding options
-            "-vcodec",
-            vcodec,
-            "-preset",
-            preset,
-            "-crf",
-            str(crf),
-            "-pix_fmt",
-            pix_fmt_output,
-            filename,
         ]
+        # Output encoding options
+        if video_filter is not None:
+            cmd += ["-vf", video_filter]
+        cmd += ["-vcodec", vcodec]
+        if vcodec_profile is not None:
+            cmd += ["-profile:v", vcodec_profile]
+        if preset is not None:
+            cmd += ["-preset", preset]
+        if crf is not None:
+            cmd += ["-crf", str(crf)]
+        if extra_output_args is not None:
+            cmd += extra_output_args
+        cmd += ["-pix_fmt", pix_fmt_output, filename]
 
         print("Starting ffmpeg process:", " ".join(cmd))
         # Start ffmpeg process
@@ -88,10 +109,11 @@ class FFMpegWriter:
 
     def write_frame(self, frame: np.ndarray):
         """
-        Write a single RGB frame to the video.
+        Write a single RGB/RGBA frame to the video.
 
         Args:
-            frame: numpy array of shape (height, width, 3) with uint8 RGB data
+            frame: numpy array of shape (height, width, channels) with uint8 data,
+                where channels matches the pix_fmt_input (3 for rgb24, 4 for rgba)
 
         Raises:
             RuntimeError: If writer is closed or frame dimensions don't match
@@ -104,8 +126,10 @@ class FFMpegWriter:
             raise RuntimeError("FFMpeg process not initialized.")
 
         # Validate frame shape
-        if frame.shape != (self.height, self.width, 3):
-            raise ValueError(f"Frame shape {frame.shape} does not match expected ({self.height}, {self.width}, 3)")
+        if frame.shape != (self.height, self.width, self.channels):
+            raise ValueError(
+                f"Frame shape {frame.shape} does not match expected ({self.height}, {self.width}, {self.channels})"
+            )
 
         # Ensure frame is uint8
         if frame.dtype != np.uint8:

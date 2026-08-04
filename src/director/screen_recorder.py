@@ -4,6 +4,7 @@ import datetime
 import os
 import subprocess
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import qtpy.QtCore as QtCore
@@ -14,6 +15,48 @@ from director import vtkAll as vtk
 from director import vtkNumpy as vnp
 from director.ffmpeg_writer import FFMpegWriter
 from director.timercallback import TimerCallback
+
+
+@dataclass(frozen=True)
+class CodecPreset:
+    """An ffmpeg encoder configuration selectable from the record button menu."""
+
+    name: str
+    menu_label: str
+    file_extension: str
+    # Transparent presets record RGBA against a black transparent background
+    # and encode with an alpha channel; see _apply_transparent_background().
+    transparent_background: bool
+    writer_kwargs: dict = field(default_factory=dict)
+
+
+# The first preset is the default.  The RGBA capture of the transparent
+# preset is premultiplied alpha (black transparent background); the
+# unpremultiply filter converts to the straight-alpha convention video
+# editors expect.
+CODEC_PRESETS = (
+    CodecPreset(
+        name="default_mp4",
+        menu_label="Default — mp4 (H.264 yuv420p)",
+        file_extension="mp4",
+        transparent_background=False,
+    ),
+    CodecPreset(
+        name="transparent_prores4444_mov",
+        menu_label="Transparent background — mov (ProRes 4444)",
+        file_extension="mov",
+        transparent_background=True,
+        writer_kwargs=dict(
+            vcodec="prores_ks",
+            vcodec_profile="4444",
+            preset=None,
+            crf=None,
+            pix_fmt_output="yuva444p10le",
+            pix_fmt_input="rgba",
+            video_filter="unpremultiply=inplace=1",
+        ),
+    ),
+)
 
 
 def capture_screenshot(view):
@@ -30,6 +73,34 @@ def capture_screenshot(view):
     grabber = vtk.vtkWindowToImageFilter()
     grabber.SetInput(view.renderWindow())
     grabber.SetInputBufferTypeToRGB()
+    grabber.ReadFrontBufferOff()
+    grabber.SetShouldRerender(False)
+    grabber.Update()
+
+    vtk_image = grabber.GetOutput()
+    numpy_image = vnp.getNumpyImageFromVtk(vtk_image)
+    return numpy_image
+
+
+def capture_screenshot_rgba(view):
+    """Capture a screenshot including the framebuffer alpha channel.
+
+    The alpha channel is meaningful when the renderer clears with
+    SetBackgroundAlpha(0.0): geometry pixels are opaque, background pixels are
+    transparent, and antialiased edges get fractional alpha.  With the
+    background color set to black the result is premultiplied-alpha RGBA
+    (edge pixel rgb = coverage * geometry color), which composites cleanly
+    with  out = rgb + (1 - a) * dst.
+
+    Args:
+        view: VTKWidget instance to capture from
+
+    Returns:
+        numpy array of shape (height, width, 4) with uint8 RGBA data
+    """
+    grabber = vtk.vtkWindowToImageFilter()
+    grabber.SetInput(view.renderWindow())
+    grabber.SetInputBufferTypeToRGBA()
     grabber.ReadFrontBufferOff()
     grabber.SetShouldRerender(False)
     grabber.Update()
@@ -60,6 +131,13 @@ class ScreenRecorder:
         self.recording_width = None
         self.recording_height = None
         self.locked_by_recorder = False
+
+        # Codec preset for new recordings.  The preset for the recording in
+        # progress is latched at start so menu changes while recording cannot
+        # desync the writer and the capture format.
+        self.codec_preset = CODEC_PRESETS[0]
+        self._recording_preset = None
+        self._saved_background_state = None
 
         # Value slider connection
         self.value_slider = None
@@ -173,6 +251,27 @@ class ScreenRecorder:
 
         self.capture_mode = "timer"
 
+        # Codec preset submenu
+        codec_menu = self.context_menu.addMenu("Codec Preset")
+        self.codec_preset_group = QtGui.QActionGroup(codec_menu)
+        self.codec_preset_group.setExclusive(True)
+        self.codec_preset_actions = {}
+        for preset in CODEC_PRESETS:
+            action = QtWidgets.QAction(preset.menu_label, codec_menu)
+            action.setCheckable(True)
+            action.setChecked(preset is self.codec_preset)
+            action.triggered.connect(lambda checked=False, preset=preset: self._set_codec_preset(preset))
+            self.codec_preset_group.addAction(action)
+            codec_menu.addAction(action)
+            self.codec_preset_actions[preset.name] = action
+
+    def _set_codec_preset(self, preset: CodecPreset):
+        """Set the codec preset used for new recordings."""
+        self.codec_preset = preset
+
+        # Update checked state
+        self.codec_preset_actions[preset.name].setChecked(True)
+
     def _set_capture_mode(self, mode: str):
         """Set the capture mode ('timer' or 'playback')."""
         self.capture_mode = mode
@@ -251,6 +350,40 @@ class ScreenRecorder:
             self.value_slider.useRealTime = False
             self.value_slider.animationTimer.targetFps = self.framerate
 
+    def _apply_transparent_background(self):
+        """Switch the renderer to a black transparent background for recording.
+
+        Clearing with alpha=0 makes the framebuffer alpha a geometry coverage
+        mask (fractional at antialiased edges), and clearing to black makes the
+        captured RGBA exactly premultiplied alpha, so edges composite without
+        background-color fringe.  The gradient background is an opaque quad and
+        must be off.  Saved state is restored by _restore_background().
+        """
+        renderer = self.view.renderer()
+        self._saved_background_state = (
+            renderer.GetGradientBackground(),
+            renderer.GetBackground(),
+            renderer.GetBackground2(),
+            renderer.GetBackgroundAlpha(),
+        )
+        renderer.GradientBackgroundOff()
+        renderer.SetBackground(0.0, 0.0, 0.0)
+        renderer.SetBackgroundAlpha(0.0)
+        self.view.forceRender()
+
+    def _restore_background(self):
+        """Restore the renderer background saved by _apply_transparent_background()."""
+        if self._saved_background_state is None:
+            return
+        gradient, background, background2, background_alpha = self._saved_background_state
+        renderer = self.view.renderer()
+        renderer.SetGradientBackground(gradient)
+        renderer.SetBackground(background)
+        renderer.SetBackground2(background2)
+        renderer.SetBackgroundAlpha(background_alpha)
+        self._saved_background_state = None
+        self.view.forceRender()
+
     def _restore_slider_realtime(self):
         """Restore real-time mode on value slider if it was changed."""
         if self.value_slider is not None and self.original_use_real_time is not None:
@@ -280,25 +413,31 @@ class ScreenRecorder:
 
         self.recording_width = width
         self.recording_height = height
+        self._recording_preset = self.codec_preset
 
         # Generate filename with datetime
         videos_dir = Path.home() / "Videos"
         videos_dir.mkdir(exist_ok=True)
 
         datetime_str = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        filename = videos_dir / f"{datetime_str}_director_video.mp4"
+        filename = videos_dir / f"{datetime_str}_director_video.{self._recording_preset.file_extension}"
         self.current_filename = str(filename)
 
         try:
-            # Create FFMpegWriter
+            # Create FFMpegWriter configured by the selected codec preset
             self.writer = FFMpegWriter(
-                filename=self.current_filename, width=width, height=height, framerate=self.framerate
+                filename=self.current_filename,
+                width=width,
+                height=height,
+                framerate=self.framerate,
+                **self._recording_preset.writer_kwargs,
             )
         except Exception as e:
             # If creation failed, cleanup
             if self.locked_by_recorder:
                 self._unlock_view_size()
             self.locked_by_recorder = False
+            self._recording_preset = None
 
             # Show error dialog
             error_dialog = QtWidgets.QMessageBox(self.main_window)
@@ -312,6 +451,9 @@ class ScreenRecorder:
             return
 
         # If we got here, writer started successfully
+        if self._recording_preset.transparent_background:
+            self._apply_transparent_background()
+
         self.is_recording = True
         self.record_button.setToolTip(f"Recording to: {self.current_filename}")
 
@@ -345,6 +487,10 @@ class ScreenRecorder:
 
         self.writer = None
         self.is_recording = False
+
+        # Restore the renderer background if a transparent preset changed it
+        self._restore_background()
+        self._recording_preset = None
 
         # Unlock view size if we locked it
         if self.locked_by_recorder:
@@ -431,8 +577,10 @@ class ScreenRecorder:
         file_path = Path(current_filename)
 
         # Open file dialog to choose new name/location
+        suffix = file_path.suffix or ".mp4"
+        file_filter = f"Video Files (*{suffix});;All Files (*)"
         new_filename, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
-            self.main_window, "Rename Video File", str(file_path), "MP4 Files (*.mp4);;All Files (*)"
+            self.main_window, "Rename Video File", str(file_path), file_filter
         )
 
         if not new_filename:
@@ -501,7 +649,10 @@ class ScreenRecorder:
 
         try:
             # Capture screenshot
-            frame = capture_screenshot(self.view)
+            if self._recording_preset.transparent_background:
+                frame = capture_screenshot_rgba(self.view)
+            else:
+                frame = capture_screenshot(self.view)
             # Write frame
             self.write_frame(frame)
         except Exception as e:
@@ -518,7 +669,8 @@ class ScreenRecorder:
         Write a frame to the current recording (if recording).
 
         Args:
-            frame: numpy array of shape (height, width, 3) with uint8 RGB data
+            frame: numpy array of shape (height, width, channels) with uint8 data;
+                3 channels (RGB) normally, 4 (RGBA) in transparent background mode
         """
         if self.is_recording and self.writer is not None:
             try:
