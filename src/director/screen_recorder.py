@@ -1,6 +1,7 @@
 """Screen recorder widget for capturing video using FFMpegWriter."""
 
 import datetime
+import math
 import os
 import subprocess
 import sys
@@ -190,7 +191,7 @@ class ScreenRecorder:
         self.fps30_action = QtWidgets.QAction("30 fps", framerate_menu)
         self.fps30_action.setCheckable(True)
         self.fps30_action.setChecked(self.framerate == 30.0)
-        self.fps30_action.triggered.connect(lambda: self._set_framerate(30.0))
+        self.fps30_action.triggered.connect(lambda: self.set_framerate(30.0))
         self.framerate_group.addAction(self.fps30_action)
         framerate_menu.addAction(self.fps30_action)
 
@@ -198,9 +199,18 @@ class ScreenRecorder:
         self.fps60_action = QtWidgets.QAction("60 fps", framerate_menu)
         self.fps60_action.setCheckable(True)
         self.fps60_action.setChecked(self.framerate == 60.0)
-        self.fps60_action.triggered.connect(lambda: self._set_framerate(60.0))
+        self.fps60_action.triggered.connect(lambda: self.set_framerate(60.0))
         self.framerate_group.addAction(self.fps60_action)
         framerate_menu.addAction(self.fps60_action)
+
+        # Panels that synchronize playback to source media can provide a
+        # fractional rate such as 24000/1001. Keep that exact rate visible in
+        # the recorder menu rather than pretending a 30/60 fps preset is active.
+        self.custom_fps_action = QtWidgets.QAction("", framerate_menu)
+        self.custom_fps_action.setCheckable(True)
+        self.custom_fps_action.setVisible(False)
+        self.framerate_group.addAction(self.custom_fps_action)
+        framerate_menu.addAction(self.custom_fps_action)
 
         # View size submenu
         view_size_menu = self.context_menu.addMenu("View size")
@@ -286,19 +296,32 @@ class ScreenRecorder:
         """Show the context menu at the given position."""
         self.context_menu.exec_(self.record_button.mapToGlobal(position))
 
-    def _set_framerate(self, fps: float):
+    def set_framerate(self, fps: float):
         """Set the recording framerate.
 
         Args:
             fps: Frame rate in frames per second
         """
+        fps = float(fps)
+        if not math.isfinite(fps) or fps <= 0:
+            raise ValueError(f"Framerate must be positive and finite, got {fps}")
         self.framerate = fps
 
         # Update checked state
-        if fps == 30.0:
+        if math.isclose(fps, 30.0):
+            self.custom_fps_action.setVisible(False)
             self.fps30_action.setChecked(True)
-        elif fps == 60.0:
+        elif math.isclose(fps, 60.0):
+            self.custom_fps_action.setVisible(False)
             self.fps60_action.setChecked(True)
+        else:
+            self.custom_fps_action.setText(f"{fps:.9g} fps (source video)")
+            self.custom_fps_action.setVisible(True)
+            self.custom_fps_action.setChecked(True)
+
+    def _set_framerate(self, fps: float):
+        """Compatibility wrapper for callers using the previous private API."""
+        self.set_framerate(fps)
 
     def _set_view_size(self, width: int, height: int):
         """Set the view to a fixed size.
@@ -362,11 +385,14 @@ class ScreenRecorder:
         renderer = self.view.renderer()
         self._saved_background_state = (
             renderer.GetGradientBackground(),
+            renderer.GetTexturedBackground(),
+            renderer.GetBackgroundTexture(),
             renderer.GetBackground(),
             renderer.GetBackground2(),
             renderer.GetBackgroundAlpha(),
         )
         renderer.GradientBackgroundOff()
+        renderer.TexturedBackgroundOff()
         renderer.SetBackground(0.0, 0.0, 0.0)
         renderer.SetBackgroundAlpha(0.0)
         self.view.forceRender()
@@ -375,9 +401,18 @@ class ScreenRecorder:
         """Restore the renderer background saved by _apply_transparent_background()."""
         if self._saved_background_state is None:
             return
-        gradient, background, background2, background_alpha = self._saved_background_state
+        (
+            gradient,
+            textured,
+            background_texture,
+            background,
+            background2,
+            background_alpha,
+        ) = self._saved_background_state
         renderer = self.view.renderer()
         renderer.SetGradientBackground(gradient)
+        renderer.SetBackgroundTexture(background_texture)
+        renderer.SetTexturedBackground(textured)
         renderer.SetBackground(background)
         renderer.SetBackground2(background2)
         renderer.SetBackgroundAlpha(background_alpha)
@@ -621,6 +656,14 @@ class ScreenRecorder:
         """Get the record button widget for adding to toolbar."""
         return self.record_button
 
+    def is_recording_transparent(self) -> bool:
+        """Return whether the active recording expects a transparent framebuffer."""
+        return bool(
+            self.is_recording
+            and self._recording_preset is not None
+            and self._recording_preset.transparent_background
+        )
+
     def connect_to_value_slider(self, slider):
         """Connect to a ValueSlider to capture frames on value changes.
 
@@ -632,7 +675,7 @@ class ScreenRecorder:
 
         # Automatically switch to playback mode and 60fps when connected to slider
         self._set_capture_mode("playback")
-        self._set_framerate(60.0)
+        self.set_framerate(60.0)
 
     def _on_capture_timer(self):
         if self.capture_mode == "timer":
